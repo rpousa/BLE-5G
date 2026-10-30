@@ -1,0 +1,1216 @@
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -1878,6 +1878,7 @@
+   ${OPENAIR_DIR}/executables/nr-uesoftmodem.c
+   ${OPENAIR_DIR}/executables/position_interface.c
+   ${OPENAIR_DIR}/executables/nr-ue.c
++  ${OPENAIR_DIR}/executables/nrlink_ue.c
+   ${OPENAIR_DIR}/executables/nr-ue-ru.c
+   ${OPENAIR1_DIR}/PHY/TOOLS/phy_scope_interface.c
+   ${NFAPI_USER_DIR}/nfapi.c
+--- a/executables/nr-uesoftmodem.c
++++ b/executables/nr-uesoftmodem.c
+@@ -210,6 +210,10 @@
+   return NULL;
+ }
+ 
++// nrlink L1 emulation over the FRDM-MCXW72 boards (nrlink_ue.c)
++bool nrlink_ue_enabled(void);
++void *nrlink_ue_thread(void *arg);
++
+ int NB_UE_INST = 1;
+ configmodule_interface_t *uniqCfg = NULL;
+ nrLDPC_coding_interface_t nrLDPC_coding_interface = {0};
+@@ -295,8 +299,8 @@
+   time_manager_start(tick_functions, tick_functions_count,
+                      // iq_samples time source for rfsim,
+                      // realtime time source if not
+-                     IS_SOFTMODEM_RFSIM ? TIME_SOURCE_IQ_SAMPLES
+-                                        : TIME_SOURCE_REALTIME);
++                     IS_SOFTMODEM_RFSIM || nrlink_ue_enabled() ? TIME_SOURCE_IQ_SAMPLES
++                                                               : TIME_SOURCE_REALTIME);
+ 
+   // initialize per-cell frame parameters
+   for (int cell_id = 0; cell_id < nrue_get_cell_count(); cell_id++) {
+@@ -391,7 +395,9 @@
+     }
+   }
+ 
+-  nrue_init_openair0();
++  // nrlink L1 emulation: no radio device, the slots come from the board bridge
++  if (!nrlink_ue_enabled())
++    nrue_init_openair0();
+ 
+   lock_memory_to_ram();
+ 
+@@ -408,14 +414,21 @@
+   }
+ 
+   // Launch a temporary high-priority thread to start the UE RU, ensuring radio library threads inherit this priority
+-  pthread_t ru_start_thread;
+-  threadCreate(&ru_start_thread, nrue_ru_start_thread, NULL, "ru_start_thread", -1, OAI_PRIORITY_RT_MAX);
+-  int ret = pthread_join(ru_start_thread, NULL);
+-  AssertFatal(ret == 0, "pthread_join error %d, errno %d (%s)\n", ret, errno, strerror(errno));
+-
+-  for (int inst = 0; inst < NB_UE_INST; inst++) {
+-    LOG_I(PHY,"Intializing UE Threads for instance %d ...\n", inst);
+-    init_NR_UE_threads(nrPHY_vars_UE_g[inst][0]);
++  if (nrlink_ue_enabled()) {
++    for (int inst = 0; inst < NB_UE_INST; inst++) {
++      PHY_VARS_NR_UE *UE = nrPHY_vars_UE_g[inst][0];
++      threadCreate(&UE->main_thread, nrlink_ue_thread, UE, "nrlink_ue", -1, OAI_PRIORITY_RT_MAX);
++    }
++  } else {
++    pthread_t ru_start_thread;
++    threadCreate(&ru_start_thread, nrue_ru_start_thread, NULL, "ru_start_thread", -1, OAI_PRIORITY_RT_MAX);
++    int ret = pthread_join(ru_start_thread, NULL);
++    AssertFatal(ret == 0, "pthread_join error %d, errno %d (%s)\n", ret, errno, strerror(errno));
++
++    for (int inst = 0; inst < NB_UE_INST; inst++) {
++      LOG_I(PHY,"Intializing UE Threads for instance %d ...\n", inst);
++      init_NR_UE_threads(nrPHY_vars_UE_g[inst][0]);
++    }
+   }
+ 
+   // wait for end of program
+--- a/executables/nrlink_ue.c
++++ b/executables/nrlink_ue.c
+@@ -0,0 +1,462 @@
++/*
++ * nrlink UE side: L1 emulation replacing UE_thread (see nfapi/oai_integration/nrlink_proto.h).
++ *
++ * Enabled with NRLINK_UE=<bridge ip>:<port>. The UE bridge forwards the DL_SLOT messages its board
++ * received over the air; each one drives one slot of the UE MAC exactly as the PHY would:
++ * MIB (SSB), DCIs matched against the search spaces the MAC configured, PDSCH transport blocks for the
++ * DLSCH the MAC configured from those DCIs. For the TX slot (rx slot + rx2tx) the MAC's PUSCH/PUCCH/PRACH
++ * configuration is sent back as an UL_SLOT message, which the bridge transmits when the gNB polls.
++ */
++
++#include <arpa/inet.h>
++#include <errno.h>
++#include <poll.h>
++#include <stdlib.h>
++#include <string.h>
++#include <sys/socket.h>
++#include <time.h>
++#include <unistd.h>
++
++#include "PHY/defs_nr_common.h"
++#include "PHY/impl_defs_nr.h"
++#include "executables/nr-uesoftmodem.h"
++#include "PHY/INIT/nr_phy_init.h"
++#include "LAYER2/NR_MAC_UE/mac_proto.h"
++#include "RRC/NR_UE/L2_interface_ue.h"
++#include "SCHED_NR_UE/defs.h"
++#include "executables/softmodem-common.h"
++#include "common/utils/nr/nr_common.h"
++#include "common/utils/time_manager/time_manager.h"
++#include "nr_phy_common.h"
++#include "log.h"
++#include "common/utils/utils.h"
++#include "../nfapi/oai_integration/nrlink_proto.h"
++
++#define MAX_SS 16
++#define MAX_DLSCH 8
++#define MAX_CATCHUP_SLOTS 40
++
++/* what the MAC configured for the slot being processed (passed to the MAC as phy_data) */
++typedef struct {
++  int n_ss;
++  fapi_nr_dl_config_dci_dl_pdu_rel15_t ss[MAX_SS];
++  int n_dlsch;
++  struct {
++    uint8_t type;
++    fapi_nr_dl_config_dlsch_pdu pdu;
++  } dlsch[MAX_DLSCH];
++} emu_dl_t;
++
++typedef struct {
++  uint8_t *buf;
++  size_t len;
++  nrlink_hdr_t *hdr;
++} emu_msg_t;
++
++static int s_sock = -1;
++static struct sockaddr_in s_bridge;
++static uint8_t s_rx[NRLINK_MAX_MSG];
++static uint8_t s_tx[NRLINK_MAX_MSG];
++static emu_msg_t *s_ul; /* UL message being built during ul_indication */
++static uint16_t s_crnti;
++
++static void *ul_item(emu_msg_t *m, uint8_t type, size_t len)
++{
++  AssertFatal(m->len + sizeof(nrlink_item_t) + len <= sizeof(s_tx), "nrlink UL message overflow\n");
++  nrlink_item_t *it = (nrlink_item_t *)(m->buf + m->len);
++  it->type = type;
++  it->len = len;
++  m->len += sizeof(*it);
++  void *body = m->buf + m->len;
++  m->len += len;
++  m->hdr->n_items++;
++  return body;
++}
++
++/* replaces nr_ue_scheduled_response(): capture the MAC's configuration instead of programming a PHY */
++static int8_t emu_scheduled_response(nr_scheduled_response_t *sr)
++{
++  if (sr->dl_config && sr->phy_data) {
++    emu_dl_t *dl = sr->phy_data;
++    fapi_nr_dl_config_request_t *cfg = sr->dl_config;
++    int n_ss = 0, n_dlsch = 0;
++    for (int i = 0; i < cfg->number_pdus; i++) {
++      fapi_nr_dl_config_request_pdu_t *pdu = &cfg->dl_config_list[i];
++      switch (pdu->pdu_type) {
++        case FAPI_NR_DL_CONFIG_TYPE_DCI:
++          if (n_ss < MAX_SS)
++            dl->ss[n_ss++] = pdu->dci_config_pdu.dci_config_rel15;
++          break;
++        case FAPI_NR_DL_CONFIG_TYPE_DLSCH:
++        case FAPI_NR_DL_CONFIG_TYPE_RA_DLSCH:
++        case FAPI_NR_DL_CONFIG_TYPE_SI_DLSCH:
++        case FAPI_NR_DL_CONFIG_TYPE_P_DLSCH:
++          if (n_dlsch < MAX_DLSCH) {
++            dl->dlsch[n_dlsch].type = pdu->pdu_type;
++            dl->dlsch[n_dlsch].pdu = pdu->dlsch_config_pdu;
++            n_dlsch++;
++          }
++          break;
++        default:
++          break; /* CSI-RS/IM, TA command: nothing to emulate */
++      }
++    }
++    if (n_ss)
++      dl->n_ss = n_ss;
++    if (n_dlsch)
++      dl->n_dlsch = n_dlsch;
++  }
++
++  if (sr->ul_config) {
++    fapi_nr_ul_config_request_t *cfg = sr->ul_config;
++    fapi_nr_ul_config_request_pdu_t *pdu = fapiLockIterator(cfg, cfg->frame, cfg->slot);
++    if (!pdu)
++      return 0;
++    for (; pdu->pdu_type != FAPI_NR_END; pdu++) {
++      switch (pdu->pdu_type) {
++        case FAPI_NR_UL_CONFIG_TYPE_PUSCH: {
++          const nfapi_nr_ue_pusch_pdu_t *p = &pdu->pusch_config_pdu;
++          const uint32_t len = p->tx_request_body.fapiTxPdu ? p->tx_request_body.pdu_length : 0;
++          if (s_ul) {
++            nrlink_pusch_t *it = ul_item(s_ul, NRLINK_IT_PUSCH, sizeof(*it) + len);
++            it->rnti = p->rnti;
++            it->harq_pid = p->pusch_data.harq_process_id;
++            it->tb_len = len;
++            if (len)
++              memcpy(it + 1, p->tx_request_body.fapiTxPdu, len);
++            /* UCI multiplexed on PUSCH is not emulated: the gNB OAI scheduler avoids it by default */
++          }
++          pdu->pdu_type = FAPI_NR_UL_CONFIG_TYPE_DONE;
++        } break;
++        case FAPI_NR_UL_CONFIG_TYPE_PUCCH: {
++          const fapi_nr_ul_config_pucch_pdu *p = &pdu->pucch_config_pdu;
++          if (s_ul) {
++            nrlink_uci_t *it = ul_item(s_ul, NRLINK_IT_UCI, sizeof(*it));
++            *it = (nrlink_uci_t){.rnti = p->rnti,
++                                 .format = p->format_type,
++                                 .n_harq = p->emu_n_harq,
++                                 .ack_payload = p->emu_ack_payload,
++                                 .n_sr = p->emu_n_sr,
++                                 .sr_payload = p->emu_sr_payload,
++                                 .n_bit = p->n_bit,
++                                 .payload = p->payload};
++          }
++          pdu->pdu_type = FAPI_NR_UL_CONFIG_TYPE_DONE;
++        } break;
++        case FAPI_NR_UL_CONFIG_TYPE_PRACH: {
++          const fapi_nr_ul_config_prach_pdu *p = &pdu->prach_config_pdu;
++          if (s_ul) {
++            nrlink_prach_t *it = ul_item(s_ul, NRLINK_IT_PRACH, sizeof(*it));
++            *it = (nrlink_prach_t){.preamble_index = p->ra_PreambleIndex, .num_ra = p->num_ra, .start_symbol = p->prach_start_symbol};
++            LOG_I(NR_PHY, "nrlink: PRACH preamble %d for %d.%d\n", p->ra_PreambleIndex, cfg->frame, cfg->slot);
++          }
++          pdu->pdu_type = FAPI_NR_UL_CONFIG_TYPE_DONE;
++        } break;
++        case FAPI_NR_UL_CONFIG_TYPE_SRS:
++          pdu->pdu_type = FAPI_NR_UL_CONFIG_TYPE_DONE;
++          break;
++        default:
++          break;
++      }
++    }
++    release_ul_config(pdu, true);
++  }
++  return 0;
++}
++
++/* copies of the static helpers in nr-ue.c and phy_procedures_nr_ue.c */
++static int emu_slot_select(const fapi_nr_config_request_t *cfg, int nr_slot)
++{
++  if (cfg->cell_config.frame_duplex_type == FDD)
++    return NR_UPLINK_SLOT | NR_DOWNLINK_SLOT;
++  const fapi_nr_tdd_table_t *tdd_table = &cfg->tdd_table;
++  if (tdd_table->max_tdd_periodicity_list == NULL)
++    return NR_DOWNLINK_SLOT;
++  const fapi_nr_max_tdd_periodicity_t *cur = &tdd_table->max_tdd_periodicity_list[nr_slot % tdd_table->tdd_period_in_slots];
++  if (cur->num_dl_ul_symbols_list.num_dl == NR_SYMBOLS_PER_SLOT)
++    return NR_DOWNLINK_SLOT;
++  if (cur->num_dl_ul_symbols_list.num_ul == NR_SYMBOLS_PER_SLOT)
++    return NR_UPLINK_SLOT;
++  return NR_MIXED_SLOT;
++}
++
++static uint32_t emu_ssb_arfcn(const NR_DL_FRAME_PARMS *fp)
++{
++  uint32_t band_size_hz = fp->N_RB_DL * 12 * fp->subcarrier_spacing;
++  int ssb_center_sc = fp->ssb_start_subcarrier + 120;
++  uint64_t ssb_freq = fp->dl_CarrierFreq - (band_size_hz / 2) + fp->subcarrier_spacing * ssb_center_sc;
++  return to_nrarfcn(ssb_freq);
++}
++
++static bool has_dl(int type)
++{
++  return type == NR_DOWNLINK_SLOT || type == NR_MIXED_SLOT || type == (NR_UPLINK_SLOT | NR_DOWNLINK_SLOT);
++}
++
++static bool has_ul(int type)
++{
++  return type == NR_UPLINK_SLOT || type == NR_MIXED_SLOT || type == (NR_UPLINK_SLOT | NR_DOWNLINK_SLOT);
++}
++
++/* ---- DL slot message parsing ---- */
++
++typedef struct {
++  const nrlink_ssb_t *ssb;
++  int n_dci;
++  const nrlink_dci_t *dci[32];
++  int n_tb;
++  const nrlink_tb_t *tb[32];
++} dl_items_t;
++
++static void parse_dl(const uint8_t *items, int n_items, size_t len, dl_items_t *out)
++{
++  memset(out, 0, sizeof(*out));
++  const uint8_t *p = items;
++  for (int i = 0; i < n_items && p + sizeof(nrlink_item_t) <= items + len; i++) {
++    const nrlink_item_t *it = (const nrlink_item_t *)p;
++    if (p + sizeof(*it) + it->len > items + len)
++      break;
++    const void *body = it + 1;
++    if (it->type == NRLINK_IT_SSB)
++      out->ssb = body;
++    else if (it->type == NRLINK_IT_DCI && out->n_dci < 32)
++      out->dci[out->n_dci++] = body;
++    else if (it->type == NRLINK_IT_TB && out->n_tb < 32)
++      out->tb[out->n_tb++] = body;
++    p += sizeof(*it) + it->len;
++  }
++}
++
++static void deliver_ssb(PHY_VARS_NR_UE *UE, int frame, int slot, const nrlink_ssb_t *s)
++{
++  NR_DL_FRAME_PARMS *fp = &UE->frame_parms;
++  fp->Nid_cell = s->cell_id;
++  fp->ssb_index = s->ssb_index;
++  fp->ssb_start_subcarrier = s->ssb_start_subcarrier;
++
++  fapi_nr_rx_indication_t rx_ind = {.number_pdus = 1};
++  fapi_nr_ssb_pdu_t *ssb = &rx_ind.rx_indication_body[0].ssb_pdu;
++  rx_ind.rx_indication_body[0].pdu_type = FAPI_NR_RX_PDU_TYPE_SSB;
++  memcpy(ssb->pdu, s->mib, 3);
++  ssb->additional_bits = s->xtra_byte;
++  ssb->ssb_index = s->ssb_index & 7;
++  ssb->ssb_length = s->lmax;
++  ssb->cell_id = s->cell_id;
++  ssb->ssb_start_subcarrier = s->ssb_start_subcarrier;
++  ssb->arfcn = emu_ssb_arfcn(fp);
++  ssb->radiolink_monitoring = RLM_in_sync;
++  ssb->decoded_pdu = true;
++  nr_downlink_indication_t dl = {.module_id = UE->Mod_id, .cc_id = UE->CC_id, .frame = frame, .slot = slot, .rx_ind = &rx_ind};
++  UE->if_inst->dl_indication(&dl);
++}
++
++static void deliver_dcis(PHY_VARS_NR_UE *UE, int frame, int slot, const dl_items_t *items, emu_dl_t *cfg)
++{
++  fapi_nr_dci_indication_t dci_ind = {.SFN = frame, .slot = slot};
++  for (int i = 0; i < items->n_dci; i++) {
++    const nrlink_dci_t *d = items->dci[i];
++    bool found = false;
++    for (int s = 0; s < cfg->n_ss && !found; s++) {
++      const fapi_nr_dl_config_dci_dl_pdu_rel15_t *ss = &cfg->ss[s];
++      if (ss->rnti != d->rnti)
++        continue;
++      for (int k = 0; k < ss->num_dci_options && !found; k++) {
++        if (ss->dci_length_options[k] != d->nbits)
++          continue;
++        if (dci_ind.number_of_dcis >= sizeofArray(dci_ind.dci_list))
++          break;
++        fapi_nr_dci_indication_pdu_t *out = &dci_ind.dci_list[dci_ind.number_of_dcis++];
++        *out = (fapi_nr_dci_indication_pdu_t){.rnti = d->rnti,
++                                              .n_CCE = d->cce_index,
++                                              .N_CCE = d->aggregation_level,
++                                              .dci_format = ss->dci_format_options[k],
++                                              .ss_type = ss->ss_type_options[k],
++                                              .coreset_type = ss->coreset.CoreSetType,
++                                              .payloadSize = d->nbits};
++        int n_rb, cset_start;
++        get_coreset_rballoc(ss->coreset.frequency_domain_resource, &n_rb, &cset_start);
++        out->cset_start = ss->BWPStart + cset_start + ss->coreset.rb_offset;
++        memcpy(out->payloadBits, d + 1, (d->nbits + 7) / 8);
++        found = true;
++      }
++    }
++  }
++  if (dci_ind.number_of_dcis == 0)
++    return;
++  cfg->n_dlsch = 0;
++  nr_downlink_indication_t dl = {.module_id = UE->Mod_id, .cc_id = UE->CC_id, .frame = frame, .slot = slot, .dci_ind = &dci_ind, .phy_data = cfg};
++  UE->if_inst->dl_indication(&dl);
++}
++
++static void deliver_pdsch(PHY_VARS_NR_UE *UE, int frame, int slot, const dl_items_t *items, emu_dl_t *cfg)
++{
++  for (int i = 0; i < cfg->n_dlsch; i++) {
++    const fapi_nr_dl_config_dlsch_pdu *pdu = &cfg->dlsch[i].pdu;
++    const fapi_nr_dl_config_dlsch_pdu_rel15_t *rel15 = &pdu->dlsch_config_rel15;
++    const uint32_t tbs = rel15->cw_info[0].TBS / 8;
++    const nrlink_tb_t *tb = NULL;
++    for (int t = 0; t < items->n_tb && !tb; t++)
++      if (items->tb[t]->rnti == pdu->rnti)
++        tb = items->tb[t];
++    uint8_t type = FAPI_NR_RX_PDU_TYPE_DLSCH;
++    if (cfg->dlsch[i].type == FAPI_NR_DL_CONFIG_TYPE_RA_DLSCH)
++      type = FAPI_NR_RX_PDU_TYPE_RAR;
++    else if (cfg->dlsch[i].type == FAPI_NR_DL_CONFIG_TYPE_SI_DLSCH)
++      type = FAPI_NR_RX_PDU_TYPE_SIB;
++    else if (cfg->dlsch[i].type == FAPI_NR_DL_CONFIG_TYPE_P_DLSCH)
++      type = FAPI_NR_RX_PDU_TYPE_PCCH;
++    const bool ok = tb && tb->tb_len == tbs;
++    if (tb && !ok)
++      LOG_W(NR_PHY, "nrlink: %d.%d rnti %04x TB %d B over the air, MAC expects %d B\n", frame, slot, pdu->rnti, tb->tb_len, tbs);
++    fapi_nr_rx_indication_t rx_ind = {.number_pdus = 1};
++    rx_ind.rx_indication_body[0].pdu_type = type;
++    fapi_nr_pdsch_pdu_t *pd = &rx_ind.rx_indication_body[0].pdsch_pdu;
++    pd->harq_pid = rel15->harq_process_nbr;
++    pd->cw_idx = 0;
++    pd->ack_nack = ok;
++    pd->pdu = ok ? (uint8_t *)(tb + 1) : NULL;
++    pd->pdu_length = tbs;
++    nr_downlink_indication_t dl = {.module_id = UE->Mod_id, .cc_id = UE->CC_id, .frame = frame, .slot = slot, .rx_ind = &rx_ind};
++    UE->if_inst->dl_indication(&dl);
++  }
++}
++
++static void drain_rrc(PHY_VARS_NR_UE *UE)
++{
++  NR_UE_MAC_INST_t *mac = get_mac_inst(UE->Mod_id);
++  for (;;) {
++    notifiedFIFO_elt_t *elt = pollNotifiedFIFO(&mac->input_nf);
++    if (!elt)
++      break;
++    process_msg_rcc_to_mac(NotifiedFifoData(elt), UE->Mod_id);
++    delNotifiedFIFO_elt(elt);
++  }
++}
++
++static void process_slot(PHY_VARS_NR_UE *UE, int abs_slot, const dl_items_t *items)
++{
++  const NR_DL_FRAME_PARMS *fp = &UE->frame_parms;
++  const int spf = fp->slots_per_frame;
++  const int rx2tx = get_nrUE_params()->ue_capability_rx2tx;
++  const int frame = (abs_slot / spf) % MAX_FRAME_NUMBER, slot = abs_slot % spf;
++  const int frame_tx = ((abs_slot + rx2tx) / spf) % MAX_FRAME_NUMBER, slot_tx = (abs_slot + rx2tx) % spf;
++  int rx_type = NR_DOWNLINK_SLOT, tx_type = NR_DOWNLINK_SLOT;
++  if (UE->received_config_request) {
++    rx_type = emu_slot_select(&UE->nrUE_config, slot);
++    tx_type = emu_slot_select(&UE->nrUE_config, slot_tx);
++  }
++
++  time_manager_iq_samples(1, spf * 100);
++  drain_rrc(UE);
++  UE->if_inst->slot_indication(UE->Mod_id, false);
++
++  if (has_dl(rx_type)) {
++    static emu_dl_t cfg;
++    memset(&cfg, 0, sizeof(cfg));
++    nr_downlink_indication_t dl = {.module_id = UE->Mod_id, .cc_id = UE->CC_id, .frame = frame, .slot = slot, .phy_data = &cfg};
++    UE->if_inst->dl_indication(&dl); /* MAC configures the search spaces to monitor */
++    if (items) {
++      if (items->ssb)
++        deliver_ssb(UE, frame, slot, items->ssb);
++      deliver_dcis(UE, frame, slot, items, &cfg);
++      deliver_pdsch(UE, frame, slot, items, &cfg);
++    }
++  }
++
++  UE->if_inst->slot_indication(UE->Mod_id, true);
++  if (has_ul(tx_type)) {
++    emu_msg_t m = {.buf = s_tx, .hdr = (nrlink_hdr_t *)s_tx, .len = sizeof(nrlink_hdr_t)};
++    NR_UE_MAC_INST_t *mac = get_mac_inst(UE->Mod_id);
++    s_crnti = mac->crnti;
++    *m.hdr = (nrlink_hdr_t){.magic = NRLINK_MAGIC, .type = NRLINK_MSG_UL_SLOT, .sfn = frame_tx, .slot = slot_tx, .rnti = s_crnti};
++    s_ul = &m;
++    nr_phy_data_tx_t phy_data = {0};
++    nr_uplink_indication_t ul = {.module_id = UE->Mod_id, .frame = frame_tx, .slot = slot_tx, .phy_data = &phy_data};
++    UE->if_inst->ul_indication(&ul);
++    s_ul = NULL;
++    /* sent even when empty: tells the bridge this TX slot is processed, so it does not answer a poll too early */
++    sendto(s_sock, m.buf, m.len, 0, (struct sockaddr *)&s_bridge, sizeof(s_bridge));
++  }
++}
++
++static void send_hello(void)
++{
++  nrlink_hdr_t h = {.magic = NRLINK_MAGIC, .type = NRLINK_MSG_HELLO, .rnti = s_crnti};
++  sendto(s_sock, &h, sizeof(h), 0, (struct sockaddr *)&s_bridge, sizeof(s_bridge));
++}
++
++bool nrlink_ue_enabled(void)
++{
++  const char *env = getenv("NRLINK_UE");
++  return env && *env;
++}
++
++void *nrlink_ue_thread(void *arg)
++{
++  PHY_VARS_NR_UE *UE = arg;
++  const char *env = getenv("NRLINK_UE");
++  char host[64];
++  int port = 5001;
++  AssertFatal(sscanf(env, "%63[^:]:%d", host, &port) >= 1, "NRLINK_UE must be <ip>:<port>\n");
++  s_sock = socket(AF_INET, SOCK_DGRAM, 0);
++  AssertFatal(s_sock >= 0, "nrlink socket: %s\n", strerror(errno));
++  int buf = 4 << 20;
++  setsockopt(s_sock, SOL_SOCKET, SO_RCVBUF, &buf, sizeof(buf));
++  s_bridge = (struct sockaddr_in){.sin_family = AF_INET, .sin_port = htons(port)};
++  AssertFatal(inet_pton(AF_INET, host, &s_bridge.sin_addr) == 1, "bad NRLINK_UE address %s\n", host);
++  UE->if_inst->scheduled_response = emu_scheduled_response;
++  UE->is_synchronized = 0;
++  LOG_A(NR_PHY, "nrlink: UE L1 emulation, bridge %s:%d\n", host, port);
++
++  const int spf = UE->frame_parms.slots_per_frame;
++  const int frame_slots = MAX_FRAME_NUMBER * spf;
++  int last_abs = -1;
++  time_t last_hello = 0;
++  dl_items_t items;
++
++  while (!oai_exit) {
++    if (time(NULL) != last_hello) {
++      send_hello(); /* lets the bridge learn our address and current C-RNTI */
++      last_hello = time(NULL);
++    }
++    struct pollfd pfd = {.fd = s_sock, .events = POLLIN};
++    if (poll(&pfd, 1, 500) <= 0)
++      continue;
++    ssize_t n = recv(s_sock, s_rx, sizeof(s_rx), 0);
++    if (n < (ssize_t)sizeof(nrlink_hdr_t))
++      continue;
++    const nrlink_hdr_t *h = (const nrlink_hdr_t *)s_rx;
++    if (h->magic != NRLINK_MAGIC || h->type != NRLINK_MSG_DL_SLOT)
++      continue;
++    parse_dl(s_rx + sizeof(*h), h->n_items, n - sizeof(*h), &items);
++    const int abs_slot = h->sfn * spf + h->slot;
++
++    if (!UE->is_synchronized) {
++      if (!items.ssb)
++        continue;
++      /* initial sync: MIB to MAC/RRC, then wait for RRC's answer as UE_thread does */
++      deliver_ssb(UE, h->sfn, h->slot, items.ssb);
++      NR_UE_MAC_INST_t *mac = get_mac_inst(UE->Mod_id);
++      notifiedFIFO_elt_t *elt = pullNotifiedFIFO(&mac->input_nf);
++      process_msg_rcc_to_mac(NotifiedFifoData(elt), UE->Mod_id);
++      delNotifiedFIFO_elt(elt);
++      UE->is_synchronized = 1;
++      LOG_A(NR_PHY, "nrlink: UE synchronized on %d.%d (cell %d)\n", h->sfn, h->slot, items.ssb->cell_id);
++      last_abs = abs_slot;
++      continue;
++    }
++
++    int gap = (abs_slot - last_abs + frame_slots) % frame_slots;
++    if (gap == 0 || gap > frame_slots / 2)
++      continue; /* duplicate or old */
++    if (gap > MAX_CATCHUP_SLOTS) {
++      LOG_W(NR_PHY, "nrlink: jumped %d slots\n", gap);
++      gap = 1;
++    }
++    for (int s = gap - 1; s > 0; s--) /* slots whose DL message was lost over the air */
++      process_slot(UE, (abs_slot - s + frame_slots) % frame_slots, NULL);
++    process_slot(UE, abs_slot, &items);
++    last_abs = abs_slot;
++  }
++  return NULL;
++}
+--- a/nfapi/oai_integration/CMakeLists.txt
++++ b/nfapi/oai_integration/CMakeLists.txt
+@@ -11,7 +11,8 @@
+ # Shared: nFAPI mode management + PNF (Temporary until PNF separation)
+ add_library(nfapi_user_lib
+         nfapi.c
+-        nfapi_pnf.c)
++        nfapi_pnf.c
++        nrlink_gnb.c)
+ if(OAI_WLS)
+     target_compile_definitions(nfapi_user_lib PRIVATE ENABLE_WLS)
+ elseif(OAI_AERIAL)
+--- a/nfapi/oai_integration/nfapi_pnf.c
++++ b/nfapi/oai_integration/nfapi_pnf.c
+@@ -12,6 +12,7 @@
+ 
+ #include "debug.h"
+ #include "nfapi/oai_integration/vendor_ext.h"
++#include "nfapi/oai_integration/nrlink_gnb.h"
+ #include "nfapi_pnf_interface.h"
+ #include "nfapi_nr_interface.h"
+ #include "nfapi_nr_interface_scf.h"
+@@ -2355,6 +2356,15 @@
+                         &sched_resp->UL_dci_req,
+                         &sched_resp->TX_req);
+ 
++  // nrlink: hand the slot to the board bridge instead of a radio (no-op unless NRLINK_GNB is set)
++  static bool nrlink_init_done = false;
++  if (!nrlink_init_done) {
++    nrlink_gnb_init();
++    nrlink_init_done = true;
++  }
++  if (nrlink_gnb_active())
++    nrlink_gnb_slot(sfn, slot, sched_resp);
++
+   return;
+ }
+ 
+--- a/nfapi/oai_integration/nrlink_gnb.c
++++ b/nfapi/oai_integration/nrlink_gnb.c
+@@ -0,0 +1,441 @@
++/*
++ * nrlink gNB side: L1 emulation inside the PNF.
++ *
++ * Enabled with NRLINK_GNB=<bridge ip>:<port>. For every slot the PNF hands to L1, the DL content the
++ * VNF scheduled (SSB/MIB, DCIs, PDSCH transport blocks) is sent as a DL_SLOT message to the gNB bridge,
++ * which transmits it over the gNB board's radio and polls the UE boards. The bridge answers with the
++ * UL items the UEs sent for that slot (PUSCH TBs, UCI, PRACH); they are turned into CRC/RX_DATA/UCI/RACH
++ * indications for the VNF, matched against the slot's UL_TTI.request. The PHY's own UL indications
++ * (it receives nothing over rfsim) are suppressed, see NR_IF_Module.c. Waiting for the bridge paces
++ * the PNF: one slot takes as long as its over-the-air exchange.
++ */
++
++#include <arpa/inet.h>
++#include <errno.h>
++#include <poll.h>
++#include <stdlib.h>
++#include <string.h>
++#include <sys/socket.h>
++#include <time.h>
++#include <unistd.h>
++
++#include "common/ran_context.h"
++#include "common/utils/LOG/log.h"
++#include "openair1/PHY/defs_gNB.h"
++#include "openair1/PHY/NR_TRANSPORT/nr_transport_proto.h"
++#include "common/utils/utils.h"
++#include "openair2/NR_PHY_INTERFACE/NR_IF_Module.h"
++#include "nfapi_nr_interface_scf.h"
++#include "openair1/PHY/nr_phy_common/inc/nr_phy_common.h"
++#include "nrlink_proto.h"
++#include "nrlink_gnb.h"
++
++int oai_nfapi_nr_rx_data_indication(nfapi_nr_rx_data_indication_t *ind);
++int oai_nfapi_nr_crc_indication(nfapi_nr_crc_indication_t *ind);
++int oai_nfapi_nr_uci_indication(nfapi_nr_uci_indication_t *ind);
++int oai_nfapi_nr_rach_indication(nfapi_nr_rach_indication_t *ind);
++
++static int s_sock = -1;
++static struct sockaddr_in s_bridge;
++static int s_timeout_ms = 300;
++static uint8_t s_tx[NRLINK_MAX_MSG];
++static uint8_t s_rx[NRLINK_MAX_MSG];
++
++bool nrlink_gnb_active(void)
++{
++  return s_sock >= 0;
++}
++
++void nrlink_gnb_init(void)
++{
++  const char *env = getenv("NRLINK_GNB");
++  if (env == NULL || *env == '\0')
++    return;
++  char host[64];
++  int port = 5000;
++  if (sscanf(env, "%63[^:]:%d", host, &port) < 1)
++    AssertFatal(false, "NRLINK_GNB must be <ip>:<port>, got \"%s\"\n", env);
++  const char *t = getenv("NRLINK_TIMEOUT_MS");
++  if (t)
++    s_timeout_ms = atoi(t);
++
++  s_sock = socket(AF_INET, SOCK_DGRAM, 0);
++  AssertFatal(s_sock >= 0, "nrlink socket: %s\n", strerror(errno));
++  int buf = 4 << 20;
++  setsockopt(s_sock, SOL_SOCKET, SO_RCVBUF, &buf, sizeof(buf));
++  struct sockaddr_in local = {.sin_family = AF_INET, .sin_port = htons(port + 100), .sin_addr.s_addr = htonl(INADDR_ANY)};
++  AssertFatal(bind(s_sock, (struct sockaddr *)&local, sizeof(local)) == 0, "nrlink bind: %s\n", strerror(errno));
++  s_bridge = (struct sockaddr_in){.sin_family = AF_INET, .sin_port = htons(port)};
++  AssertFatal(inet_pton(AF_INET, host, &s_bridge.sin_addr) == 1, "bad NRLINK_GNB address %s\n", host);
++  LOG_A(NR_PHY, "nrlink: L1 emulation enabled, bridge %s:%d, local port %d, slot timeout %d ms\n", host, port, port + 100, s_timeout_ms);
++}
++
++/* ---- message building ---- */
++
++typedef struct {
++  uint8_t *buf;
++  size_t len;
++  nrlink_hdr_t *hdr;
++} msg_t;
++
++static void msg_start(msg_t *m, uint8_t type, int sfn, int slot)
++{
++  m->buf = s_tx;
++  m->hdr = (nrlink_hdr_t *)s_tx;
++  *m->hdr = (nrlink_hdr_t){.magic = NRLINK_MAGIC, .type = type, .sfn = sfn, .slot = slot};
++  m->len = sizeof(nrlink_hdr_t);
++}
++
++static void *msg_item(msg_t *m, uint8_t type, size_t len)
++{
++  AssertFatal(m->len + sizeof(nrlink_item_t) + len <= sizeof(s_tx), "nrlink message overflow\n");
++  nrlink_item_t *it = (nrlink_item_t *)(m->buf + m->len);
++  it->type = type;
++  it->len = len;
++  m->len += sizeof(*it);
++  void *body = m->buf + m->len;
++  m->len += len;
++  m->hdr->n_items++;
++  return body;
++}
++
++/* The MIB as the UE PHY will report it, see nr_generate_pbch() and nr_rx_pbch() */
++static void add_ssb(msg_t *m, const PHY_VARS_gNB *gNB, int sfn, int slot, const nfapi_nr_dl_tti_ssb_pdu_rel15_t *ssb)
++{
++  const NR_DL_FRAME_PARMS *fp = &gNB->frame_parms;
++  const uint8_t *pbch_pdu = (const uint8_t *)&ssb->bchPayload;
++  uint32_t pbch_a = 0;
++  for (int i = 0; i < NR_PBCH_PDU_BITS; i++)
++    pbch_a |= ((pbch_pdu[i >> 3] >> (7 - (i & 7))) & 1) << i;
++  const int n_hf = slot < (fp->slots_per_frame >> 1) ? 0 : 1;
++  const int ssb_sc_offset = gNB->gNB_config.ssb_table.ssb_subcarrier_offset.value;
++  pbch_a |= nr_pbch_extra_byte_generation(sfn, n_hf, ssb->SsbBlockIndex, ssb_sc_offset, fp->Lmax) << 24;
++
++  uint32_t rev = 0;
++  for (int i = 0; i < 32; i++)
++    rev |= ((pbch_a >> i) & 1) << (31 - i);
++
++  nrlink_ssb_t *s = msg_item(m, NRLINK_IT_SSB, sizeof(*s));
++  for (int i = 0; i < 3; i++)
++    s->mib[i] = (rev >> ((3 - i) << 3)) & 0xff;
++  s->xtra_byte = pbch_a >> 24;
++  s->ssb_index = ssb->SsbBlockIndex;
++  s->lmax = fp->Lmax;
++  s->cell_id = ssb->PhysCellId;
++  // from the PDU, as nr_common_signal_procedures() does: fp->ssb_start_subcarrier is only set when the L1
++  // processes the SSB, after this hook, so it can still be 0 here (the nrUE then asserts on CORESET0)
++  s->ssb_start_subcarrier = nr_get_ssb_start_sc(gNB->gNB_config.ssb_config.scs_common.value, ssb->ssbOffsetPointA,
++                                                ssb->SsbSubcarrierOffset, fp->freq_range);
++}
++
++static void add_dcis(msg_t *m, const nfapi_nr_dl_tti_pdcch_pdu_rel15_t *pdcch)
++{
++  for (int i = 0; i < pdcch->numDlDci; i++) {
++    const nfapi_nr_dl_dci_pdu_t *dci = &pdcch->dci_pdu[i];
++    const int nbytes = (dci->PayloadSizeBits + 7) / 8;
++    nrlink_dci_t *d = msg_item(m, NRLINK_IT_DCI, sizeof(*d) + nbytes);
++    d->rnti = dci->RNTI;
++    d->cce_index = dci->CceIndex;
++    d->aggregation_level = dci->AggregationLevel;
++    d->nbits = dci->PayloadSizeBits;
++    memcpy(d + 1, dci->Payload, nbytes);
++  }
++}
++
++static void add_tb(msg_t *m, const nfapi_nr_dl_tti_pdsch_pdu_rel15_t *pdsch, const nfapi_nr_tx_data_request_t *tx)
++{
++  const int idx = pdsch->pduIndex;
++  if (idx >= tx->Number_of_PDUs || tx->pdu_list[idx].PDU_index != idx) {
++    LOG_E(NR_PHY, "nrlink: no TX_DATA for PDSCH index %d\n", idx);
++    return;
++  }
++  const nfapi_nr_tx_data_request_tlv_t *tlv = &tx->pdu_list[idx].TLVs[0];
++  const uint8_t *data = tlv->tag == 0 ? (const uint8_t *)tlv->value.direct : (const uint8_t *)tlv->value.ptr;
++  const uint32_t len = pdsch->TBSize[0];
++  nrlink_tb_t *t = msg_item(m, NRLINK_IT_TB, sizeof(*t) + len);
++  t->rnti = pdsch->rnti;
++  t->tb_len = len;
++  memcpy(t + 1, data, len);
++}
++
++/* ---- UL results -> indications ---- */
++
++static const nfapi_nr_ul_tti_request_number_of_pdus_t *find_ul_pdu(const nfapi_nr_ul_tti_request_t *ul, int type, uint16_t rnti, int skip)
++{
++  for (int i = 0; i < ul->n_pdus; i++) {
++    const nfapi_nr_ul_tti_request_number_of_pdus_t *p = &ul->pdus_list[i];
++    if (p->pdu_type != type)
++      continue;
++    if (type == NFAPI_NR_UL_CONFIG_PUSCH_PDU_TYPE && p->pusch_pdu.rnti != rnti)
++      continue;
++    if (type == NFAPI_NR_UL_CONFIG_PUCCH_PDU_TYPE && p->pucch_pdu.rnti != rnti)
++      continue;
++    if (skip-- > 0)
++      continue;
++    return p;
++  }
++  return NULL;
++}
++
++/* copy of pucch_rx.c set_uci_payload(): extract nb_bits LSB-first from *payload into bytes */
++static void take_bits(uint64_t *payload, int nb_bits, uint8_t *out)
++{
++  for (int i = 0; i < (nb_bits + 7) / 8; i++) {
++    int n = nb_bits - 8 * i < 8 ? nb_bits - 8 * i : 8;
++    out[i] = *payload & ((1 << n) - 1);
++    *payload >>= n;
++  }
++}
++
++static void fill_uci(nfapi_nr_uci_t *u, const nfapi_nr_pucch_pdu_t *pucch, const nrlink_uci_t *it)
++{
++  if (pucch->format_type <= 1) {
++    u->pdu_type = NFAPI_NR_UCI_FORMAT_0_1_PDU_TYPE;
++    u->pdu_size = sizeof(nfapi_nr_uci_pucch_pdu_format_0_1_t);
++    nfapi_nr_uci_pucch_pdu_format_0_1_t *p = &u->pucch_pdu_format_0_1;
++    p->pduBitmap = pucch->sr_flag | ((pucch->bit_len_harq > 0) << 1);
++    p->handle = pucch->handle;
++    p->rnti = pucch->rnti;
++    p->pucch_format = pucch->format_type;
++    p->ul_cqi = 255;
++    p->timing_advance = 0xffff;
++    p->rssi = 1000;
++    if (pucch->sr_flag) {
++      p->sr.sr_indication = it && it->n_sr > 0 && it->sr_payload;
++      p->sr.sr_confidence_level = 0;
++    }
++    if (pucch->bit_len_harq > 0) {
++      const int n = pucch->bit_len_harq > 2 ? 2 : pucch->bit_len_harq;
++      p->harq.num_harq = n;
++      p->harq.harq_confidence_level = it == NULL; /* no transmission received: DTX */
++      for (int b = 0; b < n; b++) {
++        /* gNB pucch0 decoding: 1 bit -> list[0] = bit0, 2 bits -> list[0] = bit1, list[1] = bit0; 0 = ACK */
++        int bit = it ? (it->ack_payload >> (n - 1 - b)) & 1 : 0;
++        p->harq.harq_list[b].harq_value = !bit;
++      }
++    }
++  } else {
++    u->pdu_type = NFAPI_NR_UCI_FORMAT_2_3_4_PDU_TYPE;
++    u->pdu_size = sizeof(nfapi_nr_uci_pucch_pdu_format_2_3_4_t);
++    nfapi_nr_uci_pucch_pdu_format_2_3_4_t *p = &u->pucch_pdu_format_2_3_4;
++    uint64_t payload = it ? it->payload : 0;
++    const int crc = it == NULL;
++    p->handle = pucch->handle;
++    p->rnti = pucch->rnti;
++    p->pucch_format = pucch->format_type - 2;
++    p->ul_cqi = 255;
++    p->timing_advance = 0xffff;
++    p->rssi = 1000;
++    p->pduBitmap = 0;
++    if (pucch->bit_len_harq > 0) {
++      p->pduBitmap |= 2;
++      p->harq.harq_crc = crc;
++      p->harq.harq_bit_len = pucch->bit_len_harq;
++      p->harq.harq_payload = calloc((pucch->bit_len_harq + 7) / 8, 1);
++      take_bits(&payload, pucch->bit_len_harq, p->harq.harq_payload);
++    }
++    if (pucch->sr_flag) {
++      p->pduBitmap |= 1;
++      p->sr.sr_bit_len = 1;
++      p->sr.sr_payload = malloc(1);
++      p->sr.sr_payload[0] = payload & 1;
++      payload >>= 1;
++    }
++    if (pucch->bit_len_csi_part1 > 0) {
++      p->pduBitmap |= 4;
++      p->csi_part1.csi_part1_crc = crc;
++      p->csi_part1.csi_part1_bit_len = pucch->bit_len_csi_part1;
++      p->csi_part1.csi_part1_payload = calloc((pucch->bit_len_csi_part1 + 7) / 8, 1);
++      take_bits(&payload, pucch->bit_len_csi_part1, p->csi_part1.csi_part1_payload);
++    }
++  }
++}
++
++static const nrlink_uci_t *find_uci(const uint8_t *items, int n_items, size_t len, uint16_t rnti)
++{
++  const uint8_t *p = items;
++  for (int i = 0; i < n_items && p + sizeof(nrlink_item_t) <= items + len; i++) {
++    const nrlink_item_t *it = (const nrlink_item_t *)p;
++    if (it->type == NRLINK_IT_UCI && ((const nrlink_uci_t *)(it + 1))->rnti == rnti)
++      return (const nrlink_uci_t *)(it + 1);
++    p += sizeof(*it) + it->len;
++  }
++  return NULL;
++}
++
++static void indicate(int sfn, int slot, const nfapi_nr_ul_tti_request_t *ul, const uint8_t *items, int n_items, size_t len)
++{
++  static nfapi_nr_crc_indication_t crc_ind;
++  static nfapi_nr_rx_data_indication_t rx_ind;
++  static nfapi_nr_uci_indication_t uci_ind;
++  static nfapi_nr_rach_indication_t rach_ind;
++  static nfapi_nr_crc_t crc_list[NFAPI_MAX_NUM_UL_PDU];
++  static nfapi_nr_rx_data_pdu_t rx_list[NFAPI_MAX_NUM_UL_PDU];
++  static nfapi_nr_uci_t uci_list[NFAPI_MAX_NUM_UL_PDU];
++  static nfapi_nr_prach_indication_pdu_t rach_list[8];
++  bool pusch_done[NFAPI_MAX_NUM_UL_PDU] = {0};
++  bool pucch_done[NFAPI_MAX_NUM_UL_PDU] = {0};
++
++  crc_ind = (nfapi_nr_crc_indication_t){.sfn = sfn, .slot = slot, .crc_list = crc_list};
++  rx_ind = (nfapi_nr_rx_data_indication_t){.sfn = sfn, .slot = slot, .pdu_list = rx_list};
++  uci_ind = (nfapi_nr_uci_indication_t){.sfn = sfn, .slot = slot, .uci_list = uci_list};
++  rach_ind = (nfapi_nr_rach_indication_t){.sfn = sfn, .slot = slot, .pdu_list = rach_list};
++
++  const uint8_t *p = items;
++  for (int i = 0; i < n_items && p + sizeof(nrlink_item_t) <= items + len; i++) {
++    const nrlink_item_t *it = (const nrlink_item_t *)p;
++    const void *body = it + 1;
++    p += sizeof(*it) + it->len;
++    if (it->type == NRLINK_IT_PUSCH) {
++      const nrlink_pusch_t *pu = body;
++      const nfapi_nr_ul_tti_request_number_of_pdus_t *up = find_ul_pdu(ul, NFAPI_NR_UL_CONFIG_PUSCH_PDU_TYPE, pu->rnti, 0);
++      if (!up) {
++        LOG_W(NR_PHY, "nrlink: %d.%d PUSCH from rnti %04x not scheduled\n", sfn, slot, pu->rnti);
++        continue;
++      }
++      const nfapi_nr_pusch_pdu_t *pdu = &up->pusch_pdu;
++      pusch_done[up - ul->pdus_list] = true;
++      const bool ok = pu->tb_len == pdu->pusch_data.tb_size;
++      if (!ok)
++        LOG_W(NR_PHY, "nrlink: %d.%d PUSCH rnti %04x TB %d B, expected %d B\n", sfn, slot, pu->rnti, pu->tb_len, pdu->pusch_data.tb_size);
++      crc_list[crc_ind.number_crcs++] = (nfapi_nr_crc_t){.handle = pdu->handle,
++                                                          .rnti = pdu->rnti,
++                                                          .harq_id = pdu->pusch_data.harq_process_id,
++                                                          .tb_crc_status = !ok,
++                                                          .num_cb = pdu->pusch_data.num_cb,
++                                                          .ul_cqi = 255,
++                                                          .timing_advance = 31,
++                                                          .rssi = 1000};
++      rx_list[rx_ind.number_of_pdus++] = (nfapi_nr_rx_data_pdu_t){.handle = pdu->handle,
++                                                                   .rnti = pdu->rnti,
++                                                                   .harq_id = pdu->pusch_data.harq_process_id,
++                                                                   .pdu_length = ok ? pdu->pusch_data.tb_size : 0,
++                                                                   .ul_cqi = 255,
++                                                                   .timing_advance = 31,
++                                                                   .rssi = 1000,
++                                                                   .pdu = ok ? (uint8_t *)(pu + 1) : NULL};
++    } else if (it->type == NRLINK_IT_UCI) {
++      const nrlink_uci_t *uc = body;
++      for (int k = 0;; k++) {
++        const nfapi_nr_ul_tti_request_number_of_pdus_t *up = find_ul_pdu(ul, NFAPI_NR_UL_CONFIG_PUCCH_PDU_TYPE, uc->rnti, k);
++        if (!up)
++          break;
++        if (pucch_done[up - ul->pdus_list])
++          continue;
++        pucch_done[up - ul->pdus_list] = true;
++        fill_uci(&uci_list[uci_ind.num_ucis++], &up->pucch_pdu, uc);
++      }
++    } else if (it->type == NRLINK_IT_PRACH) {
++      const nrlink_prach_t *pr = body;
++      if (!ul->rach_present && !find_ul_pdu(ul, NFAPI_NR_UL_CONFIG_PRACH_PDU_TYPE, 0, 0)) {
++        LOG_W(NR_PHY, "nrlink: %d.%d PRACH outside of a RACH occasion\n", sfn, slot);
++        continue;
++      }
++      if (rach_ind.number_of_pdus >= sizeofArray(rach_list))
++        continue;
++      nfapi_nr_prach_indication_pdu_t *ind = &rach_ind.pdu_list[rach_ind.number_of_pdus++];
++      *ind = (nfapi_nr_prach_indication_pdu_t){
++          .phy_cell_id = RC.gNB[0]->gNB_config.cell_config.phy_cell_id.value,
++          .symbol_index = pr->start_symbol,
++          .slot_index = slot,
++          .freq_index = pr->num_ra,
++          .avg_rssi = 200,
++          .avg_snr = 0xff,
++          .num_preamble = 1,
++          .preamble_list = {{.preamble_index = pr->preamble_index, .timing_advance = 0, .preamble_pwr = 0xffffffff}}};
++      LOG_I(NR_PHY, "nrlink: %d.%d PRACH preamble %d (symbol %d, fdm %d)\n", sfn, slot, pr->preamble_index, pr->start_symbol, pr->num_ra);
++    }
++  }
++
++  /* scheduled but nothing received over the air: what the PHY reports for a missed transmission */
++  for (int i = 0; i < ul->n_pdus; i++) {
++    const nfapi_nr_ul_tti_request_number_of_pdus_t *up = &ul->pdus_list[i];
++    if (up->pdu_type == NFAPI_NR_UL_CONFIG_PUSCH_PDU_TYPE && !pusch_done[i]) {
++      const nfapi_nr_pusch_pdu_t *pdu = &up->pusch_pdu;
++      crc_list[crc_ind.number_crcs++] = (nfapi_nr_crc_t){.handle = pdu->handle,
++                                                          .rnti = pdu->rnti,
++                                                          .harq_id = pdu->pusch_data.harq_process_id,
++                                                          .tb_crc_status = 1,
++                                                          .num_cb = pdu->pusch_data.num_cb,
++                                                          .ul_cqi = 0,
++                                                          .timing_advance = 31};
++      rx_list[rx_ind.number_of_pdus++] =
++          (nfapi_nr_rx_data_pdu_t){.handle = pdu->handle, .rnti = pdu->rnti, .harq_id = pdu->pusch_data.harq_process_id};
++    } else if (up->pdu_type == NFAPI_NR_UL_CONFIG_PUCCH_PDU_TYPE && !pucch_done[i]) {
++      fill_uci(&uci_list[uci_ind.num_ucis++], &up->pucch_pdu, find_uci(items, n_items, len, up->pucch_pdu.rnti));
++    }
++  }
++
++  if (rach_ind.number_of_pdus)
++    oai_nfapi_nr_rach_indication(&rach_ind);
++  if (uci_ind.num_ucis)
++    oai_nfapi_nr_uci_indication(&uci_ind);
++  if (crc_ind.number_crcs) {
++    oai_nfapi_nr_crc_indication(&crc_ind);
++    oai_nfapi_nr_rx_data_indication(&rx_ind);
++  }
++}
++
++static int now_ms(void)
++{
++  struct timespec ts;
++  clock_gettime(CLOCK_MONOTONIC, &ts);
++  return ts.tv_sec * 1000 + ts.tv_nsec / 1000000;
++}
++
++void nrlink_gnb_slot(int sfn, int slot, struct NR_Sched_Rsp *rsp)
++{
++  const PHY_VARS_gNB *gNB = RC.gNB[0];
++  msg_t m;
++  msg_start(&m, NRLINK_MSG_DL_SLOT, sfn, slot);
++
++  const nfapi_nr_dl_tti_request_body_t *dl = &rsp->DL_req.dl_tti_request_body;
++  for (int i = 0; i < dl->nPDUs; i++) {
++    const nfapi_nr_dl_tti_request_pdu_t *pdu = &dl->dl_tti_pdu_list[i];
++    if (pdu->PDUType == NFAPI_NR_DL_TTI_SSB_PDU_TYPE)
++      add_ssb(&m, gNB, sfn, slot, &pdu->ssb_pdu.ssb_pdu_rel15);
++    else if (pdu->PDUType == NFAPI_NR_DL_TTI_PDCCH_PDU_TYPE)
++      add_dcis(&m, &pdu->pdcch_pdu.pdcch_pdu_rel15);
++  }
++  for (int i = 0; i < rsp->UL_dci_req.numPdus; i++)
++    add_dcis(&m, &rsp->UL_dci_req.ul_dci_pdu_list[i].pdcch_pdu.pdcch_pdu_rel15);
++  for (int i = 0; i < dl->nPDUs; i++) {
++    const nfapi_nr_dl_tti_request_pdu_t *pdu = &dl->dl_tti_pdu_list[i];
++    if (pdu->PDUType == NFAPI_NR_DL_TTI_PDSCH_PDU_TYPE)
++      add_tb(&m, &pdu->pdsch_pdu.pdsch_pdu_rel15, &rsp->TX_req);
++  }
++  const nfapi_nr_ul_tti_request_t *ul = &rsp->UL_tti_req;
++  for (int i = 0; i < ul->n_pdus; i++) {
++    if (ul->pdus_list[i].pdu_type == NFAPI_NR_UL_CONFIG_PUSCH_PDU_TYPE) {
++      nrlink_ulgrant_t *g = msg_item(&m, NRLINK_IT_ULGRANT, sizeof(*g));
++      g->rnti = ul->pdus_list[i].pusch_pdu.rnti;
++      g->tb_len = ul->pdus_list[i].pusch_pdu.pusch_data.tb_size;
++    }
++  }
++  if (ul->n_pdus > 0)
++    m.hdr->flags |= NRLINK_FLAG_UL_POLL;
++
++  sendto(s_sock, m.buf, m.len, 0, (struct sockaddr *)&s_bridge, sizeof(s_bridge));
++
++  /* wait for the bridge to finish the slot's over-the-air exchange */
++  const int deadline = now_ms() + s_timeout_ms;
++  for (;;) {
++    int left = deadline - now_ms();
++    if (left <= 0) {
++      LOG_W(NR_PHY, "nrlink: %d.%d no answer from the bridge\n", sfn, slot);
++      indicate(sfn, slot, ul, NULL, 0, 0);
++      return;
++    }
++    struct pollfd pfd = {.fd = s_sock, .events = POLLIN};
++    if (poll(&pfd, 1, left) <= 0)
++      continue;
++    ssize_t n = recv(s_sock, s_rx, sizeof(s_rx), 0);
++    if (n < (ssize_t)sizeof(nrlink_hdr_t))
++      continue;
++    const nrlink_hdr_t *h = (const nrlink_hdr_t *)s_rx;
++    if (h->magic != NRLINK_MAGIC || h->type != NRLINK_MSG_UL_RESULT || h->sfn != sfn || h->slot != slot)
++      continue; /* stale answer for an earlier, timed out slot */
++    indicate(sfn, slot, ul, s_rx + sizeof(*h), h->n_items, n - sizeof(*h));
++    return;
++  }
++}
+--- a/nfapi/oai_integration/nrlink_gnb.h
++++ b/nfapi/oai_integration/nrlink_gnb.h
+@@ -0,0 +1,13 @@
++/* nrlink gNB L1 emulation, see nrlink_gnb.c */
++#ifndef NRLINK_GNB_H
++#define NRLINK_GNB_H
++
++#include <stdbool.h>
++
++struct NR_Sched_Rsp;
++
++void nrlink_gnb_init(void);
++bool nrlink_gnb_active(void);
++void nrlink_gnb_slot(int sfn, int slot, struct NR_Sched_Rsp *rsp);
++
++#endif
+--- a/nfapi/oai_integration/nrlink_proto.h
++++ b/nfapi/oai_integration/nrlink_proto.h
+@@ -0,0 +1,105 @@
++/*
++ * nrlink: NR L1 emulation over FRDM-MCXW72 GenFSK boards.
++ *
++ * The gNB PNF (nrlink_gnb.c) and the nrUE (executables/nrlink_ue.c) bypass their PHY and exchange
++ * per-slot "slot messages" with host bridges (~/oai/nrlink/*.py) over UDP. The bridges carry those
++ * messages over the boards' 2.4 GHz radio: gNB bridge -> gNB board ~~air~~ UE board -> UE bridge.
++ *
++ * Slot message: nrlink_hdr_t followed by n_items items, each nrlink_item_t + body (little endian).
++ */
++
++#ifndef NRLINK_PROTO_H
++#define NRLINK_PROTO_H
++
++#include <stdint.h>
++
++#define NRLINK_MAGIC 0x4EU /* 'N' */
++
++/* message types */
++#define NRLINK_MSG_DL_SLOT   1 /* gNB hook -> gNB bridge -> (air) -> UE bridge -> UE emulator */
++#define NRLINK_MSG_UL_SLOT   2 /* UE emulator -> UE bridge -> (air, when polled) -> gNB bridge */
++#define NRLINK_MSG_UL_RESULT 3 /* gNB bridge -> gNB hook: all UL items received for a slot (also the slot ack) */
++#define NRLINK_MSG_HELLO     4 /* UE emulator -> UE bridge: register the emulator's UDP address */
++
++/* DL_SLOT flags */
++#define NRLINK_FLAG_UL_POLL 0x01 /* UL_TTI has PDUs for this slot: the bridge polls the UEs */
++
++/* item types */
++#define NRLINK_IT_SSB     0x01 /* nrlink_ssb_t */
++#define NRLINK_IT_DCI     0x02 /* nrlink_dci_t + payload[(nbits + 7) / 8] */
++#define NRLINK_IT_TB      0x03 /* nrlink_tb_t + data[tb_len] */
++#define NRLINK_IT_ULGRANT 0x04 /* nrlink_ulgrant_t: a PUSCH scheduled in this slot (used for the gNB LEDs) */
++#define NRLINK_IT_PUSCH   0x11 /* nrlink_pusch_t + data[tb_len] */
++#define NRLINK_IT_UCI     0x12 /* nrlink_uci_t */
++#define NRLINK_IT_PRACH   0x13 /* nrlink_prach_t */
++
++typedef struct __attribute__((packed)) {
++  uint8_t magic;
++  uint8_t type;
++  uint16_t sfn;
++  uint8_t slot;
++  uint8_t flags;
++  uint16_t rnti; /* UL_SLOT: the UE's current C-RNTI (0 before RA) */
++  uint16_t n_items;
++} nrlink_hdr_t;
++
++typedef struct __attribute__((packed)) {
++  uint8_t type;
++  uint16_t len; /* body length */
++} nrlink_item_t;
++
++typedef struct __attribute__((packed)) {
++  uint8_t mib[3]; /* as the UE PHY reports it (fapiPbch_t.decoded_output) */
++  uint8_t xtra_byte;
++  uint8_t ssb_index;
++  uint8_t lmax;
++  uint16_t cell_id;
++  uint16_t ssb_start_subcarrier;
++} nrlink_ssb_t;
++
++typedef struct __attribute__((packed)) {
++  uint16_t rnti;
++  uint8_t cce_index;
++  uint8_t aggregation_level;
++  uint8_t nbits;
++  /* payload follows, nFAPI DL_TTI PDCCH Payload byte order */
++} nrlink_dci_t;
++
++typedef struct __attribute__((packed)) {
++  uint16_t rnti;
++  uint16_t tb_len;
++  /* data follows */
++} nrlink_tb_t;
++
++typedef struct __attribute__((packed)) {
++  uint16_t rnti;
++  uint16_t tb_len;
++} nrlink_ulgrant_t;
++
++typedef struct __attribute__((packed)) {
++  uint16_t rnti;
++  uint8_t harq_pid;
++  uint16_t tb_len;
++  /* data follows */
++} nrlink_pusch_t;
++
++typedef struct __attribute__((packed)) {
++  uint16_t rnti;
++  uint8_t format;
++  uint8_t n_harq;
++  uint32_t ack_payload;
++  uint8_t n_sr;
++  uint8_t sr_payload;
++  uint8_t n_bit;     /* format 2/3/4: total UCI bits in payload */
++  uint64_t payload;  /* format 2/3/4: harq | sr << n_harq | csi << (n_harq + n_sr) */
++} nrlink_uci_t;
++
++typedef struct __attribute__((packed)) {
++  uint8_t preamble_index;
++  uint8_t num_ra;
++  uint8_t start_symbol;
++} nrlink_prach_t;
++
++#define NRLINK_MAX_MSG 65000
++
++#endif
+--- a/nfapi/open-nFAPI/nfapi/public_inc/fapi_nr_ue_interface.h
++++ b/nfapi/open-nFAPI/nfapi/public_inc/fapi_nr_ue_interface.h
+@@ -231,6 +231,11 @@
+   int16_t pucch_tx_power;
+   uint32_t n_bit;
+   uint64_t payload;
++  // set by the MAC for the nrlink L1 emulation
++  uint8_t emu_n_harq;
++  uint32_t emu_ack_payload;
++  uint8_t emu_n_sr;
++  uint8_t emu_sr_payload;
+ } fapi_nr_ul_config_pucch_pdu;
+ 
+ typedef struct
+--- a/openair2/LAYER2/NR_MAC_UE/nr_ue_procedures.c
++++ b/openair2/LAYER2/NR_MAC_UE/nr_ue_procedures.c
+@@ -1710,6 +1710,12 @@
+   long *pusch_id = NULL;
+   long *id0 = NULL;
+   const int scs = current_UL_BWP->scs;
++
++  // UCI content in clear, for the nrlink L1 emulation (format 0 carries it only in the cyclic shift)
++  pucch_pdu->emu_n_harq = pucch->n_harq;
++  pucch_pdu->emu_ack_payload = pucch->ack_payload;
++  pucch_pdu->emu_n_sr = pucch->n_sr;
++  pucch_pdu->emu_sr_payload = pucch->sr_payload;
+   int subframe_number = slot / (mac->frame_structure.numb_slots_frame / 10);
+   pucch_pdu->rnti = rnti;
+ 
+--- a/openair2/NR_PHY_INTERFACE/NR_IF_Module.c
++++ b/openair2/NR_PHY_INTERFACE/NR_IF_Module.c
+@@ -24,9 +24,18 @@
+ 
+ static NR_IF_Module_t *nr_if_inst[MAX_IF_MODULES];
+ 
++// nrlink L1 emulation (nfapi/oai_integration/nrlink_gnb.c) produces the UL indications itself
++bool nrlink_gnb_active(void) __attribute__((weak));
++static bool nrlink_on(void)
++{
++  return nrlink_gnb_active && nrlink_gnb_active();
++}
++
+ static void handle_nr_rach(NR_UL_IND_t *UL_info)
+ {
+   if (NFAPI_MODE == NFAPI_MODE_PNF) {
++    if (nrlink_on())
++      UL_info->rach_ind.number_of_pdus = 0;
+     if (UL_info->rach_ind.number_of_pdus > 0) {
+       LOG_D(PHY,"UL_info->UL_info->rach_ind.number_of_pdus:%d SFN/Slot:%d.%d \n", UL_info->rach_ind.number_of_pdus, UL_info->rach_ind.sfn,UL_info->rach_ind.slot);
+       oai_nfapi_nr_rach_indication(&UL_info->rach_ind);
+@@ -62,6 +71,8 @@
+ static void handle_nr_uci(NR_UL_IND_t *UL_info)
+ {
+   if(NFAPI_MODE == NFAPI_MODE_PNF) {
++    if (nrlink_on())
++      UL_info->uci_ind.num_ucis = 0;
+     if (UL_info->uci_ind.num_ucis > 0) {
+       LOG_D(PHY,"PNF Sending UL_info->num_ucis:%d PDU_type: %d, SFN/SF:%d.%d \n", UL_info->uci_ind.num_ucis, UL_info->uci_ind.uci_list[0].pdu_type ,UL_info->frame, UL_info->slot);
+       oai_nfapi_nr_uci_indication(&UL_info->uci_ind);
+@@ -128,6 +139,10 @@
+ static void handle_nr_ulsch(NR_UL_IND_t *UL_info)
+ {
+   if(NFAPI_MODE == NFAPI_MODE_PNF) {
++    if (nrlink_on()) {
++      UL_info->crc_ind.number_crcs = 0;
++      UL_info->rx_ind.number_of_pdus = 0;
++    }
+     if (UL_info->crc_ind.number_crcs > 0) {
+       LOG_D(PHY,"UL_info->UL_info->crc_ind.number_crcs:%d CRC_IND:SFN/Slot:%d.%d\n", UL_info->crc_ind.number_crcs, UL_info->crc_ind.sfn, UL_info->crc_ind.slot);
+       oai_nfapi_nr_crc_indication(&UL_info->crc_ind);
