@@ -1,0 +1,6 @@
+__pycache__/
+*.pyc
+logs/
+nrlink/media/
+deploy/free5gc/cert/
+*.elf

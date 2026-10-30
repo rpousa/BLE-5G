@@ -1,0 +1,13 @@
+cmake_minimum_required(VERSION 3.22.0)
+
+include(${SdkRootDirPath}/cmake/extension/mcux.cmake)
+project(nrlink_bm LANGUAGES C CXX ASM
+    PROJECT_BOARD_PORT_PATH ${board_root}/${board}/wireless_examples
+    CUSTOM_PRJ_CONF_PATH    ${board_root}/${board}/wireless_examples/genfsk/nrlink
+)
+
+include(../CMakeLists.txt)
+
+mcux_add_configuration(
+    CC "        -DSDK_OS_BAREMETAL"
+)
