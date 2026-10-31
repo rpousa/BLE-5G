@@ -1,0 +1,832 @@
+<title>Non-3gpp access with bluetooth and nfapi</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Semi+Condensed:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+<style>
+/* Layout: control-room board. Network schematic across the top, three use-case consoles below, colour = traffic class (matches the board LEDs). */
+:root {
+  --bg: #eef1f4;
+  --panel: #ffffff;
+  --panel-2: #f5f7f9;
+  --line: #d3d9e0;
+  --ink: #17202b;
+  --ink-2: #4b5866;
+  --ink-3: #7a8693;
+  --signal: #b86e00;
+  --embb: #1f63d6;
+  --urllc: #d0342c;
+  --mmtc: #18884a;
+  --ok: #18884a;
+  --warn: #b86e00;
+  --crit: #d0342c;
+  --floor: #e4e7ea;
+  --floor-grid: #d2d7dc;
+  --machine: #b9c2cc;
+  --lane: #e0a100;
+  --display: "Barlow Semi Condensed", "Arial Narrow", "Roboto Condensed", system-ui, sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+  --r: 6px;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0e141b; --panel: #151d26; --panel-2: #1b2530; --line: #2a3644; --ink: #e6ebf0; --ink-2: #a9b4bf; --ink-3: #74808c;
+    --signal: #f0a830; --embb: #5b93f5; --urllc: #f0605a; --mmtc: #3dbb72; --ok: #3dbb72; --warn: #f0a830; --crit: #f0605a;
+    --floor: #1a232d; --floor-grid: #243040; --machine: #34414f; --lane: #c99212; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0e141b; --panel: #151d26; --panel-2: #1b2530; --line: #2a3644; --ink: #e6ebf0; --ink-2: #a9b4bf; --ink-3: #74808c;
+  --signal: #f0a830; --embb: #5b93f5; --urllc: #f0605a; --mmtc: #3dbb72; --ok: #3dbb72; --warn: #f0a830; --crit: #f0605a;
+  --floor: #1a232d; --floor-grid: #243040; --machine: #34414f; --lane: #c99212; color-scheme: dark;
+}
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+body { background: var(--bg); color: var(--ink); font-family: var(--display); font-size: 15px; line-height: 1.4; }
+.wrap { max-width: 1480px; margin: 0 auto; padding-block: 14px 40px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); display: grid; gap: 14px; }
+.mono, .num { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+h1, h2, h3 { margin: 0; font-weight: 600; text-wrap: balance; }
+h1 { font-size: 1.55rem; letter-spacing: .01em; }
+h2 { font-size: 1.15rem; }
+.label { font-size: .72rem; letter-spacing: .09em; text-transform: uppercase; color: var(--ink-3); font-weight: 600; }
+
+header.top { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 22px; }
+header.top .title { display: grid; gap: 2px; margin-right: auto; min-width: 0; }
+header.top .sub { color: var(--ink-2); font-size: .92rem; }
+.pill { display: inline-flex; align-items: center; gap: 7px; padding: 4px 11px; border-radius: 999px; font-family: var(--mono); font-size: .78rem; font-weight: 600; border: 1px solid var(--line); background: var(--panel); }
+.pill .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--ink-3); }
+.pill.live .dot { background: var(--ok); box-shadow: 0 0 0 0 var(--ok); animation: ping 1.6s infinite; }
+.pill.replay .dot { background: var(--signal); }
+.pill.down .dot { background: var(--crit); }
+@keyframes ping { 0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--ok) 60%, transparent); } 100% { box-shadow: 0 0 0 9px transparent; } }
+.kpis { display: flex; flex-wrap: wrap; gap: 6px 20px; }
+.kpi { display: grid; gap: 0; }
+.kpi .v { font-family: var(--mono); font-size: 1.05rem; font-weight: 600; font-variant-numeric: tabular-nums; }
+
+.card { background: var(--panel); border: 1px solid var(--line); border-radius: var(--r); }
+.card > .hd { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 12px; padding: 11px 14px 9px; border-bottom: 1px solid var(--line); }
+.card > .hd .tag { font-family: var(--mono); font-size: .74rem; padding: 2px 8px; border-radius: 4px; color: #fff; font-weight: 600; }
+.card > .hd .meta { margin-left: auto; color: var(--ink-3); font-size: .82rem; }
+.bd { padding: 12px 14px; display: grid; gap: 12px; min-width: 0; }
+
+/* network schematic */
+.net { display: grid; grid-template-columns: minmax(0, 1fr); gap: 0; }
+.net .diagram { overflow-x: auto; padding: 6px 4px 2px; border-bottom: 1px solid var(--line); }
+.net svg { display: block; width: 100%; min-width: 1060px; height: auto; }
+.net > .hd { grid-column: 1 / -1; }
+.net .side { padding: 12px 14px; display: grid; grid-template-columns: minmax(220px, 300px) minmax(0, 1fr); align-items: start; gap: 10px 28px; min-width: 0; }
+.net .side .ctlcol { display: grid; gap: 10px; }
+.seg { display: inline-flex; border: 1px solid var(--line); border-radius: 5px; overflow: hidden; }
+.seg button { font: inherit; font-size: .82rem; padding: 4px 10px; border: 0; background: var(--panel); color: var(--ink-2); cursor: pointer; }
+.seg button[aria-pressed="true"] { background: var(--ink); color: var(--panel); }
+.seg button:focus-visible, button:focus-visible, select:focus-visible { outline: 2px solid var(--signal); outline-offset: 2px; }
+.detail h3 { font-size: 1.05rem; }
+.detail dl { display: grid; grid-template-columns: auto 1fr; gap: 4px 12px; margin: 8px 0 0; font-size: .88rem; }
+.detail dt { color: var(--ink-3); }
+.detail dd { margin: 0; font-family: var(--mono); font-size: .82rem; overflow-wrap: anywhere; }
+.detail p { margin: 8px 0 0; color: var(--ink-2); font-size: .9rem; }
+.legend { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: .8rem; color: var(--ink-2); }
+.legend i { display: inline-block; width: 18px; height: 3px; vertical-align: middle; margin-right: 5px; border-radius: 2px; }
+
+svg .node rect.box { fill: var(--panel-2); stroke: var(--line); stroke-width: 1.2; }
+svg .node { cursor: pointer; }
+svg .node:hover rect.box, svg .node.sel rect.box { stroke: var(--signal); stroke-width: 2; }
+svg .node text { fill: var(--ink); font-family: var(--display); }
+svg .node .n1 { font-size: 17px; font-weight: 600; }
+svg .node .n2 { font-size: 11px; fill: var(--ink-3); font-family: var(--mono); }
+svg .lane { fill: none; stroke-linecap: round; }
+svg .lane.base { stroke: var(--line); }
+svg .link { cursor: pointer; }
+svg .link .hit { stroke: transparent; stroke-width: 22; fill: none; }
+svg .link:hover .base, svg .link.sel .base { stroke: var(--signal); }
+svg .flow { stroke-dasharray: 2 9; animation: flow linear infinite; animation-duration: 0s; }
+svg .flow.ul { animation-direction: reverse; }
+@keyframes flow { to { stroke-dashoffset: -110; } }
+svg .ltxt { font-family: var(--mono); font-size: 11.5px; fill: var(--ink-2); paint-order: stroke; stroke: var(--panel); stroke-width: 4px; stroke-linejoin: round; }
+svg .ltxt.cap { fill: var(--ink-3); }
+svg .ltxt.live { fill: var(--ink); font-weight: 600; }
+svg .band { fill: var(--panel-2); opacity: .55; }
+svg .band.nxp { fill: color-mix(in srgb, var(--signal) 9%, var(--panel)); opacity: 1; }
+svg .delim { stroke: var(--ink-3); stroke-width: 1.5; stroke-dasharray: 8 5; }
+svg .delim.nxp { stroke: var(--signal); stroke-width: 2; stroke-dasharray: none; }
+svg .chip rect { fill: var(--panel); stroke: var(--ink-3); }
+svg .chip.nxp rect { fill: var(--signal); stroke: var(--signal); }
+svg .chip text { font-family: var(--display); font-size: 13px; font-weight: 700; letter-spacing: .08em; fill: var(--ink); }
+svg .chip.nxp text { fill: var(--panel); }
+svg .bsub { font-family: var(--mono); font-size: 11px; fill: var(--ink-3); }
+svg .zlabel { font-family: var(--display); font-size: 14px; letter-spacing: .1em; fill: var(--ink-2); text-transform: uppercase; font-weight: 700; }
+svg .bneck { fill: var(--signal); font-family: var(--mono); font-size: 10.5px; font-weight: 600; paint-order: stroke; stroke: var(--panel); stroke-width: 4px; }
+svg .led { stroke: var(--line); stroke-width: 1; }
+
+/* consoles */
+.consoles { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
+.stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
+.stat { background: var(--panel-2); border-radius: 5px; padding: 7px 9px; display: grid; gap: 1px; min-width: 0; }
+.stat .v { font-family: var(--mono); font-weight: 600; font-size: 1.02rem; font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.stat .u { font-size: .72rem; color: var(--ink-3); font-weight: 500; }
+.row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.btn { font: inherit; font-weight: 600; font-size: .9rem; padding: 6px 13px; border-radius: 5px; border: 1px solid var(--line); background: var(--panel); color: var(--ink); cursor: pointer; }
+.btn:hover:not(:disabled) { border-color: var(--ink-3); }
+.btn:disabled { opacity: .5; cursor: not-allowed; }
+.btn.stop { background: var(--crit); border-color: var(--crit); color: #fff; letter-spacing: .06em; }
+.btn.stop[aria-pressed="true"] { background: var(--panel); color: var(--crit); }
+select { font: inherit; font-size: .9rem; padding: 5px 8px; border-radius: 5px; border: 1px solid var(--line); background: var(--panel); color: var(--ink); }
+.hint { font-size: .84rem; color: var(--ink-3); }
+canvas.spark { width: 100%; height: 56px; display: block; }
+
+.lidar { position: relative; border-radius: 5px; overflow: hidden; background: #0b1016; aspect-ratio: 16 / 10; max-width: 100%; }
+.lidar canvas { width: 100%; height: 100%; display: block; cursor: grab; touch-action: none; }
+.lidar canvas:active { cursor: grabbing; }
+.lidar .ov { position: absolute; left: 8px; top: 8px; right: 8px; display: flex; justify-content: space-between; gap: 8px; font-family: var(--mono); font-size: .74rem; color: #e6ebf0; pointer-events: none; }
+.lidar .ov span { background: rgba(0,0,0,.45); padding: 2px 6px; border-radius: 3px; }
+.lidar .paused { position: absolute; inset: 0; display: grid; place-items: center; color: #fff; font-family: var(--mono); background: rgba(0,0,0,.55); }
+.credit { font-size: .74rem; color: var(--ink-3); }
+
+.floorwrap { position: relative; }
+canvas.floor { width: 100%; display: block; border-radius: 5px; cursor: crosshair; touch-action: manipulation; }
+.log { list-style: none; margin: 0; padding: 0; display: grid; gap: 3px; max-height: 128px; overflow-y: auto; font-size: .84rem; }
+.log li { display: grid; grid-template-columns: 64px 1fr; gap: 8px; padding: 3px 6px; border-radius: 4px; background: var(--panel-2); }
+.log li .ts { font-family: var(--mono); font-size: .74rem; color: var(--ink-3); padding-top: 1px; }
+.log li.warn { box-shadow: inset 3px 0 0 var(--warn); }
+.log li.crit { box-shadow: inset 3px 0 0 var(--crit); }
+.log li.ok { box-shadow: inset 3px 0 0 var(--ok); }
+
+.sensor svg { width: 100%; height: auto; display: block; }
+.sensor .enc { fill: var(--panel-2); stroke: var(--ink-3); stroke-width: 1.5; }
+.sensor .part { fill: var(--panel); stroke: var(--ink-3); stroke-width: 1; }
+.sensor .wire { stroke: var(--ink-3); stroke-width: 1.5; fill: none; }
+.sensor .txt { fill: var(--ink-2); font-family: var(--display); font-size: 12px; }
+.sensor .lcd { fill: #1d2a1f; stroke: var(--ink-3); }
+.sensor .lcdtxt { fill: #8ef0a8; font-family: var(--mono); font-size: 15px; font-weight: 600; }
+.sensor .lcdsm { fill: #8ef0a8; font-family: var(--mono); font-size: 10px; }
+.sensor .wave { fill: none; stroke: var(--mmtc); stroke-width: 2; opacity: 0; }
+.sensor .wave.go { animation: wave 1.2s ease-out; }
+.sensor .wave.go.w2 { animation-delay: .15s; } .sensor .wave.go.w3 { animation-delay: .3s; }
+@keyframes wave { 0% { opacity: 1; } 100% { opacity: 0; } }
+.sensor .heat { opacity: 0; transition: opacity .4s; }
+.sensor .heat.on { opacity: 1; }
+.sensor .pkt { fill: var(--mmtc); opacity: 0; }
+.cfg-pending { font-family: var(--mono); font-size: .78rem; color: var(--warn); }
+
+.replaybar { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; padding: 9px 14px; }
+.replaybar input[type=range] { flex: 1; min-width: 160px; accent-color: var(--signal); }
+.connect { padding: 12px 14px; display: grid; gap: 6px; font-size: .9rem; color: var(--ink-2); }
+.connect code { font-family: var(--mono); font-size: .82rem; background: var(--panel-2); padding: 2px 6px; border-radius: 4px; color: var(--ink); overflow-wrap: anywhere; }
+.toast { position: fixed; left: 50%; bottom: calc(18px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); background: var(--ink); color: var(--panel); padding: 8px 14px; border-radius: 6px; font-size: .9rem; opacity: 0; pointer-events: none; transition: opacity .25s; max-width: calc(100% - 32px); }
+.toast.show { opacity: 1; }
+
+@media (max-width: 1180px) { .consoles { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); } .consoles .urllc { grid-column: 1 / -1; order: -1; } }
+@media (max-width: 760px) { .net .side { grid-template-columns: minmax(0, 1fr); } }
+@media (max-width: 720px) { .consoles { grid-template-columns: minmax(0, 1fr); } .stats { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (prefers-reduced-motion: reduce) { svg .flow, .pill.live .dot, .sensor .wave.go { animation: none !important; } }
+</style>
+
+<div class="wrap">
+  <header class="top">
+    <div class="title">
+      <h1>Non-3gpp access with bluetooth and nfapi</h1>
+      <div class="sub">OpenAirInterface 5G core, gNB split over nFAPI and three NR UEs, carried over NXP FRDM-MCXW72 boards on the 2.4 GHz Bluetooth LE 1M radio</div>
+    </div>
+    <div class="kpis">
+      <div class="kpi"><span class="label">NR slots / s</span><span class="v" id="k-slots">–</span></div>
+      <div class="kpi"><span class="label">Air packets / s</span><span class="v" id="k-air">–</span></div>
+      <div class="kpi"><span class="label">UEs attached</span><span class="v" id="k-ues">–</span></div>
+      <div class="kpi"><span class="label">Clock</span><span class="v" id="k-clock">–</span></div>
+    </div>
+    <span class="pill" id="mode"><span class="dot"></span><span id="mode-txt">connecting…</span></span>
+  </header>
+
+  <section class="card" id="replay" hidden>
+    <div class="replaybar">
+      <button class="btn" id="rp-play" type="button">Pause</button>
+      <input type="range" id="rp-pos" min="0" max="1000" value="0" aria-label="Replay position">
+      <span class="mono" id="rp-time">0:00 / 0:00</span>
+    </div>
+    <div class="connect">
+      <div>This copy replays a run recorded from the live system on <span id="rp-date">–</span>. A published page cannot open connections to your machine, so the live view and its controls run from the dashboard server on the host:</div>
+      <div><code>cd ~/oai/nrlink &amp;&amp; ./dashboard.sh</code> then open <code>http://192.168.10.223:8088</code> on the LAN, <code>http://100.64.0.74:8088</code> over Tailscale, or tunnel with <code>ssh -L 8088:localhost:8088 debian@192.168.10.223</code> and open <code>http://localhost:8088</code>.</div>
+    </div>
+  </section>
+
+  <section class="consoles">
+    <article class="card embb">
+      <div class="hd"><span class="tag" style="background:var(--embb)">eMBB</span><h2>LiDAR point cloud</h2><span class="meta">UE1 · oaitun_ue1 → perception server · TCP</span></div>
+      <div class="bd">
+        <div class="lidar"><canvas id="l-canvas" aria-label="3D LiDAR point cloud received at the ext-dn. Drag to orbit, scroll or pinch to zoom."></canvas>
+          <div class="ov"><span id="l-ov1">waiting for scans</span><span id="l-ov2"></span></div><div class="paused" id="l-paused" hidden>scanning paused at the sensor</div></div>
+        <div class="row">
+          <div class="seg" role="group" aria-label="View"><button type="button" data-view="orbit" aria-pressed="true">Orbit</button><button type="button" data-view="top" aria-pressed="false">Top</button></div>
+          <div class="seg" role="group" aria-label="Colour"><button type="button" data-col="height" aria-pressed="true">Height</button><button type="button" data-col="range" aria-pressed="false">Range</button></div>
+          <span class="hint">Drag to orbit, scroll to zoom.</span>
+        </div>
+        <div class="stats">
+          <div class="stat"><span class="label">Rate</span><span class="v" id="v-kbps">–</span><span class="u">kbit/s uplink</span></div>
+          <div class="stat"><span class="label">Scans</span><span class="v" id="v-fps">–</span><span class="u">per second</span></div>
+          <div class="stat"><span class="label">Latency</span><span class="v" id="v-lat">–</span><span class="u">ms one-way</span></div>
+          <div class="stat"><span class="label">Points</span><span class="v" id="v-size">–</span><span class="u" id="v-sizeu">per scan</span></div>
+        </div>
+        <div><span class="label">Throughput, last 60 s</span><canvas class="spark" id="v-spark"></canvas></div>
+        <div class="row"><button class="btn ctl" id="v-toggle" type="button">Pause scanning</button><span class="hint">Pausing frees the air link; watch URLLC latency drop.</span></div>
+        <div class="credit">Simulated 16-beam spinning LiDAR (±15°, 1° azimuth) on a pole in the factory shown in the AGV map, with two workers and a forklift moving. 5 760 ranges per scan, zlib-compressed, sent as fast as the link takes them.</div>
+      </div>
+    </article>
+
+    <article class="card urllc">
+      <div class="hd"><span class="tag" style="background:var(--urllc)">URLLC</span><h2>AGV on the factory floor</h2><span class="meta">UE2 · 50 Hz position reports ↔ controller · UDP</span></div>
+      <div class="bd">
+        <div class="floorwrap"><canvas class="floor" id="f-canvas" aria-label="Factory floor map. Click the aisle to drop or remove an obstacle."></canvas></div>
+        <div class="stats">
+          <div class="stat"><span class="label">Uplink p50</span><span class="v" id="a-p50">–</span><span class="u">ms one-way</span></div>
+          <div class="stat"><span class="label">Uplink p99</span><span class="v" id="a-p99">–</span><span class="u">ms one-way</span></div>
+          <div class="stat"><span class="label">Round trip</span><span class="v" id="a-rtt">–</span><span class="u">ms report → ack</span></div>
+          <div class="stat"><span class="label">Reports</span><span class="v" id="a-rate">–</span><span class="u" id="a-lost">per s</span></div>
+        </div>
+        <div class="row">
+          <button class="btn stop ctl" id="a-estop" type="button" aria-pressed="false">E-STOP</button>
+          <button class="btn ctl" id="a-clear" type="button">Clear obstacles</button>
+          <span class="hint">Click the aisle to drop an obstacle. The controller sees it in the AGV's reported path and sends STOP over the link.</span>
+        </div>
+        <div class="row" style="justify-content:space-between"><span class="label">Uplink latency p50 / p99, last 60 s</span><span class="mono hint" id="a-state">–</span></div>
+        <canvas class="spark" id="a-spark"></canvas>
+        <ul class="log" id="a-log"></ul>
+      </div>
+    </article>
+
+    <article class="card mmtc sensor">
+      <div class="hd"><span class="tag" style="background:var(--mmtc)">mMTC</span><h2>Motor sensor node</h2><span class="meta">UE3 · 20 B report, then sleep · UDP</span></div>
+      <div class="bd">
+        <svg viewBox="0 0 420 210" id="s-svg" role="img" aria-label="Sensor node schematic">
+          <!-- motor with probes -->
+          <g>
+            <rect class="part" x="14" y="92" width="92" height="64" rx="8"/>
+            <g stroke="var(--ink-3)" stroke-width="1">
+              <line x1="24" y1="100" x2="24" y2="148"/><line x1="36" y1="100" x2="36" y2="148"/><line x1="48" y1="100" x2="48" y2="148"/><line x1="60" y1="100" x2="60" y2="148"/><line x1="72" y1="100" x2="72" y2="148"/>
+            </g>
+            <rect class="part" x="106" y="116" width="22" height="16"/>
+            <rect class="part" x="10" y="156" width="100" height="10" rx="2"/>
+            <text class="txt" x="60" y="184" text-anchor="middle">Motor housing</text>
+            <circle cx="86" cy="104" r="5" fill="var(--signal)"/>
+            <rect x="80" y="134" width="12" height="12" fill="var(--embb)" opacity=".8"/>
+          </g>
+          <g class="heat" id="s-heat">
+            <path d="M32 40 h40 l8 10 h-10 v22 h-14 v-22 h-24 z" fill="var(--crit)" opacity=".85"/>
+            <path d="M40 78 q6 -8 0 -14 M52 80 q6 -8 0 -14 M64 78 q6 -8 0 -14" stroke="var(--crit)" stroke-width="2" fill="none"/>
+            <text class="txt" x="56" y="32" text-anchor="middle" style="fill:var(--crit)">heat applied</text>
+          </g>
+          <!-- probe wires -->
+          <path class="wire" d="M91 104 C 140 104, 140 70, 182 70"/>
+          <path class="wire" d="M92 140 C 140 140, 150 120, 182 120"/>
+          <text class="txt" x="124" y="62" font-size="10.5">thermistor</text>
+          <text class="txt" x="112" y="160" font-size="10.5">accelerometer</text>
+          <!-- enclosure -->
+          <rect class="enc" x="182" y="40" width="150" height="140" rx="10"/>
+          <line x1="300" y1="40" x2="300" y2="10" stroke="var(--ink-3)" stroke-width="2"/>
+          <circle cx="300" cy="9" r="3" fill="var(--ink-3)"/>
+          <path class="wave w1" d="M310 2 q8 7 0 14"/><path class="wave w2" d="M318 -3 q13 12 0 24"/><path class="wave w3" d="M326 -8 q18 17 0 34"/>
+          <rect class="lcd" x="194" y="52" width="126" height="46" rx="3"/>
+          <text class="lcdtxt" x="202" y="74" id="s-lcd1">--.- °C</text>
+          <text class="lcdsm" x="202" y="90" id="s-lcd2">--% RH  -- mg</text>
+          <rect class="part" x="194" y="108" width="62" height="30" rx="3"/>
+          <text class="txt" x="225" y="127" text-anchor="middle" font-size="10.5">MCU</text>
+          <rect class="part" x="262" y="108" width="58" height="30" rx="3"/>
+          <text class="txt" x="291" y="127" text-anchor="middle" font-size="10.5">NR modem</text>
+          <rect class="part" x="194" y="146" width="80" height="22" rx="3"/>
+          <rect id="s-batt" x="196" y="148" width="60" height="18" rx="2" fill="var(--mmtc)" opacity=".75"/>
+          <rect class="part" x="274" y="152" width="5" height="10"/>
+          <text class="txt" x="300" y="161" font-size="10.5" id="s-battv">-- V</text>
+          <!-- uplink path to the collector -->
+          <path class="wire" d="M332 120 H 360" stroke-dasharray="3 3"/>
+          <rect class="part" x="360" y="96" width="54" height="48" rx="5"/>
+          <text class="txt" x="387" y="116" text-anchor="middle" font-size="10.5">collector</text>
+          <text class="txt" x="387" y="130" text-anchor="middle" font-size="10" id="s-lat">-- ms</text>
+          <circle class="pkt" id="s-pkt" cx="336" cy="120" r="4"/>
+          <text class="txt" x="372" y="166" text-anchor="middle" font-size="10">ext-dn</text>
+        </svg>
+        <div class="stats">
+          <div class="stat"><span class="label">Temperature</span><span class="v" id="s-temp">–</span><span class="u">°C at collector</span></div>
+          <div class="stat"><span class="label">Vibration</span><span class="v" id="s-vib">–</span><span class="u">mg RMS</span></div>
+          <div class="stat"><span class="label">Reports</span><span class="v" id="s-n">–</span><span class="u" id="s-iv">every – s</span></div>
+          <div class="stat"><span class="label">Latency</span><span class="v" id="s-latv">–</span><span class="u">ms one-way</span></div>
+        </div>
+        <div><span class="label">Temperature as received, last 60 reports</span><canvas class="spark" id="s-spark" style="height:84px"></canvas></div>
+        <div class="row">
+          <button class="btn ctl" id="s-heatbtn" type="button">Apply heat at the sensor</button>
+          <label class="row" style="gap:6px"><span class="hint">Report every</span>
+            <select id="s-interval" class="ctl"><option value="2">2 s</option><option value="5" selected>5 s</option><option value="10">10 s</option><option value="30">30 s</option></select></label>
+          <span class="cfg-pending" id="s-pending" hidden>queued: delivered after the next report</span>
+        </div>
+        <ul class="log" id="s-log"></ul>
+      </div>
+    </article>
+  </section>
+
+  <section class="card net" aria-label="Network architecture">
+    <div class="hd"><h2>Architecture</h2><span class="meta">capacity and live rate per link · click any box or link</span></div>
+    <div class="diagram">
+      <svg id="arch" viewBox="0 0 1700 600" role="img" aria-label="Architecture in three layers: OpenAirInterface modules, host bridges, NXP boards"></svg>
+    </div>
+    <div class="side">
+      <div class="ctlcol">
+      <div class="row" style="justify-content:space-between">
+        <span class="label">Link labels</span>
+        <div class="seg" role="group" aria-label="Link labels">
+          <button type="button" data-lbl="both" aria-pressed="true">Both</button>
+          <button type="button" data-lbl="cap" aria-pressed="false">Capacity</button>
+          <button type="button" data-lbl="live" aria-pressed="false">Live</button>
+        </div>
+      </div>
+      <div class="legend">
+        <span><i style="background:var(--embb)"></i>downlink lane</span>
+        <span><i style="background:var(--ink-3)"></i>uplink lane</span>
+        <span>dash speed follows the measured rate</span>
+      </div>
+      <div class="hint">Click any box or link for its details.</div>
+      </div>
+      <div class="detail" id="detail" aria-live="polite"></div>
+    </div>
+  </section>
+</div>
+<div class="toast" id="toast" role="status"></div>
+
+<script>
+"use strict";
+const $ = id => document.getElementById(id);
+const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+const UE = { 1: { cls: "eMBB", c: "--embb", app: "Video viewer" }, 2: { cls: "URLLC", c: "--urllc", app: "AGV" }, 3: { cls: "mMTC", c: "--mmtc", app: "Sensor node" } };
+const STATIONS = [["Warehouse", 6, 6], ["Press line", 30, 6], ["Assembly", 54, 6], ["Quality", 54, 30], ["Paint", 30, 30], ["Shipping", 6, 30]];
+const fmt = (v, d = 0) => v == null || isNaN(v) ? "–" : Number(v).toFixed(d);
+const fmtRate = k => k == null ? "–" : k >= 1000 ? (k / 1000).toFixed(2) + " Mbit/s" : k >= 10 ? k.toFixed(0) + " kbit/s" : k.toFixed(1) + " kbit/s";
+
+/* ------------------------------------------------------------------ state */
+let S;
+function reset() {
+  S = { gnb: null, ue: {}, led: { ue: 0, ul: false }, video: { on: true, kbpsHist: [], last: null, stats: null },
+        agv: null, ctrl: null, ctrlStats: null, latHist: [], obstacles: [], estop: false, agvLog: [],
+        sensor: null, sensorTx: null, sensorHist: [], sensorLog: [], interval: 5, pending: null, n: 0, now: 0, lastServed: {} };
+}
+reset();
+
+/* --------------------------------------------------------- architecture */
+const NODES = {
+  dn:   { x: 20,   y: 120, t: "Data network", s: "oai-ext-dn .132", d: "Endpoint of all three PDU sessions. The perception server (tcp/6001), the AGV controller (udp/6002) and the sensor collector (udp/6003) run in a sidecar sharing its network stack." },
+  amf:  { x: 200,  y: 20,  t: "AMF / SMF", s: "OAI CN5G", d: "Registration, authentication and session management for IMSIs 036–038 on slice SST 1, DNN oai." },
+  upf:  { x: 200,  y: 120, t: "UPF", s: "GTP-U anchor", d: "Routes 12.1.1.0/24 between the data network and the gNB through GTP-U tunnels." },
+  vnf:  { x: 380,  y: 120, t: "gNB VNF", s: "MAC · RLC · PDCP", d: "OAI nr-softmodem in VNF mode. The MAC scheduler decides every slot which UE gets downlink and uplink resources; MCS is capped at 2 so transport blocks stay small." },
+  pnf:  { x: 560,  y: 120, t: "gNB PNF", s: "L1 emulation", d: "Instead of modulating the slot, nrlink_gnb.c sends what the VNF scheduled (MIB, DCIs, transport blocks) to the host bridge and waits for that slot's uplink. One slot lasts as long as its over-the-air exchange." },
+  gbr:  { x: 560,  y: 258, t: "gNB bridge", s: "udp/5000", d: "Python on the host. Fragments each slot into ≤255 B air packets, broadcasts them, then polls each UE board in turn for its uplink (TDMA). Drives the gNB board LEDs." },
+  gbd:  { x: 560,  y: 492, t: "gNB board", s: "FRDM-MCXW72", d: "NXP MCXW727C, nrlink v4 firmware: SLIP modem between USB and the 2.4 GHz GFSK radio. RGB LED shows the class of the UE served in the current slot, LED1 is on for an uplink allocation." },
+  u1:   { x: 980,  y: 120, t: "nrUE1", s: "LiDAR", d: "OAI nr-uesoftmodem; MAC, RLC, PDCP, RRC and NAS run unchanged. The LiDAR streams its scans through oaitun_ue1.", ue: 1 },
+  u2:   { x: 1220, y: 120, t: "nrUE2", s: "AGV", d: "OAI nr-uesoftmodem. The AGV reports its position every 20 ms through oaitun_ue1.", ue: 2 },
+  u3:   { x: 1460, y: 120, t: "nrUE3", s: "Sensor node", d: "OAI nr-uesoftmodem. The sensor sends one 20 B report per interval and listens for 1 s afterwards.", ue: 3 },
+  u1r:  { x: 980,  y: 258, t: "UE1 bridge", s: "udp/5001", d: "Python on the host. Hands downlink slots to nrUE1 and answers the gNB's polls with nrUE1's uplink.", ue: 1 },
+  u2r:  { x: 1220, y: 258, t: "UE2 bridge", s: "udp/5002", d: "Python on the host. Hands downlink slots to nrUE2 and answers the gNB's polls with nrUE2's uplink.", ue: 2 },
+  u3r:  { x: 1460, y: 258, t: "UE3 bridge", s: "udp/5003", d: "Python on the host. Hands downlink slots to nrUE3 and answers the gNB's polls with nrUE3's uplink.", ue: 3 },
+  u1b:  { x: 980,  y: 398, t: "UE1 board", s: "2HOKMMVEX1WMP", d: "NXP FRDM-MCXW72, eMBB UE radio. Blinks blue once when served.", ue: 1 },
+  u2b:  { x: 1220, y: 398, t: "UE2 board", s: "GBAMNH4BQ3CSB", d: "NXP FRDM-MCXW72, URLLC UE radio. Blinks red twice when served.", ue: 2 },
+  u3b:  { x: 1460, y: 398, t: "UE3 board", s: "3VWLILYT2A1AK", d: "NXP FRDM-MCXW72, mMTC UE radio. Blinks green three times when served.", ue: 3 },
+};
+const NW = 110, NH = 64;
+// three layers, split by the delimiter lines: [top, bottom, name, sub]
+const BANDS = [[10, 226, "OpenAirInterface", "CN5G · gNB VNF + PNF (nFAPI) · nrUE · Docker"],
+               [226, 358, "Host", "Linux · Python bridges and USB serial"],
+               [358, 592, "NXP", "FRDM-MCXW72 boards · MCXW727C · GenFSK firmware"]];
+const sumUe = f => [1, 2, 3].reduce((a, u) => a + (S.gnb?.ue?.[u]?.[f] || 0), 0);
+// geometry: from [node, side] to [node, side]; lbl = where the two label lines go
+const LINKS = [
+  { id: "n6", a: ["dn", "r"], b: ["upf", "l"], name: "N6", cap: "10 Gbit/s", capK: 1e7, what: "IP between the data network and the UPF (Docker bridge).", live: () => [sumUe("dl_kbps"), sumUe("ul_kbps")] },
+  { id: "n2", a: ["amf", "r"], b: ["vnf", "t"], elbow: true, ctl: true, name: "N2", cap: "NGAP / SCTP", capK: 1e7, what: "Control plane only: NG setup, UE context, PDU session resources.", live: () => [0, 0] },
+  { id: "n3", a: ["upf", "r"], b: ["vnf", "l"], name: "N3", cap: "10 Gbit/s", capK: 1e7, what: "GTP-U user plane between the UPF and the gNB.", live: () => [sumUe("dl_kbps"), sumUe("ul_kbps")] },
+  { id: "p7", a: ["vnf", "r"], b: ["pnf", "l"], name: "nFAPI P7", cap: "10 Gbit/s", capK: 1e7, what: "Per-slot FAPI messages between VNF and PNF: DL_TTI, UL_TTI, TX_DATA down; CRC, RX_DATA, UCI, RACH up.", live: () => [S.gnb?.dl_kbps, S.gnb?.ul_kbps, S.gnb ? fmt(S.gnb.slots_s) + " slots/s" : ""] },
+  { id: "nl", a: ["pnf", "b"], b: ["gbr", "t"], name: "UDP", cap: "lockstep per slot", capK: 1e7, what: "One DL_SLOT message down, one UL_RESULT back per slot. The PNF waits for the answer, which is what sets the slot rate.", live: () => [S.gnb?.dl_kbps, S.gnb?.ul_kbps, S.gnb ? fmt(S.gnb.slots_s) + " slots/s" : ""] },
+  { id: "ug", a: ["gbr", "b"], b: ["gbd", "t"], name: "USB VCOM", cap: "1 Mbaud ≈ 800 kbit/s", capK: 800, what: "SLIP-framed serial link to the board's LPUART through the on-board MCU-Link probe.", live: () => [S.gnb?.dl_kbps, S.gnb?.ul_kbps, S.gnb ? fmt(S.gnb.air_pps) + " pkt/s" : ""] },
+  ...[1, 2, 3].map(u => ({ id: "ud" + u, a: [`u${u}`, "b"], b: [`u${u}r`, "t"], ue: u, name: "UDP", cap: "veth", capK: 1e7, what: "Downlink slots to the nrUE, its uplink for each TX slot back.",
+      live: () => [S.ue[u]?.dl_kbps, S.ue[u]?.ul_kbps, S.ue[u] ? fmt(S.ue[u].dl_slots_s) + " slots/s" : ""] })),
+  ...[1, 2, 3].map(u => ({ id: "uu" + u, a: [`u${u}r`, "b"], b: [`u${u}b`, "t"], ue: u, name: "USB VCOM", cap: "1 Mbaud", capK: 800, what: "Serial link from the UE board to its bridge.",
+      live: () => [S.ue[u]?.dl_kbps, S.ue[u]?.ul_kbps, S.ue[u]?.rssi != null ? `DL ${S.ue[u].rssi} dBm` : ""] })),
+  ...[1, 2, 3].map(u => ({ id: "air" + u, a: ["gbd", "r"], b: [`u${u}b`, "b"], ue: u, air: true, name: `2.4 GHz · UE${u}`, cap: "1 Mbit/s shared", capK: 400,
+      what: "GFSK at 1 Mbit/s, the Bluetooth LE 1M PHY, with 24-bit CRC and whitening. One channel shared by all UEs: the gNB broadcasts each downlink slot, then polls each UE for its uplink. About 400 kbit/s usable after framing and turnaround; this is the bottleneck of the system.",
+      live: () => [S.gnb?.ue?.[u]?.dl_kbps, S.gnb?.ue?.[u]?.ul_kbps, S.gnb?.ue?.[u]?.rssi != null ? `UL ${S.gnb.ue[u].rssi} dBm` : ""] })),
+];
+const nodeName = L => NODES[L.a[0]].t + " ↔ " + NODES[L.b[0]].t;
+let lblMode = "both", selected = null;
+const NS = "http://www.w3.org/2000/svg";
+function el(tag, attrs = {}, parent) { const e = document.createElementNS(NS, tag); for (const k in attrs) e.setAttribute(k, attrs[k]); if (parent) parent.appendChild(e); return e; }
+function port([n, side]) { const N = NODES[n]; return side === "r" ? [N.x + NW, N.y + NH / 2] : side === "l" ? [N.x, N.y + NH / 2] : side === "b" ? [N.x + NW / 2, N.y + NH] : [N.x + NW / 2, N.y]; }
+function buildArch() {
+  const svg = $("arch"); svg.textContent = "";
+  // layers and the delimiter lines between them
+  BANDS.forEach(([y0, y1, name, sub], i) => {
+    el("rect", { class: "band" + (name === "NXP" ? " nxp" : ""), x: 0, y: y0, width: 1700, height: y1 - y0 }, svg);
+    const ly = i === 0 ? 198 : y0 + 30; // OpenAirInterface caption sits under the data network box
+    el("text", { class: "zlabel", x: 20, y: ly }, svg).textContent = name === "NXP" ? "NXP boards" : name === "Host" ? "Host" : "OpenAirInterface";
+    el("text", { class: "bsub", x: 20, y: ly + 15 }, svg).textContent = sub;
+  });
+  const delim = (y, nxp, upper, lower) => {
+    el("line", { class: "delim" + (nxp ? " nxp" : ""), x1: 0, x2: 1700, y1: y, y2: y }, svg);
+    for (const [txt, cx, isNxp] of [[`▲ ${upper}`, 800, false], [`▼ ${lower}`, 920, nxp]]) {
+      const g = el("g", { class: "chip" + (isNxp ? " nxp" : "") }, svg);
+      const w = txt.length * 7.6 + 16;
+      el("rect", { x: cx - w / 2, y: y - 11, width: w, height: 22, rx: 11 }, g);
+      el("text", { x: cx, y: y + 4.5, "text-anchor": "middle" }, g).textContent = txt;
+    }
+  };
+  delim(226, false, "OpenAirInterface", "Host");
+  delim(358, true, "Host", "NXP");
+  // links
+  for (const L of LINKS) {
+    const p1 = port(L.a), p2 = port(L.b);
+    const g = el("g", { class: "link", "data-id": L.id, tabindex: 0, role: "button", "aria-label": `${L.name} link, ${nodeName(L)}` }, svg);
+    const dx = p2[0] - p1[0], dy = p2[1] - p1[1], len = Math.hypot(dx, dy) || 1, ox = -dy / len * 3.5, oy = dx / len * 3.5;
+    const d = L.elbow ? `M${p1[0]} ${p1[1]} H ${p2[0]} V ${p2[1]}` : `M${p1[0]} ${p1[1]} L ${p2[0]} ${p2[1]}`;
+    const lane = s => L.elbow ? d : `M${p1[0] + ox * s} ${p1[1] + oy * s} L ${p2[0] + ox * s} ${p2[1] + oy * s}`;
+    el("path", { class: "hit", d }, g);
+    el("path", { class: "lane base", d: lane(-1), "stroke-width": 3 }, g);
+    if (!L.ctl) el("path", { class: "lane base", d: lane(1), "stroke-width": 3 }, g);
+    L.dl = el("path", { class: "lane flow dl", d: lane(-1), "stroke-width": 3, stroke: L.ue ? css(UE[L.ue].c) : css("--embb") }, g);
+    L.ul = L.ctl ? null : el("path", { class: "lane flow ul", d: lane(1), "stroke-width": 3, stroke: css("--ink-3") }, g);
+    // labels: above the gap for horizontal links, beside vertical ones, next to the UE board for radio links
+    let x, y, anchor = "middle", one = false;
+    if (L.elbow) { x = p1[0] + 10; y = p1[1] - 22; anchor = "start"; }
+    else if (L.air) { const B = NODES[L.b[0]]; x = B.x + NW + 8; y = B.y + 40; anchor = "start"; one = true; }
+    else if (dx === 0) { x = p1[0] + 10; y = p1[1] + 18; anchor = "start"; }
+    else { x = (p1[0] + p2[0]) / 2; y = NODES[L.a[0]].y - 24; }
+    L.t1 = el("text", { class: "ltxt cap", x, y, "text-anchor": anchor }, g);
+    L.t2 = el("text", { class: "ltxt live", x, y: y + 13, "text-anchor": anchor }, g);
+    L.one = one;
+    g.addEventListener("click", () => select({ link: L.id }));
+    g.addEventListener("keydown", e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); select({ link: L.id }); } });
+  }
+  // one caption for the shared radio channel
+  const gb = NODES.gbd;
+  el("text", { class: "ltxt cap", x: gb.x + NW + 14, y: gb.y + 74 }, svg).textContent = "2.4 GHz GFSK · Bluetooth LE 1M PHY · 1 Mbit/s, one channel shared by all UEs";
+  el("text", { class: "bneck", x: gb.x + NW + 14, y: gb.y + 89 }, svg).textContent = "▲ bottleneck: ≈ 400 kbit/s usable after framing and polling";
+  // nodes
+  for (const [id, N] of Object.entries(NODES)) {
+    const g = el("g", { class: "node", "data-id": id, tabindex: 0, role: "button", "aria-label": N.t }, svg);
+    el("rect", { class: "box", x: N.x, y: N.y, width: NW, height: NH, rx: 6 }, g);
+    if (N.ue) el("rect", { x: N.x, y: N.y + 8, width: 3, height: NH - 16, fill: css(UE[N.ue].c) }, g);
+    el("text", { class: "n1", x: N.x + 12, y: N.y + 26 }, g).textContent = N.t;
+    el("text", { class: "n2", x: N.x + 12, y: N.y + 45 }, g).textContent = N.s;
+    if (id === "gbd" || id.match(/^u\db$/)) {
+      N.rgb = el("circle", { class: "led", cx: N.x + NW - 14, cy: N.y + 18, r: 7, fill: "var(--panel)" }, g);
+      if (id === "gbd") { N.led1 = el("circle", { class: "led", cx: N.x + NW - 14, cy: N.y + 50, r: 5, fill: "var(--panel)" }, g); el("text", { class: "n2", x: N.x + 12, y: N.y + 58, "font-size": 9.5 }, g).textContent = "LED1 = uplink"; }
+    }
+    g.addEventListener("click", () => select({ node: id }));
+    g.addEventListener("keydown", e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); select({ node: id }); } });
+  }
+}
+function select(sel) { selected = sel; document.querySelectorAll("#arch .sel").forEach(e => e.classList.remove("sel")); const q = sel.link ? `.link[data-id="${sel.link}"]` : `.node[data-id="${sel.node}"]`; document.querySelector("#arch " + q)?.classList.add("sel"); renderDetail(); }
+function renderDetail() {
+  const box = $("detail"); if (!selected) selected = { link: "air2" };
+  if (selected.link) {
+    const L = LINKS.find(l => l.id === selected.link); const [dl, ul, x] = L.live();
+    const util = L.capK && dl != null ? ((dl + (ul || 0)) / L.capK * 100) : null;
+    box.innerHTML = `<span class="label">Link</span><h3>${L.name}: ${nodeName(L)}</h3>
+      <dl><dt>Capacity</dt><dd>${L.cap}</dd><dt>Downlink</dt><dd>${L.ctl ? "control plane" : fmtRate(dl)}</dd><dt>Uplink</dt><dd>${L.ctl ? "–" : fmtRate(ul)}</dd>
+      ${x ? `<dt>Also</dt><dd>${x}</dd>` : ""}${util != null && !L.ctl ? `<dt>Load</dt><dd>${util < 0.01 ? "<0.01" : util.toFixed(util < 1 ? 2 : 0)} % of capacity</dd>` : ""}</dl><p>${L.what}</p>`;
+  } else {
+    const N = NODES[selected.node]; let extra = "";
+    if (N.ue) { const u = S.ue[N.ue], g = S.gnb?.ue?.[N.ue]; extra = `<dl><dt>Class</dt><dd>${UE[N.ue].cls}</dd><dt>RNTI</dt><dd>${u?.rnti ?? "–"}</dd><dt>DL slots/s</dt><dd>${fmt(g?.dl_slots)}</dd><dt>UL slots/s</dt><dd>${fmt(g?.ul_slots)}</dd></dl>`; }
+    if (selected.node === "gbd" || selected.node === "gbr") extra = `<dl><dt>Slots/s</dt><dd>${fmt(S.gnb?.slots_s)}</dd><dt>UL slots/s</dt><dd>${fmt(S.gnb?.ul_slots_s)}</dd><dt>Polls</dt><dd>${S.gnb?.polls ?? "–"} (timeouts ${S.gnb?.timeouts ?? "–"})</dd><dt>Serving</dt><dd>${S.led.ue ? UE[S.led.ue].cls + (S.led.ul ? " · UL" : " · DL") : "idle"}</dd></dl>`;
+    box.innerHTML = `<span class="label">Node</span><h3>${N.t}</h3>${extra}<p>${N.d}</p>`;
+  }
+}
+function renderArch() {
+  for (const L of LINKS) {
+    const [dl, ul, x] = L.live();
+    const short = k => k == null ? "–" : k >= 100 ? k.toFixed(0) : k.toFixed(1);
+    if (L.one) { L.t1.textContent = lblMode === "cap" ? `UE${L.ue} · shared` : `↓${short(dl)} ↑${short(ul)} kb/s`; L.t2.textContent = lblMode === "cap" ? "" : (x || ""); }
+    else { L.t1.textContent = lblMode === "live" ? "" : `${L.name} · ${L.cap}`; L.t2.textContent = lblMode === "cap" || L.ctl ? "" : `↓${short(dl)} ↑${short(ul)} kb/s`; }
+    const speed = k => !k ? "0s" : Math.max(0.4, 6 - Math.log10(1 + k) * 2.2).toFixed(2) + "s";
+    L.dl.style.animationDuration = L.ctl ? "0s" : speed(dl); L.dl.style.opacity = dl ? 1 : 0.15;
+    if (L.ul) { L.ul.style.animationDuration = speed(ul); L.ul.style.opacity = ul ? 1 : 0.15; }
+  }
+  const g = NODES.gbd;
+  g.rgb.setAttribute("fill", S.led.ue ? css(UE[S.led.ue].c) : "var(--panel)");
+  g.led1.setAttribute("fill", S.led.ue && S.led.ul ? css("--signal") : "var(--panel)");
+  const t = performance.now();
+  for (const u of [1, 2, 3]) {
+    const N = NODES[`u${u}b`], served = S.gnb?.ue?.[u] && (S.gnb.ue[u].dl_slots + S.gnb.ue[u].ul_slots) > 0;
+    // blink pattern: n flashes of 120 ms then a pause, like the board
+    const ph = t % 1500, on = served && ph < u * 240 && (ph % 240) < 120;
+    N.rgb.setAttribute("fill", on ? css(UE[u].c) : "var(--panel)");
+  }
+}
+document.querySelectorAll("[data-lbl]").forEach(b => b.addEventListener("click", () => { lblMode = b.dataset.lbl; document.querySelectorAll("[data-lbl]").forEach(x => x.setAttribute("aria-pressed", x === b)); renderArch(); }));
+
+/* ------------------------------------------------------------ sparklines */
+function spark(canvas, series, opts = {}) {
+  const dpr = window.devicePixelRatio || 1, w = canvas.clientWidth, h = canvas.clientHeight;
+  if (!w) return;
+  canvas.width = w * dpr; canvas.height = h * dpr;
+  const c = canvas.getContext("2d"); c.scale(dpr, dpr); c.clearRect(0, 0, w, h);
+  const all = series.flatMap(s => s.data).filter(v => v != null);
+  const max = Math.max(opts.min || 1, ...all) * 1.15, min = opts.floor ?? 0, pad = 18;
+  c.strokeStyle = css("--line"); c.lineWidth = 1; c.font = `10px ${css("--mono")}`; c.fillStyle = css("--ink-3");
+  for (const f of [0, 0.5, 1]) { const y = h - 4 - (h - 10) * f; c.beginPath(); c.moveTo(pad + 22, y + .5); c.lineTo(w, y + .5); c.stroke(); c.fillText((min + (max - min) * f).toFixed(opts.dec ?? 0), 0, y + 3); }
+  const n = opts.n || 60, x0 = pad + 24;
+  for (const s of series) {
+    const d = s.data.slice(-n); if (!d.length) continue;
+    const X = i => x0 + (w - x0 - 4) * (i + n - d.length) / (n - 1), Y = v => h - 4 - (h - 10) * ((v - min) / (max - min));
+    if (s.fill) { c.beginPath(); c.moveTo(X(0), h - 4); d.forEach((v, i) => c.lineTo(X(i), Y(v ?? min))); c.lineTo(X(d.length - 1), h - 4); c.closePath(); c.fillStyle = s.color + "22"; c.fill(); }
+    c.beginPath(); d.forEach((v, i) => v == null ? null : (i ? c.lineTo(X(i), Y(v)) : c.moveTo(X(i), Y(v)))); c.strokeStyle = s.color; c.lineWidth = 1.6; c.stroke();
+    const lv = d[d.length - 1]; if (lv != null) { c.beginPath(); c.arc(X(d.length - 1), Y(lv), 3, 0, 7); c.fillStyle = s.color; c.fill(); }
+  }
+}
+
+/* ---------------------------------------------------------- factory floor */
+const W = 60, H = 36, M = 3;
+let fs = 1, fw = 0, fh = 0, drawAgv = null, drawCtrl = null, trail = [];
+function sizeFloor() { const cv = $("f-canvas"); fw = cv.clientWidth; fh = Math.round(fw * (H + 2 * M) / (W + 2 * M)); cv.style.height = fh + "px"; const dpr = window.devicePixelRatio || 1; cv.width = fw * dpr; cv.height = fh * dpr; fs = fw / (W + 2 * M); }
+const wx = x => (x + M) * fs, wy = y => (y + M) * fs;
+function nearestOnPath(x, y) {
+  let best = null; const P = STATIONS.map(s => [s[1], s[2]]);
+  for (let i = 0; i < P.length; i++) { const a = P[i], b = P[(i + 1) % P.length]; const dx = b[0] - a[0], dy = b[1] - a[1]; const t = Math.max(0, Math.min(1, ((x - a[0]) * dx + (y - a[1]) * dy) / (dx * dx + dy * dy))); const px = a[0] + dx * t, py = a[1] + dy * t, d = Math.hypot(px - x, py - y); if (!best || d < best.d) best = { x: px, y: py, d }; }
+  return best;
+}
+function drawFloor(dt) {
+  const cv = $("f-canvas"), c = cv.getContext("2d"), dpr = window.devicePixelRatio || 1;
+  c.setTransform(dpr, 0, 0, dpr, 0, 0); c.clearRect(0, 0, fw, fh);
+  c.fillStyle = css("--floor"); c.fillRect(0, 0, fw, fh);
+  c.strokeStyle = css("--floor-grid"); c.lineWidth = 1;
+  for (let x = 0; x <= W; x += 3) { c.beginPath(); c.moveTo(wx(x) + .5, wy(0)); c.lineTo(wx(x) + .5, wy(H)); c.stroke(); }
+  for (let y = 0; y <= H; y += 3) { c.beginPath(); c.moveTo(wx(0), wy(y) + .5); c.lineTo(wx(W), wy(y) + .5); c.stroke(); }
+  // aisle
+  const P = STATIONS.map(s => [s[1], s[2]]);
+  c.lineJoin = "round"; c.strokeStyle = css("--panel-2"); c.lineWidth = 2.6 * fs; c.beginPath(); P.forEach((p, i) => i ? c.lineTo(wx(p[0]), wy(p[1])) : c.moveTo(wx(p[0]), wy(p[1]))); c.closePath(); c.stroke();
+  c.setLineDash([fs * 0.8, fs * 0.8]); c.strokeStyle = css("--lane"); c.lineWidth = Math.max(1, fs * 0.12); c.stroke(); c.setLineDash([]);
+  // machines and stations
+  c.font = `600 ${Math.max(10, fs * 1.15)}px ${css("--display")}`; c.textAlign = "center";
+  const blocks = [[14, 11, 10, 6], [36, 11, 10, 6], [44, 18, 6, 9], [14, 19, 10, 6], [30, 15, 8, 8]];
+  for (const [x, y, w, h] of blocks) { c.fillStyle = css("--machine"); c.fillRect(wx(x), wy(y), w * fs, h * fs); }
+  for (const [n, x, y] of STATIONS) {
+    c.fillStyle = css("--machine"); const oy = y < 18 ? -2.8 : 1.4; c.fillRect(wx(x - 2.4), wy(y + oy), 4.8 * fs, 1.4 * fs);
+    c.fillStyle = css("--ink-2"); c.fillText(n, wx(x), wy(y + (y < 18 ? -3.4 : 4.4)));
+  }
+  // obstacles
+  // the LiDAR pole (eMBB console)
+  c.fillStyle = css("--embb"); c.beginPath(); c.arc(wx(26), wy(26), Math.max(3, fs * .45), 0, 7); c.fill();
+  c.font = `600 ${Math.max(10, fs * 1.0)}px ${css("--display")}`; c.textAlign = "left"; c.fillText("LiDAR", wx(26.8), wy(26.4)); c.textAlign = "center";
+  for (const [ox, oy] of S.obstacles) {
+    c.fillStyle = css("--signal"); c.beginPath(); c.moveTo(wx(ox), wy(oy - .9)); c.lineTo(wx(ox + .8), wy(oy + .6)); c.lineTo(wx(ox - .8), wy(oy + .6)); c.closePath(); c.fill();
+    c.strokeStyle = css("--signal"); c.globalAlpha = .35; c.beginPath(); c.arc(wx(ox), wy(oy), 1.5 * fs, 0, 7); c.stroke(); c.globalAlpha = 1;
+  }
+  // agv: interpolate toward reported state, extrapolating with its speed
+  const lerp = (cur, tgt) => { if (!tgt) return cur; if (!cur || Math.hypot(cur.x - tgt.x, cur.y - tgt.y) > 4) return { ...tgt }; const k = Math.min(1, dt * 10); return { x: cur.x + (tgt.x - cur.x) * k, y: cur.y + (tgt.y - cur.y) * k, h: tgt.h, v: tgt.v, state: tgt.state }; };
+  drawAgv = lerp(drawAgv, S.agv); drawCtrl = lerp(drawCtrl, S.ctrl);
+  if (drawAgv) { trail.push([drawAgv.x, drawAgv.y]); if (trail.length > 90) trail.shift(); }
+  c.strokeStyle = css("--urllc"); c.globalAlpha = .25; c.lineWidth = 2; c.beginPath(); trail.forEach((p, i) => i ? c.lineTo(wx(p[0]), wy(p[1])) : c.moveTo(wx(p[0]), wy(p[1]))); c.stroke(); c.globalAlpha = 1;
+  const vehicle = (a, ghost) => {
+    c.save(); c.translate(wx(a.x), wy(a.y)); c.rotate(a.h || 0);
+    const L = 1.9 * fs, Wd = 1.2 * fs;
+    if (ghost) { c.setLineDash([3, 3]); c.strokeStyle = css("--ink-2"); c.lineWidth = 1.5; c.strokeRect(-L / 2, -Wd / 2, L, Wd); c.setLineDash([]); }
+    else {
+      c.fillStyle = css("--urllc"); c.fillRect(-L / 2, -Wd / 2, L, Wd);
+      c.fillStyle = css("--panel"); c.fillRect(L / 2 - L * .28, -Wd / 2 + 2, L * .22, Wd - 4);
+      const blink = a.state === 1 ? (performance.now() % 600 < 300) : a.state === 2;
+      c.fillStyle = blink ? css("--signal") : css("--panel-2"); c.beginPath(); c.arc(-L * .15, 0, Math.max(2, fs * .22), 0, 7); c.fill();
+    }
+    c.restore();
+  };
+  if (drawCtrl) vehicle(drawCtrl, true);
+  if (drawAgv) vehicle(drawAgv, false);
+  // legend
+  c.textAlign = "left"; c.font = `${Math.max(10, fs * .95)}px ${css("--mono")}`; c.fillStyle = css("--ink-3");
+  const lag = drawAgv && drawCtrl ? Math.hypot(drawAgv.x - drawCtrl.x, drawAgv.y - drawCtrl.y) : null;
+  c.fillText(`solid: AGV (true)   dashed: controller's view${lag != null ? `   lag ${(lag * 100).toFixed(0)} cm` : ""}`, wx(0), wy(H + 2.2));
+  if (S.estop) { c.fillStyle = css("--crit"); c.textAlign = "right"; c.font = `700 ${Math.max(12, fs * 1.4)}px ${css("--display")}`; c.fillText("E-STOP ACTIVE", wx(W), wy(-1)); }
+}
+$("f-canvas").addEventListener("click", e => {
+  if (!live) return toast("Controls work on the live dashboard. This copy is a recording.");
+  const r = e.currentTarget.getBoundingClientRect(), x = (e.clientX - r.left) / fs - M, y = (e.clientY - r.top) / fs - M;
+  const hit = S.obstacles.findIndex(([ox, oy]) => Math.hypot(ox - x, oy - y) < 2.2);
+  let list = S.obstacles.slice();
+  if (hit >= 0) list.splice(hit, 1);
+  else { const p = nearestOnPath(x, y); if (p.d > 4) return toast("Drop obstacles on the aisle (yellow dashed line)."); if (list.length >= 4) list.shift(); list.push([+p.x.toFixed(1), +p.y.toFixed(1)]); }
+  cmd({ k: "obstacles", list });
+});
+
+/* ----------------------------------------------------------------- lidar */
+const LID = { pts: null, n: 0, yaw: -2.2, pitch: 0.62, zoom: 1, view: "orbit", col: "height", idle: 0, w: 0, h: 0, seq: 0 };
+const L_POS = [26, 26, 2.5], L_TGT = [30, 18, 1];
+async function decodeScan(ev) {
+  const my = ++LID.seq;
+  try {
+    const bin = Uint8Array.from(atob(ev.z), c => c.charCodeAt(0));
+    const buf = await new Response(new Blob([bin]).stream().pipeThrough(new DecompressionStream("deflate"))).arrayBuffer();
+    if (my !== LID.seq) return;
+    const dv = new DataView(buf), nb = ev.beams, na = ev.az, pts = new Float32Array(nb * na * 4); let n = 0;
+    for (let b = 0; b < nb; b++) {
+      const el = (-15 + 2 * b) * Math.PI / 180, ce = Math.cos(el), se = Math.sin(el);
+      for (let a = 0; a < na; a++) {
+        const cm = dv.getUint16((b * na + a) * 2, true); if (!cm) continue;
+        const r = cm / 100, az = a * Math.PI / 180;
+        pts[n * 4] = L_POS[0] + r * ce * Math.cos(az); pts[n * 4 + 1] = L_POS[1] + r * ce * Math.sin(az); pts[n * 4 + 2] = L_POS[2] + r * se; pts[n * 4 + 3] = r; n++;
+      }
+    }
+    LID.pts = pts; LID.n = n;
+  } catch (e) { $("l-ov1").textContent = "this browser cannot decompress the scans"; }
+}
+function sizeLidar() { const cv = $("l-canvas"), dpr = window.devicePixelRatio || 1; LID.w = cv.clientWidth; LID.h = cv.clientHeight; cv.width = LID.w * dpr; cv.height = LID.h * dpr; }
+const RAMP = Array.from({ length: 32 }, (_, i) => `hsl(${Math.round(225 - 225 * i / 31)} 90% ${i > 20 ? 58 : 62}%)`);
+function drawLidar(dt) {
+  const cv = $("l-canvas"), c = cv.getContext("2d"), dpr = window.devicePixelRatio || 1, w = LID.w, h = LID.h;
+  if (!w) return;
+  const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
+  LID.idle += dt; if (LID.view === "orbit" && LID.idle > 4 && !reduce) LID.yaw += dt * 0.12;
+  const pitch = LID.view === "top" ? 1.5 : LID.pitch, yaw = LID.view === "top" ? -Math.PI / 2 : LID.yaw;
+  const cy = Math.cos(yaw), sy = Math.sin(yaw), cp = Math.cos(pitch), sp = Math.sin(pitch);
+  const D = 62 / LID.zoom, f = Math.min(w, h * 1.6) * 1.05;
+  const proj = (x, y, z) => {
+    x -= L_TGT[0]; y -= L_TGT[1]; z -= L_TGT[2];
+    const x1 = x * cy - y * sy, y1 = x * sy + y * cy;          // yaw about z
+    const y2 = y1 * cp - z * sp, z2 = y1 * sp + z * cp;          // pitch: y2 depth axis, z2 up
+    const depth = D + y2; if (depth < 1) return null;
+    return [w / 2 + x1 * f / depth, h / 2 - z2 * f / depth, depth];
+  };
+  c.setTransform(dpr, 0, 0, dpr, 0, 0); c.fillStyle = "#0b1016"; c.fillRect(0, 0, w, h);
+  // floor grid and outline
+  c.strokeStyle = "rgba(160,180,200,.14)"; c.lineWidth = 1;
+  const seg = (a, b) => { const p = proj(...a), q = proj(...b); if (p && q) { c.beginPath(); c.moveTo(p[0], p[1]); c.lineTo(q[0], q[1]); c.stroke(); } };
+  for (let x = 0; x <= 60; x += 6) seg([x, 0, 0], [x, 36, 0]);
+  for (let y = 0; y <= 36; y += 6) seg([0, y, 0], [60, y, 0]);
+  if (LID.pts) {
+    const buckets = RAMP.map(() => []), P = LID.pts;
+    for (let i = 0; i < LID.n; i++) {
+      const p = proj(P[i * 4], P[i * 4 + 1], P[i * 4 + 2]); if (!p) continue;
+      const v = LID.col === "height" ? P[i * 4 + 2] / 5 : P[i * 4 + 3] / 32;
+      buckets[Math.max(0, Math.min(31, Math.round(v * 31)))].push(p);
+    }
+    buckets.forEach((b, i) => { c.fillStyle = RAMP[i]; for (const p of b) { const s = Math.max(1.1, 2.6 * 40 / p[2]); c.fillRect(p[0] - s / 2, p[1] - s / 2, s, s); } });
+  }
+  // sensor pole
+  const base = proj(L_POS[0], L_POS[1], 0), top = proj(...L_POS);
+  if (base && top) { c.strokeStyle = "#e6ebf0"; c.lineWidth = 2; c.beginPath(); c.moveTo(base[0], base[1]); c.lineTo(top[0], top[1]); c.stroke(); c.fillStyle = "#e6ebf0"; c.beginPath(); c.arc(top[0], top[1], 3.5, 0, 7); c.fill(); }
+  c.font = `11px ${css("--mono")}`; c.fillStyle = "rgba(230,235,240,.75)"; c.textAlign = "left";
+  c.fillText(LID.col === "height" ? "colour: height 0 → 5 m" : "colour: range 0 → 32 m", 10, h - 10);
+}
+(() => {
+  const cv = $("l-canvas"), ptrs = new Map(); let pinch = 0;
+  cv.addEventListener("pointerdown", e => { cv.setPointerCapture(e.pointerId); ptrs.set(e.pointerId, [e.clientX, e.clientY]); LID.idle = 0; });
+  cv.addEventListener("pointermove", e => {
+    if (!ptrs.has(e.pointerId)) return; const [px, py] = ptrs.get(e.pointerId); ptrs.set(e.pointerId, [e.clientX, e.clientY]); LID.idle = 0;
+    if (ptrs.size === 2) { const [a, b] = [...ptrs.values()]; const d = Math.hypot(a[0] - b[0], a[1] - b[1]); if (pinch) LID.zoom = Math.max(0.5, Math.min(4, LID.zoom * d / pinch)); pinch = d; return; }
+    if (LID.view === "top") return;
+    LID.yaw -= (e.clientX - px) * 0.008; LID.pitch = Math.max(0.08, Math.min(1.5, LID.pitch + (e.clientY - py) * 0.006));
+  });
+  const up = e => { ptrs.delete(e.pointerId); if (ptrs.size < 2) pinch = 0; };
+  cv.addEventListener("pointerup", up); cv.addEventListener("pointercancel", up);
+  cv.addEventListener("wheel", e => { e.preventDefault(); LID.idle = 0; LID.zoom = Math.max(0.5, Math.min(4, LID.zoom * Math.exp(-e.deltaY * 0.0015))); }, { passive: false });
+  document.querySelectorAll("[data-view]").forEach(b => b.addEventListener("click", () => { LID.view = b.dataset.view; document.querySelectorAll("[data-view]").forEach(x => x.setAttribute("aria-pressed", x === b)); }));
+  document.querySelectorAll("[data-col]").forEach(b => b.addEventListener("click", () => { LID.col = b.dataset.col; document.querySelectorAll("[data-col]").forEach(x => x.setAttribute("aria-pressed", x === b)); }));
+})();
+
+/* --------------------------------------------------------------- events */
+function logTo(ul, arr, max = 30) {
+  ul.textContent = "";
+  for (const e of arr.slice(-max).reverse()) { const li = document.createElement("li"); li.className = e.level || ""; const ts = document.createElement("span"); ts.className = "ts"; ts.textContent = clock(e.t); const tx = document.createElement("span"); tx.textContent = e.text; li.append(ts, tx); ul.appendChild(li); }
+}
+let tBase = 0; // replay: wall time of the recording start
+function clock(t) { const d = new Date((live ? t : tBase + t) * 1000); return d.toLocaleTimeString([], { hour12: false }); }
+function apply(ev) {
+  S.now = ev.t;
+  switch (ev.k) {
+    case "hello": (ev.snapshot || []).forEach(apply); (ev.sensor_hist || []).forEach(apply); S.agvLog = []; S.sensorLog = []; (ev.events || []).forEach(apply); break;
+    case "gnb": S.gnb = ev; break;
+    case "ue": S.ue[ev.id] = ev; break;
+    case "led": S.led = ev; break;
+    case "scan": S.video.last = ev; S.video.on = true; if (!replayScrub) decodeScan(ev); break;
+    case "lidar_stats": S.video.stats = ev; S.video.kbpsHist.push(ev.kbps); if (S.video.kbpsHist.length > 120) S.video.kbpsHist.shift(); break;
+    case "lidar_ctl": S.video.on = ev.on; break;
+    case "agv": S.agv = ev; break;
+    case "ctrl": S.ctrl = ev; break;
+    case "ctrl_stats": S.ctrlStats = ev; S.latHist.push([ev.ul_p50, ev.ul_p99]); if (S.latHist.length > 120) S.latHist.shift(); break;
+    case "agv_cmd": S.agvLog.push({ t: ev.t, level: ev.cmd === "STOP" ? "warn" : "ok", text: `AGV received ${ev.cmd}, ${fmt(ev.dl_ms)} ms after it was sent` }); break;
+    case "agv_event": S.agvLog.push(ev); break;
+    case "obstacles": S.obstacles = ev.list; break;
+    case "estop": S.estop = ev.on; S.agvLog.push({ t: ev.t, level: ev.on ? "crit" : "ok", text: ev.on ? "E-STOP pressed at the control room" : "E-STOP released" }); break;
+    case "sensor_tx": S.sensorTx = ev; S.interval = ev.interval; pulse("tx"); break;
+    case "sensor_rx": S.sensor = ev; S.n++; S.sensorHist.push(ev); if (S.sensorHist.length > 60) S.sensorHist.shift(); pulse("rx"); break;
+    case "sensor_cfg": S.pending = ev.pending ? ev.interval : null; if (!ev.pending) S.sensorLog.push({ t: ev.t, level: "ok", text: `collector sent interval ${ev.interval} s in the sensor's receive window` }); break;
+    case "sensor_cfg_rx": S.interval = ev.interval; S.sensorLog.push({ t: ev.t, level: "ok", text: `sensor now reports every ${ev.interval} s` }); break;
+    case "sensor_event": S.sensorLog.push({ t: ev.t, level: "warn", text: ev.text }); S.heatT = ev.t; break;
+    case "app_down": S.agvLog.push({ t: ev.t, level: "crit", text: `app ${ev.src} stopped` }); break;
+  }
+  if (S.agvLog.length > 60) S.agvLog.splice(0, S.agvLog.length - 60);
+  if (S.sensorLog.length > 40) S.sensorLog.splice(0, S.sensorLog.length - 40);
+  dirty = true;
+}
+let pulseTimer = null;
+function pulse(kind) {
+  if (replayScrub) return;
+  if (kind === "tx") { document.querySelectorAll("#s-svg .wave").forEach(w => { w.classList.remove("go"); void w.getBBox(); w.classList.add("go"); }); }
+  const p = $("s-pkt"); if (kind === "tx" && p.animate) p.animate([{ opacity: 1, cx: 336 }, { opacity: 1, cx: 360 }], { duration: 600, fill: "none" });
+}
+
+/* --------------------------------------------------------------- render */
+let dirty = true;
+function render() {
+  const g = S.gnb;
+  $("k-slots").textContent = fmt(g?.slots_s); $("k-air").textContent = fmt(g?.air_pps);
+  $("k-ues").textContent = g?.rnti ? Object.keys(g.rnti).length + " / 3" : "–";
+  $("k-clock").textContent = S.now ? clock(S.now) : "–";
+  renderArch(); renderDetail();
+  // lidar
+  const v = S.video, vs = v.stats;
+  $("v-kbps").textContent = fmt(vs?.kbps, 0); $("v-fps").textContent = fmt(vs?.sps, 1); $("v-lat").textContent = fmt(vs?.lat_ms, 0);
+  $("v-size").textContent = LID.n ? LID.n.toLocaleString() : "–";
+  $("v-sizeu").textContent = vs?.avg_bytes ? `per scan · ${(vs.avg_bytes / 1024).toFixed(1)} KB sent` : "per scan";
+  if (v.last) { $("l-ov1").textContent = `scan ${v.last.idx} · ${v.last.beams}×${v.last.az}`; $("l-ov2").textContent = `${fmt(v.last.lat_ms)} ms`; }
+  $("l-paused").hidden = v.on; $("v-toggle").textContent = v.on ? "Pause scanning" : "Resume scanning";
+  spark($("v-spark"), [{ data: v.kbpsHist, color: css("--embb"), fill: true }], { min: 50 });
+  // urllc
+  const cs = S.ctrlStats;
+  $("a-p50").textContent = fmt(cs?.ul_p50); $("a-p99").textContent = fmt(cs?.ul_p99); $("a-rtt").textContent = fmt(S.agv?.rtt_ms);
+  $("a-rate").textContent = fmt(cs?.rate, 0); $("a-lost").textContent = cs ? `per s · ${cs.lost} lost of ${cs.rx + cs.lost}` : "per s";
+  const st = { 1: "moving", 2: "halted", 3: "docked" }[S.agv?.state] || "–";
+  $("a-state").textContent = S.agv ? `${st} · ${fmt(S.agv.v, 1)} m/s · next ${S.agv.station} · cmd ${S.ctrl?.cmd ?? "–"}` : "–";
+  $("a-estop").setAttribute("aria-pressed", S.estop); $("a-estop").textContent = S.estop ? "Release E-STOP" : "E-STOP";
+  spark($("a-spark"), [{ data: S.latHist.map(x => x[1]), color: css("--ink-3") }, { data: S.latHist.map(x => x[0]), color: css("--urllc"), fill: true }], { min: 100 });
+  logTo($("a-log"), S.agvLog);
+  // mmtc
+  const s = S.sensor;
+  if (s) { $("s-temp").textContent = fmt(s.temp, 1); $("s-vib").textContent = fmt(s.vib); $("s-latv").textContent = fmt(s.ul_ms); $("s-lat").textContent = `${fmt(s.ul_ms)} ms`; }
+  const tx = S.sensorTx || s;
+  if (tx) { $("s-lcd1").textContent = `${fmt(tx.temp, 1)} °C`; $("s-lcd2").textContent = `${fmt(tx.hum, 0)}% RH  ${fmt(tx.vib)} mg`; $("s-battv").textContent = `${(tx.batt / 1000).toFixed(2)} V`; $("s-batt").setAttribute("width", Math.max(4, 60 * (tx.batt - 3000) / 700)); }
+  $("s-n").textContent = S.n || "–"; $("s-iv").textContent = `every ${S.interval} s · 20 B`;
+  $("s-pending").hidden = S.pending == null; if (S.pending != null) $("s-pending").textContent = `${S.pending} s queued: delivered after the next report`;
+  $("s-heat").classList.toggle("on", !!S.heatT && S.now - S.heatT < 20);
+  spark($("s-spark"), [{ data: S.sensorHist.map(e => e.temp), color: css("--mmtc"), fill: true }], { min: 10, floor: 15, dec: 0 });
+  logTo($("s-log"), S.sensorLog);
+}
+
+/* ------------------------------------------------------------ live / replay */
+let live = false, replayScrub = false;
+function toast(t) { const e = $("toast"); e.textContent = t; e.classList.add("show"); clearTimeout(toast.t); toast.t = setTimeout(() => e.classList.remove("show"), 2600); }
+async function cmd(c) {
+  if (!live) return toast("Controls work on the live dashboard. This copy is a recording.");
+  try { const r = await fetch("/api/cmd", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(c) }); if (!r.ok) throw new Error((await r.json()).error || r.status); }
+  catch (e) { toast(`Command not delivered: ${e.message}. Is dashboard_server.py running?`); }
+}
+$("v-toggle").addEventListener("click", () => cmd({ k: "lidar", on: !S.video.on }));
+$("a-estop").addEventListener("click", () => cmd({ k: "estop", on: !S.estop }));
+$("a-clear").addEventListener("click", () => cmd({ k: "obstacles", list: [] }));
+$("s-heatbtn").addEventListener("click", () => cmd({ k: "heat", deg: 15 }));
+$("s-interval").addEventListener("change", e => cmd({ k: "interval", s: +e.target.value }));
+
+function startLive() {
+  live = true; $("mode").className = "pill live"; $("mode-txt").textContent = "LIVE";
+  const es = new EventSource("/events");
+  es.onmessage = m => { try { apply(JSON.parse(m.data)); } catch (e) { /* skip */ } };
+  es.onerror = () => { $("mode").className = "pill down"; $("mode-txt").textContent = "reconnecting"; };
+  es.onopen = () => { $("mode").className = "pill live"; $("mode-txt").textContent = "LIVE"; };
+}
+let rec = null, rpPos = 0, rpPlaying = true, rpIdx = 0;
+function startReplay(data) {
+  rec = data; live = false; $("replay").hidden = false; $("mode").className = "pill replay"; $("mode-txt").textContent = "REPLAY";
+  $("rp-date").textContent = data.recorded; tBase = Date.parse(String(data.recorded_iso || "").replace(/([+-]\d\d)(\d\d)$/, "$1:$2")) / 1000 || 0;
+  document.querySelectorAll(".ctl").forEach(b => b.disabled = true);
+  $("rp-pos").addEventListener("input", e => seek(e.target.value / 1000 * rec.duration_s));
+  $("rp-play").addEventListener("click", () => { rpPlaying = !rpPlaying; $("rp-play").textContent = rpPlaying ? "Pause" : "Play"; });
+}
+function seek(t) {
+  reset(); trail = []; drawAgv = drawCtrl = null; rpIdx = 0; replayScrub = true;
+  const ev = rec.events; let lastScan = null;
+  while (rpIdx < ev.length && ev[rpIdx].t <= t) { if (ev[rpIdx].k === "scan") lastScan = ev[rpIdx]; apply(ev[rpIdx]); rpIdx++; }
+  replayScrub = false; if (lastScan) decodeScan(lastScan);
+  rpPos = t;
+}
+function stepReplay(dt) {
+  if (!rec || !rpPlaying) return;
+  rpPos += dt;
+  if (rpPos > rec.duration_s) { seek(0); return; }
+  const ev = rec.events;
+  while (rpIdx < ev.length && ev[rpIdx].t <= rpPos) apply(ev[rpIdx++]);
+  $("rp-pos").value = Math.round(rpPos / rec.duration_s * 1000);
+  const m = s => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, "0")}`;
+  $("rp-time").textContent = `${m(rpPos)} / ${m(rec.duration_s)}`;
+}
+
+let lastT = performance.now(), lastRender = 0;
+function frame(t) {
+  const dt = Math.min(0.25, (t - lastT) / 1000); lastT = t;
+  stepReplay(dt);
+  drawFloor(dt);
+  drawLidar(dt);
+  if (t - lastRender > 200) { lastRender = t; render(); }
+  requestAnimationFrame(frame);
+}
+async function boot() {
+  buildArch(); sizeFloor(); sizeLidar(); select({ link: "air2" });
+  window.addEventListener("resize", sizeLidar);
+  window.addEventListener("resize", () => { sizeFloor(); dirty = true; });
+  matchMedia("(prefers-color-scheme: dark)").addEventListener?.("change", buildArch);
+  new MutationObserver(buildArch).observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
+  requestAnimationFrame(frame);
+  let ok = false;
+  try { const ctl = new AbortController(); setTimeout(() => ctl.abort(), 2000); const r = await fetch("/api/hello", { signal: ctl.signal, cache: "no-store" }); ok = r.ok && (await r.json()).live; } catch (e) { ok = false; }
+  if (ok) return startLive();
+  try { const r = await fetch("recording.json"); if (!r.ok) throw new Error(r.status); startReplay(await r.json()); }
+  catch (e) { $("mode").className = "pill down"; $("mode-txt").textContent = "no data source"; toast("Start dashboard_server.py on the host and open its address."); }
+}
+boot();
+</script>

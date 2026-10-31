@@ -1,0 +1,12 @@
+# Override for the OAI CN5G basic compose: fixed addresses, so the gNB config (AMF .135) and the
+# demo apps (ext-dn .132) do not depend on container start order. Upstream leaves these commented for CI.
+services:
+    mysql:      {networks: {public_net: {ipv4_address: 192.168.70.131}}}
+    oai-nrf:    {networks: {public_net: {ipv4_address: 192.168.70.130}}}
+    oai-ext-dn: {networks: {public_net: {ipv4_address: 192.168.70.132}}}
+    oai-upf:    {networks: {public_net: {ipv4_address: 192.168.70.133}}}
+    oai-smf:    {networks: {public_net: {ipv4_address: 192.168.70.134}}}
+    oai-amf:    {networks: {public_net: {ipv4_address: 192.168.70.135}}}
+    oai-udr:    {networks: {public_net: {ipv4_address: 192.168.70.136}}}
+    oai-udm:    {networks: {public_net: {ipv4_address: 192.168.70.137}}}
+    oai-ausf:   {networks: {public_net: {ipv4_address: 192.168.70.138}}}

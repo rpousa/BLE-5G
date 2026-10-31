@@ -1,0 +1,62 @@
+# OAI gNB (VNF + PNF) and three nrUEs whose L1 is carried by the FRDM-MCXW72 boards (nrlink).
+# Binaries come from the source tree build (~/oai/build_dev.sh), the boards are driven by the host
+# bridges (~/oai/nrlink/*.py) at 192.168.70.129 (host side of demo-oai-public-net).
+x-oai: &oai
+    image: nrlink-run:local
+    working_dir: /oai-ran/build_nrlink
+    environment: &env
+        LD_LIBRARY_PATH: /oai-ran/build_nrlink
+        ASAN_OPTIONS: detect_leaks=0
+    volumes:
+        - ${HOME}/oai/openairinterface5g-develop:/oai-ran:ro
+        - ${NRLINK_CONF:-./}:/conf:ro   # nrlink.sh points this at ./free5gc (generated) with the free5GC core
+    cap_add: [SYS_NICE]
+
+services:
+    oai-vnf:
+        <<: *oai
+        container_name: oai-vnf
+        command: ./nr-softmodem -O /conf/vnf.conf --nfapi VNF --log_config.global_log_options level,nocolor,time
+        networks: {core: {ipv4_address: 192.168.70.140}}
+
+    oai-pnf:
+        <<: *oai
+        container_name: oai-pnf
+        environment:
+            <<: *env
+            NRLINK_GNB: 192.168.70.129:5000
+        command: ./nr-softmodem -O /conf/pnf.conf --nfapi PNF --rfsim -E --log_config.global_log_options level,nocolor,time
+        depends_on: [oai-vnf]
+        networks: {core: {ipv4_address: 192.168.70.141}}
+
+    oai-nrue1: &ue
+        <<: *oai
+        container_name: oai-nrue1
+        cap_add: [NET_ADMIN, NET_RAW, SYS_NICE]
+        devices: [/dev/net/tun:/dev/net/tun]
+        environment:
+            <<: *env
+            NRLINK_UE: 192.168.70.129:5001
+        command: ./nr-uesoftmodem -O /conf/ue1.conf -E -r 106 --numerology 1 --band 78 -C 3619200000 --log_config.global_log_options level,nocolor,time
+        networks: {core: {ipv4_address: 192.168.70.151}}
+    oai-nrue2:
+        <<: *ue
+        container_name: oai-nrue2
+        environment:
+            <<: *env
+            NRLINK_UE: 192.168.70.129:5002
+        command: ./nr-uesoftmodem -O /conf/ue2.conf -E -r 106 --numerology 1 --band 78 -C 3619200000 --log_config.global_log_options level,nocolor,time
+        networks: {core: {ipv4_address: 192.168.70.152}}
+    oai-nrue3:
+        <<: *ue
+        container_name: oai-nrue3
+        environment:
+            <<: *env
+            NRLINK_UE: 192.168.70.129:5003
+        command: ./nr-uesoftmodem -O /conf/ue3.conf -E -r 106 --numerology 1 --band 78 -C 3619200000 --log_config.global_log_options level,nocolor,time
+        networks: {core: {ipv4_address: 192.168.70.153}}
+
+networks:
+    core:
+        external: true
+        name: demo-oai-public-net

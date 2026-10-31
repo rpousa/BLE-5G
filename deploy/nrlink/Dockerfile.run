@@ -1,0 +1,4 @@
+# Runtime for the source-built nrlink gNB/nrUE binaries (mounted from the build tree)
+FROM ran-base:local
+RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+      iproute2 iputils-ping iperf3 procps && rm -rf /var/lib/apt/lists/*

@@ -1,0 +1,52 @@
+services:
+    oai-vnf:
+        image: oaisoftwarealliance/oai-gnb:develop
+        container_name: oai-vnf
+        cap_add: [SYS_NICE]
+        cap_drop: [ALL]
+        environment:
+            USE_ADDITIONAL_OPTIONS: --nfapi VNF --log_config.global_log_options level,nocolor,time
+            NFAPI_TRACE_LEVEL: info
+            ASAN_OPTIONS: detect_leaks=0
+        volumes:
+            - ./vnf.conf:/opt/oai-gnb/etc/gnb.conf
+        networks:
+            core:
+                ipv4_address: 192.168.70.140
+
+    oai-pnf:
+        image: oaisoftwarealliance/oai-gnb:develop
+        container_name: oai-pnf
+        cap_add: [SYS_NICE]
+        cap_drop: [ALL]
+        environment:
+            USE_ADDITIONAL_OPTIONS: --nfapi PNF --rfsim -E --log_config.global_log_options level,nocolor,time
+            NFAPI_TRACE_LEVEL: info
+            ASAN_OPTIONS: detect_leaks=0
+        depends_on: [oai-vnf]
+        volumes:
+            - ./pnf.conf:/opt/oai-gnb/etc/gnb.conf
+        networks:
+            core:
+                ipv4_address: 192.168.70.141
+
+    oai-nr-ue:
+        image: oaisoftwarealliance/oai-nr-ue:develop
+        container_name: oai-nr-ue
+        cap_drop: [ALL]
+        cap_add: [NET_ADMIN, NET_RAW, SYS_NICE]
+        environment:
+            USE_ADDITIONAL_OPTIONS: -E --rfsim -r 106 --numerology 1 --band 78 -C 3619200000 --log_config.global_log_options level,nocolor,time
+        depends_on: [oai-pnf]
+        devices:
+            - /dev/net/tun:/dev/net/tun
+        volumes:
+            - ./ue.conf:/opt/oai-nr-ue/etc/nr-ue.conf
+        networks:
+            core:
+                ipv4_address: 192.168.70.150
+
+networks:
+    core:
+        external: true
+        name: demo-oai-public-net
