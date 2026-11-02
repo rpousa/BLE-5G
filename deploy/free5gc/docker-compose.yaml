@@ -1,0 +1,167 @@
+# free5GC v4.3.0 core with N3IWF, on the same docker network and addresses as the OAI core
+# (AMF .135, UPF .133, ext-dn .132), so the nrlink gNB/nrUEs and the dashboard work unchanged.
+# Configs: ./config (from free5gc-compose, PLMN 208/95, TAC 0xa000, slice 1/010203, DNN internet = 12.1.1.0/24).
+# The UPF needs the gtp5g kernel module (~/free5gc/install_modules.sh).
+x-nf: &nf
+  environment: {GIN_MODE: release, DB_URI: "mongodb://db/free5gc"}
+  depends_on: [db]
+
+services:
+  db:
+    container_name: f5gc-mongodb
+    image: mongo:4.4
+    command: mongod --port 27017 --bind_ip_all
+    volumes: [f5gc-dbdata:/data/db]
+    networks: {core: {ipv4_address: 192.168.70.131, aliases: [db]}}
+
+  nrf:
+    <<: *nf
+    container_name: f5gc-nrf
+    image: free5gc/nrf:v4.3.0
+    command: ./nrf -c ./config/nrfcfg.yaml
+    volumes: [./config/nrfcfg.yaml:/free5gc/config/nrfcfg.yaml, ./cert:/free5gc/cert]
+    networks: {core: {ipv4_address: 192.168.70.130, aliases: [nrf.free5gc.org]}}
+
+  amf:
+    <<: *nf
+    container_name: f5gc-amf
+    image: free5gc/amf:v4.3.0
+    command: ./amf -c ./config/amfcfg.yaml
+    volumes: [./config/amfcfg.yaml:/free5gc/config/amfcfg.yaml, ./cert:/free5gc/cert]
+    depends_on: [nrf]
+    networks: {core: {ipv4_address: 192.168.70.135, aliases: [amf.free5gc.org]}}
+
+  ausf:
+    <<: *nf
+    container_name: f5gc-ausf
+    image: free5gc/ausf:v4.3.0
+    command: ./ausf -c ./config/ausfcfg.yaml
+    volumes: [./config/ausfcfg.yaml:/free5gc/config/ausfcfg.yaml, ./cert:/free5gc/cert]
+    depends_on: [nrf]
+    networks: {core: {ipv4_address: 192.168.70.136, aliases: [ausf.free5gc.org]}}
+
+  nssf:
+    <<: *nf
+    container_name: f5gc-nssf
+    image: free5gc/nssf:v4.3.0
+    command: ./nssf -c ./config/nssfcfg.yaml
+    volumes: [./config/nssfcfg.yaml:/free5gc/config/nssfcfg.yaml, ./cert:/free5gc/cert]
+    depends_on: [nrf]
+    networks: {core: {ipv4_address: 192.168.70.143, aliases: [nssf.free5gc.org]}}
+
+  pcf:
+    <<: *nf
+    container_name: f5gc-pcf
+    image: free5gc/pcf:v4.3.0
+    command: ./pcf -c ./config/pcfcfg.yaml
+    volumes: [./config/pcfcfg.yaml:/free5gc/config/pcfcfg.yaml, ./cert:/free5gc/cert]
+    depends_on: [nrf]
+    networks: {core: {ipv4_address: 192.168.70.144, aliases: [pcf.free5gc.org]}}
+
+  smf:
+    <<: *nf
+    container_name: f5gc-smf
+    image: free5gc/smf:v4.3.0
+    command: ./smf -c ./config/smfcfg.yaml -u ./config/uerouting.yaml
+    volumes:
+      - ./config/smfcfg.yaml:/free5gc/config/smfcfg.yaml
+      - ./config/uerouting.yaml:/free5gc/config/uerouting.yaml
+      - ./cert:/free5gc/cert
+    depends_on: [nrf, upf]
+    networks: {core: {ipv4_address: 192.168.70.134, aliases: [smf.free5gc.org]}}
+
+  udm:
+    <<: *nf
+    container_name: f5gc-udm
+    image: free5gc/udm:v4.3.0
+    command: ./udm -c ./config/udmcfg.yaml
+    volumes: [./config/udmcfg.yaml:/free5gc/config/udmcfg.yaml, ./cert:/free5gc/cert]
+    depends_on: [nrf]
+    networks: {core: {ipv4_address: 192.168.70.137, aliases: [udm.free5gc.org]}}
+
+  udr:
+    <<: *nf
+    container_name: f5gc-udr
+    image: free5gc/udr:v4.3.0
+    command: ./udr -c ./config/udrcfg.yaml
+    volumes: [./config/udrcfg.yaml:/free5gc/config/udrcfg.yaml, ./cert:/free5gc/cert]
+    depends_on: [nrf]
+    networks: {core: {ipv4_address: 192.168.70.138, aliases: [udr.free5gc.org]}}
+
+  chf:
+    <<: *nf
+    container_name: f5gc-chf
+    image: free5gc/chf:v4.3.0
+    command: ./chf -c ./config/chfcfg.yaml
+    volumes: [./config/chfcfg.yaml:/free5gc/config/chfcfg.yaml, ./cert:/free5gc/cert]
+    depends_on: [nrf, webui]
+    networks: {core: {ipv4_address: 192.168.70.145, aliases: [chf.free5gc.org]}}
+
+  nef:
+    <<: *nf
+    container_name: f5gc-nef
+    image: free5gc/nef:v4.3.0
+    command: ./nef -c ./config/nefcfg.yaml
+    volumes: [./config/nefcfg.yaml:/free5gc/config/nefcfg.yaml, ./cert:/free5gc/cert]
+    depends_on: [nrf]
+    networks: {core: {ipv4_address: 192.168.70.146, aliases: [nef.free5gc.org]}}
+
+  webui:
+    <<: *nf
+    container_name: f5gc-webui
+    image: free5gc/webui:v4.3.0
+    command: ./webui -c ./config/webuicfg.yaml
+    volumes: [./config/webuicfg.yaml:/free5gc/config/webuicfg.yaml]
+    depends_on: [db, nrf]
+    networks: {core: {ipv4_address: 192.168.70.147, aliases: [webui]}}
+
+  upf:
+    container_name: f5gc-upf
+    image: free5gc/upf:v4.3.0
+    command: ./upf -c ./config/upfcfg.yaml
+    volumes: [./config/upfcfg.yaml:/free5gc/config/upfcfg.yaml]
+    cap_add: [NET_ADMIN]
+    sysctls: {net.ipv4.ip_forward: 1}
+    networks: {core: {ipv4_address: 192.168.70.133, aliases: [upf.free5gc.org, oai-upf]}}
+
+  n3iwf:
+    container_name: f5gc-n3iwf
+    image: free5gc/n3iwf:v4.3.0
+    command: ./n3iwf -c ./config/n3iwfcfg.yaml
+    environment: {GIN_MODE: release}
+    volumes: [./config/n3iwfcfg.yaml:/free5gc/config/n3iwfcfg.yaml, ./cert:/free5gc/cert]
+    cap_add: [NET_ADMIN]
+    sysctls: {net.ipv4.ip_forward: 1}
+    depends_on: [amf, smf, upf]
+    networks: {core: {ipv4_address: 192.168.70.139, aliases: [n3iwf.free5gc.org]}}
+
+  # data network the UEs talk to (same container as with the OAI core: dashboard and iperf use it)
+  oai-ext-dn:
+    container_name: oai-ext-dn
+    image: oaisoftwarealliance/trf-gen-cn5g:latest
+    privileged: true
+    init: true
+    environment: [UPF_FQDN=upf.free5gc.org, UE_NETWORK=12.1.1.0/24, USE_FQDN=yes]
+    healthcheck: {test: '/bin/bash -c "ip r | grep 12.1.1"', interval: 10s, timeout: 5s, retries: 5}
+    depends_on: [upf]
+    networks: {core: {ipv4_address: 192.168.70.132}}
+
+  # non-3GPP UE (IKEv2/EAP-5G over plain IP for now; later over the Bluetooth link)
+  n3iwue:
+    container_name: f5gc-n3iwue
+    image: free5gc/n3iwue:latest
+    command: bash -c "ip route del default && ip route add default via 192.168.70.129 dev eth0 metric 203 && exec ./n3iwue"
+    volumes: [./config/n3uecfg.yaml:/n3iwue/config/n3ue.yaml]
+    cap_add: [NET_ADMIN]
+    devices: [/dev/net/tun]
+    depends_on: [n3iwf]
+    networks: {core: {ipv4_address: 192.168.70.160}}
+
+networks:
+  core:
+    name: demo-oai-public-net
+    ipam: {config: [{subnet: 192.168.70.128/26}]}
+    driver_opts: {com.docker.network.bridge.name: demo-oai}
+
+volumes:
+  f5gc-dbdata:
