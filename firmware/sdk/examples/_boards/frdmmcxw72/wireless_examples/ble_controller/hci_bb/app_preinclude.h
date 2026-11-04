@@ -97,8 +97,9 @@
 /* define the max tx power setting, allowed value 0, 7 or 10 */
 #define gAppMaxTxPowerDbm_c                    10U
 
-/* nrlink: HCI UART at 1 Mbaud (MCU-Link VCOM, as the nrlink firmware), host side: btattach -P h4 -S 1000000 */
-#define BOARD_APP_UART_BAUDRATE                1000000U
+/* nrlink: HCI UART at 115200 baud, host side: btattach -N -P h4 -S 115200. 1 Mbaud loses bytes in bursts longer than
+ * ~11 bytes (interrupt-driven serial manager, no RTS/CTS on the MCU-Link VCOM), which breaks e.g. LE scan commands. */
+#define BOARD_APP_UART_BAUDRATE                115200U
 
 /* Include common configuration file and board configuration file */
 #include "app_preinclude_common.h"
