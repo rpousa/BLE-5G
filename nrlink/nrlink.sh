@@ -11,6 +11,14 @@
 #   ./nrlink.sh boards    find the boards and assign gNB/UE roles (boards.json); bridges must be stopped
 #   ./nrlink.sh flash <serial>   back up, then write the nrlink firmware to a board in bootloader mode
 #
+#   --role all|core|ue   (up, down, restart, status) which PC of the split setup this is; default all
+#     all   everything on this PC (the original single-PC setup)
+#     core  core PC: free5GC + N3IWF, gNB board bridge, VNF, PNF, reference docker n3iwue, Bluetooth
+#           access point for the non-3GPP UEs; no nrUEs, no dashboard; gNB telemetry goes to the UE PC
+#           dashboard (NRLINK_TELEMETRY, default the UE PC 192.168.10.232:8091)
+#     ue    UE PC: UE1 eMBB + UE2 URLLC boards and nrUEs (to the core PC gNB over the air), non-3GPP UEs
+#           n3iwue1/2 (IMSI 041/042) to the core PC N3IWF (over the LAN until Bluetooth exists, see ue_routing.sh)
+#
 # Logs: ~/oai/nrlink/logs/. Not touched: the oai-dev build container; board firmware only via "flash".
 set -uo pipefail
 cd "$(dirname "$(readlink -f "$0")")"
@@ -30,6 +38,10 @@ if docker info >/dev/null 2>&1; then dk() { docker "$@"; }
 else dk() { sg docker -c "docker $(printf '%q ' "$@")"; }; fi
 
 CORE=free5gc
+ROLE=all
+CORE_PC=192.168.10.223   # claudepc: free5GC + N3IWF, gNB board, Bluetooth access point (hci0)
+UE_PC=192.168.10.232     # claudepc2: nrUE boards, Bluetooth (hci_bb) boards, n3iwues
+BLE_LINK=$HERE/ble_ip_link.py   # Bluetooth LE L2CAP <-> tun link for the non-3GPP UEs (from the UE PC session)
 S=0; T=8
 step() { printf '\n\033[1m== %s\033[0m\n' "$*"; }
 ok()   { printf '   ok: %s\n' "$*"; }
@@ -101,7 +113,7 @@ core_free5gc() {
   dk compose "${CN[@]}" down >/dev/null 2>&1   # one core at a time: both own demo-oai-public-net
   dk compose -f "$F5" up -d db nrf amf ausf nssf pcf smf udm udr chf nef webui upf oai-ext-dn >"$LOG/core.log" 2>&1 \
     || die "free5GC containers did not start (see core.log)"
-  wait_for 60 "webconsole up, subscribers 036-038 (nrUEs) and 040 (non-3GPP UE) provisioned" "$PY" f5gc_subscribers.py
+  wait_for 60 "webconsole up, subscribers 036-038 (nrUEs), 040 (docker n3iwue) and 041-042 (UE PC n3iwues) provisioned" "$PY" f5gc_subscribers.py
   wait_for 60 "SMF associated with the UPF (PFCP)" bash -c "$(declare -f dk); dk logs f5gc-smf 2>&1 | grep -qi 'association.*\(success\|accept\)'"
   wait_for 60 "ext-dn routes 12.1.1.0/24 to the UPF" bash -c "$(declare -f dk); [ \"\$(dk inspect -f '{{.State.Health.Status}}' oai-ext-dn)\" = healthy ]"
   dk compose -f "$F5" up -d n3iwf >>"$LOG/core.log" 2>&1 || die "N3IWF did not start"
@@ -113,14 +125,139 @@ core_free5gc() {
 
 n3ue_ip() { dk exec f5gc-n3iwue ip -4 -o addr 2>/dev/null | awk '$4 ~ /^12\.1\.1\./ {print $2, $4}' | head -1; }
 
-up() {
-  [ "$CORE" = oai ] && T=7
+# Bluetooth access point for the non-3GPP UEs (core role): routing from ble+ to the N3IWF, then the
+# L2CAP listener. Root parts are in core_routing.sh (run once with sudo); here only checks and start.
+ble_ap() {
+  nstep "Bluetooth access point for the non-3GPP UEs"
+  if [ "$(cat /proc/sys/net/ipv4/ip_forward)" = 1 ]; then ok "IPv4 forwarding on"
+  else printf '   warning: IPv4 forwarding is off, run:  sudo %s/core_routing.sh\n' "$HERE"; fi
+  local hci; hci=$(ls /sys/class/bluetooth 2>/dev/null | grep -m1 '^hci')
+  if [ -z "$hci" ]; then
+    printf '   skipped: no Bluetooth adapter (plug in a dongle, or btattach an hci_bb board)\n'; return 0
+  fi
+  if [ ! -f "$BLE_LINK" ]; then
+    printf '   skipped: %s not here yet (the UE PC session provides it)\n' "$BLE_LINK"; return 0
+  fi
+  if ! sudo -n true 2>/dev/null; then
+    printf '   skipped: the listener needs root. Run:\n     sudo btmgmt --index %s le on; sudo btmgmt --index %s advertising on\n     sudo %s -u %s --listen\n' \
+      "${hci#hci}" "${hci#hci}" "$PY" "$BLE_LINK"; return 0
+  fi
+  sudo -n btmgmt --index "${hci#hci}" le on >/dev/null 2>&1
+  sudo -n btmgmt --index "${hci#hci}" advertising on >/dev/null 2>&1
+  nohup sudo -n "$PY" -u "$BLE_LINK" --listen > "$LOG/ble_link.log" 2>&1 &
+  echo $! > "$PID/ble_link.pid"
+  wait_for 10 "L2CAP listener on PSM 0x0081 ($hci)" bash -c "kill -0 $! && ! grep -qi 'error\|traceback' '$LOG/ble_link.log'"
+}
+
+# ---- UE PC role: nrUE1/2 over the boards to the core PC's gNB, n3iwue1/2 to the core PC's N3IWF
+N3NET=nrlink-n3ue-net
+N3UE_YAML=~/oai/deploy/nrlink/n3iwue-ue.yaml
+N3IWF_IP=192.168.70.139
+
+n3ue_conf() {   # n3ue_conf <n>: config for n3iwue<n>, IMSI 20895000000004<n>, address 192.168.72.1<n>
+  mkdir -p "$LOG/n3ue"
+  sed -e "s/MSIN: 0000000040/MSIN: 000000004$1/" \
+      -e "s/IPSecIfaceAddr: 192.168.70.160/IPSecIfaceAddr: 192.168.72.1$1/" \
+      -e "s/IkeSaSPI: 0x000000000006f708/IkeSaSPI: 0x000000000006f74$1/" \
+      -e "s/IPSecSA3gppControlPlaneSPI: 0x00000002/IPSecSA3gppControlPlaneSPI: 0x0000004$1/" \
+      ~/oai/deploy/free5gc/config/n3uecfg.yaml > "$LOG/n3ue/n3ue$1.yaml"
+  grep -q "MSIN: 000000004$1" "$LOG/n3ue/n3ue$1.yaml" && grep -q "IkeSaSPI: 0x000000000006f74$1" "$LOG/n3ue/n3ue$1.yaml" \
+    || die "could not generate the n3iwue$1 config"
+}
+n3ue_ip_n() { dk exec "nrlink-n3iwue$1" ip -4 -o addr 2>/dev/null | awk '$4 ~ /^12\.1\.1\./ {print $2, $4}' | head -1; }
+
+up_ue() {
+  T=5
   nstep "checks"
-  for f in gnb_bridge ue1_bridge ue2_bridge ue3_bridge dashboard; do alive $f && die "$f is already running, run: $0 down"; done
+  for f in ue1_bridge ue2_bridge; do alive $f && die "$f is already running, run: $0 down --role ue"; done
   dk info >/dev/null 2>&1 || die "docker is not usable from this account"
   ok "docker"
-  "$PY" boards.py --check || die "not enough boards running nrlink (see above)"
-  ok "boards found, roles saved in boards.json"
+  [ -n "$(dk ps -q -f name=^f5gc-amf$ -f name=^oai-amf$)" ] && die "a 5G core is running on this PC; in the split setup it runs on the core PC: $0 down"
+  "$PY" boards.py --check --need ue1,ue2 || die "need two boards running nrlink for UE1/UE2 (see above)"
+  ok "UE boards found, roles saved in boards.json"
+  ping -c1 -W2 "$CORE_PC" >/dev/null 2>&1 && ok "core PC $CORE_PC reachable" || printf '   warning: core PC %s does not answer ping\n' "$CORE_PC"
+
+  nstep "docker networks and RAN configs"
+  dk network inspect demo-oai-public-net >/dev/null 2>&1 || dk network create --subnet 192.168.70.128/26 --gateway 192.168.70.129 \
+      -o com.docker.network.bridge.name=demo-oai demo-oai-public-net >/dev/null || die "could not create demo-oai-public-net"
+  ok "demo-oai-public-net (nrUE containers, local only)"
+  dk network inspect $N3NET >/dev/null 2>&1 || dk network create --subnet 192.168.72.0/24 --gateway 192.168.72.1 \
+      -o com.docker.network.bridge.name=n3ue -o com.docker.network.bridge.enable_ip_masquerade=false $N3NET >/dev/null \
+      || die "could not create $N3NET"
+  ok "$N3NET 192.168.72.0/24 (non-3GPP UEs, routed without NAT)"
+  ran_conf_free5gc
+  export NRLINK_CONF=./free5gc
+  ok "nrUE configs for slice 1/010203, DNN internet"
+
+  nstep "UE board bridges and nrUEs (eMBB, URLLC) to the core PC gNB, over the air"
+  dk compose -f "$RAN" down >/dev/null 2>&1
+  for u in 1 2; do start_proc "ue${u}_bridge" "$PY" -u ue_bridge.py "$u"; done
+  for u in 1 2; do wait_for 20 "UE$u board answers" grep -q "bridge on udp" "$LOG/ue${u}_bridge.log"; done
+  dk compose -f "$RAN" up -d oai-nrue1 oai-nrue2 >/dev/null 2>&1 || die "UE containers did not start"
+  for u in 1 2; do
+    wait_for 420 "UE$u PDU session (needs the core PC up: nrlink.sh up --role core)" bash -c "$(declare -f dk ue_ip); [ -n \"\$(ue_ip $u)\" ]"
+    printf '        oaitun_ue1 = %s\n' "$(ue_ip "$u")"
+  done
+
+  nstep "non-3GPP UEs n3iwue1/2 (IMSI 041/042) to the core PC N3IWF"
+  if ip route get "$N3IWF_IP" 2>/dev/null | grep -q "via $CORE_PC"; then
+    for n in 1 2; do n3ue_conf $n; done
+    dk compose -f "$N3UE_YAML" up -d >/dev/null 2>&1 || die "n3iwue containers did not start"
+    for n in 1 2; do
+      wait_for 120 "n3iwue$n registered over non-3GPP access, PDU session up" bash -c "$(declare -f dk n3ue_ip_n); [ -n \"\$(n3ue_ip_n $n)\" ]"
+      printf '        %s\n' "$(n3ue_ip_n $n)"
+    done
+  else
+    printf '   skipped: no route to the N3IWF yet. Bluetooth is not there yet, so use the LAN:\n'
+    printf '     here:     sudo %s/ue_routing.sh\n     core PC:  sudo ~/oai/nrlink/core_routing.sh --lan\n' "$HERE"
+  fi
+
+  printf '\n\033[1mUp (UE PC).\033[0m nrUE1 eMBB, nrUE2 URLLC over the boards; n3iwue1/2 via the core PC N3IWF.\n'
+}
+
+down_ue() {
+  step "non-3GPP UEs"
+  for n in 1 2; do dk rm -f "nrlink-n3iwue$n" >/dev/null 2>&1 && ok "removed nrlink-n3iwue$n"; done
+  step "nrUEs"
+  for c in oai-nrue1 oai-nrue2; do dk stop -t 5 "$c" >/dev/null 2>&1 && ok "stopped $c"; done
+  dk compose -f "$RAN" down >/dev/null 2>&1
+  step "board bridges"
+  for f in ue1_bridge ue2_bridge; do stop_proc $f; done
+  printf '\n\033[1mDown (UE PC).\033[0m\n'
+}
+
+status_ue() {
+  printf '%-14s %s\n' PROCESS STATE
+  for f in ue1_bridge ue2_bridge; do
+    alive $f && printf '%-14s running (pid %s)\n' $f "$(cat "$PID/$f.pid")" || printf '%-14s stopped\n' $f
+  done
+  printf '\n'
+  dk ps --format '{{.Names}}\t{{.Status}}' | grep -E 'oai-nrue|nrlink-n3iwue' | sort | column -t -s $'\t'
+  printf '\n'
+  for u in 1 2; do printf 'UE%s oaitun_ue1: %s\n' "$u" "$(ue_ip "$u")"; done
+  for n in 1 2; do printf 'n3iwue%s:       %s\n' "$n" "$(n3ue_ip_n $n)"; done
+  printf 'N3IWF route:   %s\n' "$(ip route get "$N3IWF_IP" 2>/dev/null | head -1)"
+}
+
+up() {
+  [ "$ROLE" = ue ] && { up_ue; return; }
+  [ "$CORE" = oai ] && T=7
+  if [ "$ROLE" = core ]; then
+    [ "$CORE" = free5gc ] || die "--role core needs the free5GC core (the N3IWF serves the Bluetooth UEs)"
+    T=7
+    export NRLINK_TELEMETRY=${NRLINK_TELEMETRY:-$UE_PC:8091}
+  fi
+  nstep "checks"
+  for f in gnb_bridge ue1_bridge ue2_bridge ue3_bridge dashboard; do alive $f && die "$f is already running, run: $0 down --role $ROLE"; done
+  dk info >/dev/null 2>&1 || die "docker is not usable from this account"
+  ok "docker"
+  if [ "$ROLE" = core ]; then
+    "$PY" boards.py --check --need gnb || die "the gNB board is not running nrlink (see above)"
+    ok "gNB board found, saved in boards.json"
+  else
+    "$PY" boards.py --check || die "not enough boards running nrlink (see above)"
+    ok "boards found, roles saved in boards.json"
+  fi
 
   echo "$CORE" > "$PID/core"
   core_$CORE
@@ -129,9 +266,10 @@ up() {
   dk compose -f "$OLD_RAN" down >/dev/null 2>&1
   dk compose -f "$RAN" down >/dev/null 2>&1
   start_proc gnb_bridge "$PY" -u gnb_bridge.py
-  for u in 1 2 3; do start_proc "ue${u}_bridge" "$PY" -u ue_bridge.py "$u"; done
+  [ "$ROLE" = core ] || for u in 1 2 3; do start_proc "ue${u}_bridge" "$PY" -u ue_bridge.py "$u"; done
   wait_for 20 "gNB board answers" grep -q "listening on udp" "$LOG/gnb_bridge.log"
-  for u in 1 2 3; do wait_for 20 "UE$u board answers" grep -q "bridge on udp" "$LOG/ue${u}_bridge.log"; done
+  [ "$ROLE" = core ] && ok "gNB telemetry to $NRLINK_TELEMETRY (UE PC dashboard)"
+  [ "$ROLE" = core ] || for u in 1 2 3; do wait_for 20 "UE$u board answers" grep -q "bridge on udp" "$LOG/ue${u}_bridge.log"; done
 
   nstep "gNB VNF (MAC/RLC/PDCP/RRC)"
   dk compose -f "$RAN" up -d oai-vnf >/dev/null 2>&1 || die "VNF container did not start"
@@ -142,18 +280,27 @@ up() {
   wait_for 60 "PNF running slots through the gNB board" bash -c "grep -E '^\[gnb\] +[1-9][0-9.]* slots/s' '$LOG/gnb_bridge.log'"
   wait_for 30 "VNF follows the PNF slot clock" bash -c "$(declare -f dk); ! dk logs --since 5s oai-vnf 2>&1 | grep -q 'time client: connection'"
 
+  if [ "$ROLE" != core ]; then
   nstep "nrUEs (eMBB, URLLC, mMTC)"
   dk compose -f "$RAN" up -d oai-nrue1 oai-nrue2 oai-nrue3 >/dev/null 2>&1 || die "UE containers did not start"
   for u in 1 2 3; do
     wait_for 420 "UE$u PDU session" bash -c "$(declare -f dk ue_ip); [ -n \"\$(ue_ip $u)\" ]"
     printf '        oaitun_ue1 = %s\n' "$(ue_ip "$u")"
   done
+  fi
 
   if [ "$CORE" = free5gc ]; then
     nstep "non-3GPP UE (IKEv2/EAP-5G to the N3IWF, IPsec over IP for now)"
     dk compose -f "$F5" up -d n3iwue >/dev/null 2>&1 || die "n3iwue container did not start"
     wait_for 120 "n3iwue registered over non-3GPP access, PDU session up" bash -c "$(declare -f dk n3ue_ip); [ -n \"\$(n3ue_ip)\" ]"
     printf '        %s\n' "$(n3ue_ip)"
+  fi
+
+  if [ "$ROLE" = core ]; then
+    ble_ap
+    printf '\n\033[1mUp (core PC).\033[0m gNB waiting for the UE PC nrUEs over the air; non-3GPP UEs via the N3IWF 192.168.70.139.\n'
+    printf '   gNB telemetry -> %s (dashboard on the UE PC)\n' "$NRLINK_TELEMETRY"
+    return 0
   fi
 
   nstep "dashboard and demo apps"
@@ -165,6 +312,13 @@ up() {
 }
 
 down() {
+  [ "$ROLE" = ue ] && { down_ue; return; }
+  if [ "$ROLE" = core ] && [ -f "$PID/ble_link.pid" ]; then
+    step "Bluetooth access point"
+    sudo -n pkill -TERM -f "[b]le_ip_link.py --listen" 2>/dev/null && ok "stopped the L2CAP listener" \
+      || printf '   stop it as root:  sudo pkill -f "[b]le_ip_link.py --listen"\n'
+    rm -f "$PID/ble_link.pid"
+  fi
   step "dashboard and demo apps"
   stop_proc dashboard
   if [ -n "$(dk ps -aq -f name=^nrlink-dn-apps$ 2>/dev/null)" ]; then dk rm -f nrlink-dn-apps >/dev/null 2>&1 && ok "removed ext-dn app sidecar"; fi
@@ -177,7 +331,7 @@ down() {
   for f in ue1_bridge ue2_bridge ue3_bridge gnb_bridge; do stop_proc $f; done
   # bridges started before pid files existed (older start scripts)
   for p in $(pgrep -f "python -u (gnb|ue)_bridge\.py"); do kill "$p" 2>/dev/null && ok "stopped stray bridge (pid $p)"; done
-  if [ "${1:-}" = "--keep-core" ]; then
+  if [ "$KEEP_CORE" = 1 ]; then
     step "5G core left running"
   else
     step "5G core"
@@ -189,6 +343,7 @@ down() {
 }
 
 status() {
+  [ "$ROLE" = ue ] && { status_ue; return; }
   printf '%-14s %s\n' PROCESS STATE
   for f in gnb_bridge ue1_bridge ue2_bridge ue3_bridge dashboard; do
     alive $f && printf '%-14s running (pid %s)\n' $f "$(cat "$PID/$f.pid")" || printf '%-14s stopped\n' $f
@@ -230,16 +385,24 @@ flash() {
 }
 
 cmd=${1:-}; shift || true
-if [ "${1:-}" = --core ]; then
-  case "${2:-}" in oai | free5gc) CORE=$2 ;; *) die "--core takes oai or free5gc" ;; esac
-fi
+KEEP_CORE=0; ARG=
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --core) case "${2:-}" in oai | free5gc) CORE=$2 ;; *) die "--core takes oai or free5gc" ;; esac; shift ;;
+    --role) case "${2:-}" in all | core | ue) ROLE=$2 ;;
+              *) die "--role takes all, core or ue" ;; esac; shift ;;
+    --keep-core) KEEP_CORE=1 ;;
+    *) ARG=$1 ;;
+  esac
+  shift
+done
 
 case "$cmd" in
   up) up ;;
   boards) boards ;;
-  flash) flash "${1:-}" ;;
-  down) down "${1:-}" ;;
-  restart) down --keep-core; up ;;
+  flash) flash "$ARG" ;;
+  down) down ;;
+  restart) KEEP_CORE=1; down; KEEP_CORE=0; up ;;
   status) status ;;
-  *) sed -n '2,15p' "$0"; exit 1 ;;
+  *) sed -n '2,23p' "$0"; exit 1 ;;
 esac
