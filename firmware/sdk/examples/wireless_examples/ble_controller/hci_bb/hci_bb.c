@@ -15,6 +15,7 @@
 
 #include "fsl_component_mem_manager.h"
 #include "fsl_component_serial_manager.h"
+#include "fsl_component_timer_manager.h"
 
 #include "app.h"
 #include "fwk_platform.h"
@@ -160,7 +161,11 @@ SERIAL_MANAGER_WRITE_HANDLE_DEFINE(g_appUartWriteHandle);
 
 static hcitComm_t               mHcitData;
 static detectState_t            mPacketDetectStep;
-static detectState_t            mPacketDetectStep;
+/* nrlink v3: H4 resync. The host writes each packet in one go, so a gap this long inside a packet means bytes were
+ * lost; the partial packet is dropped instead of eating the next packets' bytes (which left the board deaf). */
+#define HCIT_RX_GAP_RESET_US            100000U
+static uint64_t                 mHcitLastRxUs;
+uint32_t                        gHcitResyncCount;   /* partial packets dropped (readable with a debugger) */
 static hcitPacket_t             mHcitPacketRaw;
 #if (!defined(gAppUseDtm2Wire) || (gAppUseDtm2Wire == 0))
 static uint16_t                 nb_pkt_in_uart_tx_queue = 0;
@@ -309,6 +314,15 @@ void HCI_AppUartRxCallback(void *callbackParam,
     uint32_t        length;
     uint32_t        count = 0U;
 
+    uint64_t now = TM_GetTimestamp();
+    if( (mPacketDetectStep != mDetectMarker_c) && ((now - mHcitLastRxUs) > HCIT_RX_GAP_RESET_US) )
+    {
+        mHcitData.pPacket = NULL;
+        mPacketDetectStep = mDetectMarker_c;
+        gHcitResyncCount++;
+    }
+    mHcitLastRxUs = now;
+
     if( mPacketDetectStep != mPacketInProgress_c )
     {
         buffer = &recvChar;
@@ -330,8 +344,9 @@ void HCI_AppUartRxCallback(void *callbackParam,
         switch( mPacketDetectStep )
         {
             case mDetectMarker_c:
+                /* nrlink v3: a host sends only commands and ACL data; an "event" marker here is a byte of a broken
+                 * frame, so it is skipped like any other non-marker byte */
                 if( (*buffer == (uint8_t)gHciDataPacket_c) ||
-                    (*buffer == (uint8_t)gHciEventPacket_c) ||
                     (*buffer == (uint8_t)gHciCommandPacket_c) )
                 {
                     union

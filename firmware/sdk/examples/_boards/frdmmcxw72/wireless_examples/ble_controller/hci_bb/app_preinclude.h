@@ -101,6 +101,11 @@
  * ~11 bytes (interrupt-driven serial manager, no RTS/CTS on the MCU-Link VCOM), which breaks e.g. LE scan commands. */
 #define BOARD_APP_UART_BAUDRATE                115200U
 
+/* nrlink v3: receive ring buffer of the HCI UART. The SDK default is 128 bytes, less than one full ACL packet from the
+ * host (256 + 5). The host may send 12 of them back to back (ACL credits), and while the main loop hands a packet
+ * to the NBU the ring overflowed: bytes lost, H4 framing broken, board deaf ("command tx timeout"). */
+#define SERIAL_MANAGER_RING_BUFFER_SIZE        4096U
+
 /* Include common configuration file and board configuration file */
 #include "app_preinclude_common.h"
 #endif /* _APP_PREINCLUDE_H_ */
