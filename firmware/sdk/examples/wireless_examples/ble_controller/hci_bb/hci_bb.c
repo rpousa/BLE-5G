@@ -174,6 +174,8 @@ uint32_t                        gHcitResyncCount;   /* partial packets dropped (
  *   kind(1: 1 assert, 2 hardfault, 3 stall) pc(4) lr(4) xpsr(4) info(4: assert line / CFSR / stalled ms)
  *   resyncs(4) uartTxQueue(2) sendErrors(4) lastSendError(4) irq(4: LPUART1 NVIC enabled b0, active b1, pending b2,
  *   main-loop count << 8) text(assert file)
+ * v6: kind 6 = interrupts found disabled at the top of the main loop, where they must be on: PRIMASK, BASEPRI,
+ *   OSA nesting count, loops seen masked (in pc, lr, xpsr, info). After 4 reports interrupts are turned back on.
  * v5: kind 4 = on request (vendor command 0xFDB2, proves the path works), kind 5 = UART input left unread for 1 s
  *   (pc of the interrupted code, then LPUART1 STAT, CTRL, WATER instead of lr, xpsr, info).
  * Written by polling LPUART1, so it works with interrupts blocked. btmon shows it as a vendor event. */
@@ -270,6 +272,32 @@ void HardFault_Handler(void)
         "mrseq r0, msp   \n"
         "mrsne r0, psp   \n"
         "b HardFault_C   \n");
+}
+
+uint32_t OSA_NrlinkIrqNesting(void);
+void OSA_NrlinkIrqReset(void);
+uint32_t gDiagIrqHeals;   /* times v6 had to turn interrupts back on */
+
+static void Diag_CheckIrqMasked(void)
+{
+    static uint32_t masked;
+    if (__get_PRIMASK() == 0U)
+    {
+        masked = 0U;
+        return;
+    }
+    masked++;
+    if ((masked & 0xFFFFU) == 0U)
+    {
+        Diag_Report(6U, __get_PRIMASK(), __get_BASEPRI(), OSA_NrlinkIrqNesting(), masked);
+        if (masked >= 0x40000U)
+        {
+            gDiagIrqHeals++;
+            OSA_NrlinkIrqReset();
+            masked = 0U;
+            __enable_irq();
+        }
+    }
 }
 
 static void Diag_PlatformError(uint32_t id, int32_t error_status)
@@ -710,6 +738,7 @@ static void HCI_AppControllerRxCallback(uint8_t packetType, uint8_t *data, uint1
 
 void main_task(uint32_t param)
 {
+    Diag_CheckIrqMasked();
     if (!platformInitialized)
     {
         platformInitialized = 1;
