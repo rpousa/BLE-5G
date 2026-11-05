@@ -22,10 +22,13 @@ fi
 
 systemctl mask --runtime bluetooth.service >/dev/null 2>&1; systemctl stop bluetooth.service 2>/dev/null
 
+# btmgmt hangs without a terminal (from the watchdog, a service): run it on a pseudo-terminal (script), with a
+# timeout; adapters are found with hciconfig
+mg() { timeout 6 script -qec "btmgmt $*" /dev/null </dev/null 2>/dev/null; }
 hci_of() {   # hci_of <address>: the hciN with that address, if any
   for h in /sys/class/bluetooth/hci*; do
     [ -e "$h" ] || continue
-    n=${h##*/}; btmgmt --index "${n#hci}" info 2>/dev/null | grep -qi "addr $1" && { echo "$n"; return; }
+    n=${h##*/}; timeout 5 hciconfig "$n" </dev/null 2>/dev/null | grep -qi "BD Address: $1" && { echo "$n"; return; }
   done
 }
 
@@ -48,10 +51,10 @@ for k in 1 2; do
   done
   [ -n "$h" ] || { echo "ble$k: btattach did not create an adapter (see $RUN/btattach-ble$k.log)"; continue; }
   sleep 1
-  btmgmt --index "${h#hci}" le on >/dev/null 2>&1
-  btmgmt --index "${h#hci}" bredr off >/dev/null 2>&1
-  btmgmt --index "${h#hci}" bondable off >/dev/null 2>&1
-  btmgmt --index "${h#hci}" power on >/dev/null 2>&1
-  got=$(btmgmt --index "${h#hci}" info 2>/dev/null | awk '/addr/ {print $2; exit}')
+  mg --index "${h#hci}" le on >/dev/null
+  mg --index "${h#hci}" bredr off >/dev/null
+  mg --index "${h#hci}" bondable off >/dev/null
+  mg --index "${h#hci}" power on >/dev/null
+  got=$(timeout 5 hciconfig "$h" </dev/null 2>/dev/null | awk '/BD Address/ {print $3; exit}')
   echo "ble$k $sn $h ${got:-?}$([ "${got^^}" = "$addr" ] || echo "  (expected $addr)")"
 done

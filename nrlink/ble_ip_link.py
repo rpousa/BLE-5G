@@ -5,7 +5,7 @@ One IP packet per L2CAP SDU, PSM 0x0081, link subnet 10.70.0.0/24:
   core PC (access point, 10.70.0.1)  <-- Bluetooth LE -->  UE PC board k (10.70.0.1k), k = 1, 2
 
   core PC:  sudo ble_ip_link.py --listen [--hci 0]
-            accepts the UEs; each gets its own point-to-point tun "ble<k>" 10.70.0.1 -> 10.70.0.1k.
+            turns on connectable LE advertising on hci<N> (btmgmt), accepts the UEs; each gets its own point-to-point tun "ble<k>" 10.70.0.1 -> 10.70.0.1k.
             Routing from ble+ to the N3IWF: core_routing.sh.
   UE PC:    sudo ble_ip_link.py --connect <core adapter address> --local <board address> --index <k>
                                 [--netns <pid>] [--route 192.168.70.139/32]
@@ -17,9 +17,11 @@ The first SDU each way is a hello, b"NRLK" + k, so the access point knows which 
 Needs root (tun, netns, and LE advertising on the core side: btmgmt --index N le on; advertising on).
 """
 import argparse
+import collections
 import ctypes
 import fcntl
 import os
+import select
 import socket
 import struct
 import subprocess
@@ -31,7 +33,18 @@ PSM = 0x0081
 AF_BLUETOOTH, BTPROTO_L2CAP, SOL_BLUETOOTH, BT_RCVMTU = 31, 0, 274, 13
 BDADDR_LE_PUBLIC, BDADDR_LE_RANDOM = 1, 2
 L2CAP_MTU = 1500
-TUN_MTU = 1280
+# Shaping, tun -> Bluetooth on both ends. The hci_bb boards' 115200 baud UART has no flow control (MCU-Link VCOM):
+# driven past its capacity (about 40 kbit/s of IP each way was measured) the controller stopped answering the host.
+RATE_KBPS = 40
+RATE_BPS = RATE_KBPS * 1000 / 8
+BURST = 1600          # bytes: one full packet at air speed. Larger bursts reach the hci_bb board faster than its
+                      # UART passes them on; lost PDUs never return their L2CAP credits and the link stalls for good
+MAX_WAIT = 1.0        # s of bulk data queued at the shaped rate (about 4 full packets); beyond that, drop
+TUN_QLEN = 64         # packets in the tun's ring (the reader thread drains it at once)
+SMALL = 300           # bytes: packets this small (pings, ACKs) are served before bulk
+# (A small SO_SNDBUF on the L2CAP socket stalled every multi-PDU SDU for good: don't. The shaping above
+# keeps the send queue short instead.)
+TUN_MTU = 1500        # = L2CAP_MTU: the N3IWF IKE_AUTH reply (certificate) leaves its container as 1500 B packets with DF set; a smaller tun drops them
 NET = "10.70.0"
 HELLO = b"NRLK"
 
@@ -79,7 +92,8 @@ def tun_up(fd, name, local, peer, netns=None, routes=()):
     if netns:
         sh("ip", "link", "set", name, "netns", str(netns))
     sh("ip", "addr", "add", local, "peer", peer + "/32", "dev", name, netns=netns)
-    sh("ip", "link", "set", name, "mtu", str(TUN_MTU), "up", netns=netns)
+    # short queue: the default 500 packets held minutes of traffic at the shaped rate (RTT under load 2-5 s)
+    sh("ip", "link", "set", name, "mtu", str(TUN_MTU), "txqueuelen", str(TUN_QLEN), "up", netns=netns)
     for r in routes:
         sh("ip", "route", "replace", r, "dev", name, netns=netns)
 
@@ -88,14 +102,77 @@ def pump(sock, tun, name):
     """Move packets both ways until either side closes; returns when the link is gone."""
     stop = threading.Event()
 
-    def up():  # tun -> Bluetooth
+    # Queueing happens here, not in the tun: the tun tail-drops once its ring is full, which with full-size
+    # packets meant seconds of delay and lost pings. Two queues: small packets (pings, TCP ACKs, IKE) go first;
+    # bulk keeps at most MAX_WAIT seconds at the shaped rate and tail-drops beyond that (head-drop kept
+    # discarding the very segment TCP was waiting for: no TCP got through at all).
+    prio, bulk = collections.deque(), collections.deque()
+    qlock = threading.Condition()
+    drops = [0, 0]                       # [bulk over MAX_WAIT, send buffer full]
+    BULK_MAX = int(RATE_BPS * MAX_WAIT) + TUN_MTU
+
+    def reader():  # tun -> queues
+        bulk_bytes = 0
         try:
             while not stop.is_set():
-                sock.send(os.read(tun, 2048))
+                # select with a timeout: a thread blocked in read() would keep the tun alive after close(),
+                # and the next link of this UE would then fail with EBUSY on the same name
+                if not select.select([tun], [], [], 0.5)[0]:
+                    continue
+                p = os.read(tun, 2048)
+                # IKE is outer UDP (user data is ESP); dropped IKE keepalives made the n3iwue give up its session
+                small = len(p) <= SMALL or (len(p) > 20 and p[0] >> 4 == 4 and p[9] == 17)
+                with qlock:
+                    if small:
+                        if len(prio) < 256:
+                            prio.append(p)
+                    elif sum(len(x) for x in bulk) + len(p) <= BULK_MAX:
+                        bulk.append(p)
+                    else:
+                        drops[0] += 1
+                    qlock.notify()
         except OSError:
             pass
         stop.set()
+        with qlock:
+            qlock.notify()
 
+    def up():  # queues -> Bluetooth, paced to RATE_KBPS
+        n, size = 0, 0
+        tokens, last = BURST, time.monotonic()
+        try:
+            while not stop.is_set():
+                with qlock:
+                    while not prio and not bulk and not stop.is_set():
+                        qlock.wait(0.5)
+                    if stop.is_set():
+                        break
+                    p = prio.popleft() if prio else bulk.popleft()
+                size = len(p)
+                now = time.monotonic()
+                tokens = min(BURST, tokens + (now - last) * RATE_BPS)
+                last = now
+                if tokens < size:
+                    time.sleep((size - tokens) / RATE_BPS)
+                    tokens, last = size, time.monotonic()
+                try:
+                    sock.send(p)              # blocking: waits for L2CAP credits (MSG_DONTWAIT dropped every
+                except BlockingIOError:       # multi-PDU SDU even on an idle link)
+                    drops[1] += 1
+                    continue
+                tokens -= size
+                n += 1
+        except OSError as e:
+            if not stop.is_set():
+                log(f"{name}: send error after {n} packets (this one {size} B): {e}")
+        stop.set()
+        try:
+            sock.shutdown(socket.SHUT_RDWR)   # unblock the recv() below
+        except OSError:
+            pass
+
+    rt = threading.Thread(target=reader, daemon=True)
+    rt.start()
     t = threading.Thread(target=up, daemon=True)
     t.start()
     rx = 0
@@ -107,24 +184,66 @@ def pump(sock, tun, name):
             os.write(tun, d)
             rx += 1
     except OSError as e:
-        log(f"{name}: link error: {e}")
+        if not stop.is_set():
+            log(f"{name}: receive error after {rx} packets: {e}")
+    else:
+        if not stop.is_set():
+            log(f"{name}: peer closed the channel")
     stop.set()
+    try:
+        sock.shutdown(socket.SHUT_RDWR)
+    except OSError:
+        pass
+    t.join(2)
+    rt.join(2)
     for c in (sock.close, lambda: os.close(tun)):
         try:
             c()
         except OSError:
             pass
-    log(f"{name}: link down ({rx} packets received)")
+    log(f"{name}: link down ({rx} packets received; dropped {drops[0]} bulk over {RATE_KBPS} kbit/s (queue > {MAX_WAIT} s), {drops[1]} on a full send buffer)")
+
+
+def advertise(hci):
+    """Connectable LE advertising with the public address. 'advertising on' alone advertises non-connectable
+    with a random address: the UEs then see the access point but cannot connect (LE connect times out)."""
+    for c in (["power", "on"], ["le", "on"], ["privacy", "off"], ["connectable", "on"], ["advertising", "on"]):
+        r = subprocess.run(["timeout", "4", "btmgmt", "--index", str(hci)] + c, capture_output=True, text=True)
+        if r.returncode != 0:
+            log(f"btmgmt --index {hci} {' '.join(c)}: {(r.stdout + r.stderr).strip()[-200:]}")
+    log(f"hci{hci}: connectable LE advertising on")
+
+
+def readvertise(hci):
+    """The controller stops advertising when a UE connects, and while an LE link exists the kernel's mgmt
+    'advertising on' changes only flags. Send HCI LE Set Advertising Enable ourselves so the next UE can
+    connect; the parameters and data the kernel set stay in the controller."""
+    s = socket.socket(AF_BLUETOOTH, socket.SOCK_RAW, 1)                     # BTPROTO_HCI
+    try:
+        s.setsockopt(0, 2, struct.pack("<IIIH2x", 1 << 4, 1 << 0x0E, 0, 0x200A))  # SOL_HCI, HCI_FILTER: Command Complete
+        s.bind((hci,))
+        s.settimeout(2)
+        s.send(bytes([0x01, 0x0A, 0x20, 0x01, 0x01]))                       # LE Set Advertising Enable, on
+        ev = s.recv(16)                                                      # 04 0e 04 ncmd 0a 20 status
+        st = ev[6] if len(ev) > 6 else None
+        log(f"hci{hci}: advertising re-enabled for the next UE" if st == 0 else
+            f"hci{hci}: LE Set Advertising Enable returned status {st:#04x}" if st is not None else f"hci{hci}: short event {ev.hex()}")
+    except OSError as e:
+        log(f"hci{hci}: could not re-enable advertising: {e}")
+    finally:
+        s.close()
 
 
 def listen(args):
     local = args.local or "00:00:00:00:00:00"
+    advertise(args.hci)
     srv = l2cap_socket(local, BDADDR_LE_PUBLIC, PSM)
     srv.listen(4)
     log(f"L2CAP listener on PSM {PSM:#06x} ({local}), link subnet {NET}.0/24, waiting for the UEs")
     busy = set()
 
     def serve(conn, peer):
+        k = None
         try:
             conn.settimeout(10)
             h = conn.recv(16)
@@ -133,25 +252,31 @@ def listen(args):
                 log(f"{peer}: bad hello {h!r}, closing")
                 conn.close()
                 return
-            k = h[4]
-            if k in busy:
-                log(f"{peer}: UE {k} is already connected, closing")
+            if h[4] in busy:
+                log(f"{peer}: UE {h[4]} is already connected, closing")
                 conn.close()
                 return
+            k = h[4]
             busy.add(k)
-            conn.send(HELLO + bytes([k]))
             name = f"ble{k}"
             tun = tun_open(name)
-            tun_up(tun, name, f"{NET}.1", f"{NET}.1{k}")
+            try:
+                tun_up(tun, name, f"{NET}.1", f"{NET}.1{k}")
+            except subprocess.CalledProcessError:
+                os.close(tun)
+                raise
+            conn.send(HELLO + bytes([k]))   # only once the tun is up, so the UE never sees a link that is not there
             log(f"{name}: UE {k} connected from {peer}, {NET}.1 <-> {NET}.1{k}")
             pump(conn, tun, name)
-            busy.discard(k)
-        except OSError as e:
+        except (OSError, subprocess.CalledProcessError) as e:   # tun/ip failures too: never leave UE k marked busy
             log(f"{peer}: {e}")
             conn.close()
+        finally:
+            busy.discard(k)
 
     while True:
         conn, peer = srv.accept()
+        threading.Timer(0.5, readvertise, args=(args.hci,)).start()
         threading.Thread(target=serve, args=(conn, peer[0] if isinstance(peer, tuple) else peer), daemon=True).start()
 
 
@@ -161,7 +286,11 @@ def connect(args):
     routes = args.route or []
     peer_type = BDADDR_LE_RANDOM if args.peer_random else BDADDR_LE_PUBLIC
     backoff = 2
+    s = None
     while True:
+        if args.netns and not os.path.exists(f"/proc/{args.netns}"):
+            log(f"{name}: pid {args.netns} (target network namespace) is gone, exiting")
+            return
         try:
             s = l2cap_socket(args.local, BDADDR_LE_PUBLIC)
             buf, ln = sockaddr_l2(args.connect, PSM, peer_type)
@@ -179,7 +308,7 @@ def connect(args):
                 + (f", routes {' '.join(routes)}" if routes else ""))
             backoff = 2
             pump(s, tun, name)
-        except OSError as e:
+        except (OSError, subprocess.CalledProcessError) as e:   # ip/nsenter failures too
             log(f"{name}: {e}; retrying in {backoff}s")
             try:
                 s.close()
@@ -199,6 +328,7 @@ def main():
     ap.add_argument("--netns", type=int, help="UE: move the tun into the network namespace of this pid")
     ap.add_argument("--route", action="append", help="UE: route through the link (repeatable)")
     ap.add_argument("--peer-random", action="store_true", help="the access point uses a random (static) address")
+    ap.add_argument("--hci", type=int, default=0, help="access point: adapter index to advertise on (default 0)")
     args = ap.parse_args()
     if os.geteuid() != 0:
         sys.exit("needs root (tun, netns)")

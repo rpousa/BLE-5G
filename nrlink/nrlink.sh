@@ -8,7 +8,8 @@
 #   ./nrlink.sh down --keep-core   stop RAN, UEs, bridges and dashboard, leave the 5G core running
 #   ./nrlink.sh restart [--core oai|free5gc]   down (keeping the core) then up
 #   ./nrlink.sh status    what is running
-#   ./nrlink.sh boards    find the boards and assign gNB/UE roles (boards.json); bridges must be stopped
+#   ./nrlink.sh boards    find the boards and assign this PC's roles (boards.json); bridges must be stopped.
+#                         Without --role it uses the role of this PC's IP (UE_PC -> ue, CORE_PC -> core, else all)
 #   ./nrlink.sh flash <serial>   back up, then write the nrlink firmware to a board in bootloader mode
 #
 #   --role all|core|ue   (up, down, restart, status) which PC of the split setup this is; default all
@@ -17,7 +18,9 @@
 #           access point for the non-3GPP UEs; no nrUEs, no dashboard; gNB telemetry goes to the UE PC
 #           dashboard (NRLINK_TELEMETRY, default the UE PC 192.168.10.232:8091)
 #     ue    UE PC: UE1 eMBB + UE2 URLLC boards and nrUEs (to the core PC gNB over the air), non-3GPP UEs
-#           n3iwue1/2 (IMSI 041/042) to the core PC N3IWF (over the LAN until Bluetooth exists, see ue_routing.sh)
+#           n3iwue1/2 (IMSI 041/042) to the core PC N3IWF
+#   --transport lan|ble  (--role ue) how n3iwue1/2 reach the N3IWF: the interim LAN path (default; sudo ue_routing.sh
+#                        here, core_routing.sh --lan there) or each over its own Bluetooth LE link (sudo ble_attach.sh first)
 #
 # Logs: ~/oai/nrlink/logs/. Not touched: the oai-dev build container; board firmware only via "flash".
 set -uo pipefail
@@ -139,12 +142,10 @@ ble_ap() {
     printf '   skipped: %s not here yet (the UE PC session provides it)\n' "$BLE_LINK"; return 0
   fi
   if ! sudo -n true 2>/dev/null; then
-    printf '   skipped: the listener needs root. Run:\n     sudo btmgmt --index %s le on; sudo btmgmt --index %s advertising on\n     sudo %s -u %s --listen\n' \
-      "${hci#hci}" "${hci#hci}" "$PY" "$BLE_LINK"; return 0
+    printf '   skipped: the listener needs root. Run:\n     sudo %s -u %s --listen --hci %s   (it turns on connectable LE advertising itself)\n' \
+      "$PY" "$BLE_LINK" "${hci#hci}"; return 0
   fi
-  sudo -n btmgmt --index "${hci#hci}" le on >/dev/null 2>&1
-  sudo -n btmgmt --index "${hci#hci}" advertising on >/dev/null 2>&1
-  nohup sudo -n "$PY" -u "$BLE_LINK" --listen > "$LOG/ble_link.log" 2>&1 &
+  nohup sudo -n "$PY" -u "$BLE_LINK" --listen --hci "${hci#hci}" > "$LOG/ble_link.log" 2>&1 &
   echo $! > "$PID/ble_link.pid"
   wait_for 10 "L2CAP listener on PSM 0x0081 ($hci)" bash -c "kill -0 $! && ! grep -qi 'error\|traceback' '$LOG/ble_link.log'"
 }
@@ -153,18 +154,70 @@ ble_ap() {
 N3NET=nrlink-n3ue-net
 N3UE_YAML=~/oai/deploy/nrlink/n3iwue-ue.yaml
 N3IWF_IP=192.168.70.139
+TRANSPORT=lan
+CORE_BT=A0:C5:89:8D:1C:B9   # core PC access point adapter (hci0, public address), ble_ip_link.py --listen
+# sudo for the Bluetooth links (tun, netns): asks for the password on a terminal, else needs cached/NOPASSWD sudo
+if [ -t 0 ]; then SUDO_AUTH="sudo -v"; else SUDO_AUTH="sudo -n true"; fi
 
-n3ue_conf() {   # n3ue_conf <n>: config for n3iwue<n>, IMSI 20895000000004<n>, address 192.168.72.1<n>
-  mkdir -p "$LOG/n3ue"
+n3ue_conf() {   # n3ue_conf <n>: config for n3iwue<n>, IMSI 20895000000004<n>; IKE from 192.168.72.1<n> on eth0
+  mkdir -p "$LOG/n3ue"   # (lan) or from 10.70.0.1<n> on ble<n> (ble)
+  local ifn=eth0 ifa=192.168.72.1$1
+  [ "$TRANSPORT" = ble ] && ifn=ble$1 ifa=10.70.0.1$1
   sed -e "s/MSIN: 0000000040/MSIN: 000000004$1/" \
-      -e "s/IPSecIfaceAddr: 192.168.70.160/IPSecIfaceAddr: 192.168.72.1$1/" \
+      -e "s/IPSecIfaceName: eth0/IPSecIfaceName: $ifn/" \
+      -e "s/IPSecIfaceAddr: 192.168.70.160/IPSecIfaceAddr: $ifa/" \
       -e "s/IkeSaSPI: 0x000000000006f708/IkeSaSPI: 0x000000000006f74$1/" \
       -e "s/IPSecSA3gppControlPlaneSPI: 0x00000002/IPSecSA3gppControlPlaneSPI: 0x0000004$1/" \
       ~/oai/deploy/free5gc/config/n3uecfg.yaml > "$LOG/n3ue/n3ue$1.yaml"
   grep -q "MSIN: 000000004$1" "$LOG/n3ue/n3ue$1.yaml" && grep -q "IkeSaSPI: 0x000000000006f74$1" "$LOG/n3ue/n3ue$1.yaml" \
+    && grep -q "IPSecIfaceName: $ifn " "$LOG/n3ue/n3ue$1.yaml" && grep -q "IPSecIfaceAddr: $ifa " "$LOG/n3ue/n3ue$1.yaml" \
     || die "could not generate the n3iwue$1 config"
 }
 n3ue_ip_n() { dk exec "nrlink-n3iwue$1" ip -4 -o addr 2>/dev/null | awk '$4 ~ /^12\.1\.1\./ {print $2, $4}' | head -1; }
+
+ble_sn() { "$PY" -c "import json; print(json.load(open('boards.json')).get('ble$1', ''))" 2>/dev/null; }
+ble_addr() { "$PY" -I ~/nxp/hci_probe.py "$1" --addr; }
+hci_of() {   # hci_of <address>: the hciN adapter with that address, if attached
+  local h n
+  for h in /sys/class/bluetooth/hci*; do
+    [ -e "$h" ] || continue
+    n=${h##*/}; btmgmt --index "${n#hci}" info 2>/dev/null | grep -qi "addr $1" && { echo "$n"; return; }
+  done
+}
+ble_pid() { pgrep -f "^python.* -u $HERE/[b]le_ip_link.py --connect .* --index $1 " 2>/dev/null | head -1; }
+
+n3ue_wait() {
+  for n in 1 2; do
+    wait_for 120 "n3iwue$n registered over non-3GPP access, PDU session up" bash -c "$(declare -f dk n3ue_ip_n); [ -n \"\$(n3ue_ip_n $n)\" ]"
+    printf '        %s\n' "$(n3ue_ip_n $n)"
+  done
+}
+
+# n3iwue<k> over its own Bluetooth LE link: board ble<k> (hci_bb, attached by ble_attach.sh) -> core PC hci0.
+# The container waits for ble<k>; ble_ip_link.py (root) connects, moves the tun into it and routes the N3IWF.
+up_n3ue_ble() {
+  local k sn addr h pid
+  declare -A A
+  for k in 1 2; do
+    sn=$(ble_sn $k); [ -n "$sn" ] || die "no BLE$k board in boards.json: $0 boards --role ue"
+    addr=$(ble_addr "$sn"); A[$k]=$addr
+    h=$(hci_of "$addr"); [ -n "$h" ] || die "BLE$k board $sn ($addr) is not attached as an adapter: sudo $HERE/ble_attach.sh"
+    ok "BLE$k board $sn is $h ($addr)"
+    [ -n "$(ble_pid $k)" ] && die "a ble$k link is already running: $0 down --role ue"
+  done
+  $SUDO_AUTH 2>/dev/null || die "the Bluetooth links need root (tun, netns). Run this from a terminal (sudo asks once), or: sudo -v; $0 up --role ue"
+  for k in 1 2; do n3ue_conf $k; done
+  dk rm -f nrlink-n3iwue1 nrlink-n3iwue2 >/dev/null 2>&1
+  N3UE1_IF=ble1 N3UE2_IF=ble2 dk compose -f "$N3UE_YAML" up -d >/dev/null 2>&1 || die "n3iwue containers did not start"
+  for k in 1 2; do
+    pid=$(dk inspect -f '{{.State.Pid}}' "nrlink-n3iwue$k")
+    [ "${pid:-0}" -gt 0 ] || die "nrlink-n3iwue$k is not running"
+    nohup sudo -n "$PY" -u "$HERE/ble_ip_link.py" --connect "$CORE_BT" --local "${A[$k]}" --index $k \
+      --netns "$pid" --route "$N3IWF_IP/32" > "$LOG/ble$k.log" 2>&1 &
+    wait_for 60 "ble$k: Bluetooth link ${A[$k]} -> $CORE_BT up, 10.70.0.1$k in nrlink-n3iwue$k" grep -q "ble$k: up" "$LOG/ble$k.log"
+  done
+  n3ue_wait
+}
 
 up_ue() {
   T=5
@@ -199,24 +252,28 @@ up_ue() {
     printf '        oaitun_ue1 = %s\n' "$(ue_ip "$u")"
   done
 
-  nstep "non-3GPP UEs n3iwue1/2 (IMSI 041/042) to the core PC N3IWF"
-  if ip route get "$N3IWF_IP" 2>/dev/null | grep -q "via $CORE_PC"; then
+  nstep "non-3GPP UEs n3iwue1/2 (IMSI 041/042) to the core PC N3IWF, over $TRANSPORT"
+  if [ "$TRANSPORT" = ble ]; then
+    up_n3ue_ble
+  elif ip route get "$N3IWF_IP" 2>/dev/null | grep -q "via $CORE_PC"; then
     for n in 1 2; do n3ue_conf $n; done
+    dk rm -f nrlink-n3iwue1 nrlink-n3iwue2 >/dev/null 2>&1
     dk compose -f "$N3UE_YAML" up -d >/dev/null 2>&1 || die "n3iwue containers did not start"
-    for n in 1 2; do
-      wait_for 120 "n3iwue$n registered over non-3GPP access, PDU session up" bash -c "$(declare -f dk n3ue_ip_n); [ -n \"\$(n3ue_ip_n $n)\" ]"
-      printf '        %s\n' "$(n3ue_ip_n $n)"
-    done
+    n3ue_wait
   else
     printf '   skipped: no route to the N3IWF yet. Bluetooth is not there yet, so use the LAN:\n'
     printf '     here:     sudo %s/ue_routing.sh\n     core PC:  sudo ~/oai/nrlink/core_routing.sh --lan\n' "$HERE"
   fi
 
-  printf '\n\033[1mUp (UE PC).\033[0m nrUE1 eMBB, nrUE2 URLLC over the boards; n3iwue1/2 via the core PC N3IWF.\n'
+  printf '\n\033[1mUp (UE PC).\033[0m nrUE1 eMBB, nrUE2 URLLC over the boards; n3iwue1/2 via the core PC N3IWF (%s).\n' "$TRANSPORT"
 }
 
 down_ue() {
   step "non-3GPP UEs"
+  if [ -n "$(ble_pid 1)$(ble_pid 2)" ]; then   # root processes: stop them through sudo
+    sudo -n pkill -TERM -f "[b]le_ip_link.py --connect" 2>/dev/null && ok "stopped the Bluetooth links ble1/ble2" \
+      || printf '   stop the Bluetooth links as root:  sudo pkill -f "[b]le_ip_link.py --connect"\n'
+  fi
   for n in 1 2; do dk rm -f "nrlink-n3iwue$n" >/dev/null 2>&1 && ok "removed nrlink-n3iwue$n"; done
   step "nrUEs"
   for c in oai-nrue1 oai-nrue2; do dk stop -t 5 "$c" >/dev/null 2>&1 && ok "stopped $c"; done
@@ -236,7 +293,10 @@ status_ue() {
   printf '\n'
   for u in 1 2; do printf 'UE%s oaitun_ue1: %s\n' "$u" "$(ue_ip "$u")"; done
   for n in 1 2; do printf 'n3iwue%s:       %s\n' "$n" "$(n3ue_ip_n $n)"; done
-  printf 'N3IWF route:   %s\n' "$(ip route get "$N3IWF_IP" 2>/dev/null | head -1)"
+  printf 'N3IWF route:   %s   (LAN transport)\n' "$(ip route get "$N3IWF_IP" 2>/dev/null | head -1)"
+  for k in 1 2; do
+    printf 'ble%s link:     %s\n' "$k" "$([ -n "$(ble_pid $k)" ] && grep -E "ble$k: (up|link|conn)" "$LOG/ble$k.log" 2>/dev/null | tail -1 || echo stopped)"
+  done
 }
 
 up() {
@@ -357,9 +417,19 @@ status() {
   [ -f "$LOG/gnb_bridge.log" ] && grep '^\[gnb\]' "$LOG/gnb_bridge.log" | tail -1
 }
 
+host_role() {   # role of this PC from its addresses: ue, core, or all (single-PC setup)
+  local ips=" $(hostname -I 2>/dev/null) "
+  case "$ips" in *" $UE_PC "*) echo ue ;; *" $CORE_PC "*) echo core ;; *) echo all ;; esac
+}
+
 boards() {
+  [ "$ROLE_SET" = 1 ] || { ROLE=$(host_role); [ "$ROLE" = all ] || printf '   this PC is %s: %s role\n' "$(hostname)" "$ROLE"; }
   for f in gnb_bridge ue1_bridge ue2_bridge ue3_bridge; do alive $f && die "the bridges hold the serial ports, run: $0 down --keep-core"; done
-  "$PY" boards.py
+  case "$ROLE" in   # only the nrlink roles this PC owns (the BLE boards are always listed)
+    ue) "$PY" boards.py --need ue1,ue2 ;;
+    core) "$PY" boards.py --need gnb ;;
+    *) "$PY" boards.py ;;
+  esac
 }
 
 flash() {
@@ -385,13 +455,14 @@ flash() {
 }
 
 cmd=${1:-}; shift || true
-KEEP_CORE=0; ARG=
+KEEP_CORE=0; ARG=; ROLE_SET=0
 while [ $# -gt 0 ]; do
   case "$1" in
     --core) case "${2:-}" in oai | free5gc) CORE=$2 ;; *) die "--core takes oai or free5gc" ;; esac; shift ;;
-    --role) case "${2:-}" in all | core | ue) ROLE=$2 ;;
+    --role) case "${2:-}" in all | core | ue) ROLE=$2; ROLE_SET=1 ;;
               *) die "--role takes all, core or ue" ;; esac; shift ;;
     --keep-core) KEEP_CORE=1 ;;
+    --transport) case "${2:-}" in ble | lan) TRANSPORT=$2 ;; *) die "--transport takes ble or lan" ;; esac; shift ;;
     *) ARG=$1 ;;
   esac
   shift
@@ -404,5 +475,5 @@ case "$cmd" in
   down) down ;;
   restart) KEEP_CORE=1; down; KEEP_CORE=0; up ;;
   status) status ;;
-  *) sed -n '2,23p' "$0"; exit 1 ;;
+  *) sed -n '2,25p' "$0"; exit 1 ;;
 esac
