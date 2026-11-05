@@ -99,7 +99,9 @@ def tun_up(fd, name, local, peer, netns=None, routes=()):
 
 
 def pump(sock, tun, name):
-    """Move packets both ways until either side closes; returns when the link is gone."""
+    """Move packets both ways until either side closes; returns when the link is gone. The tun stays open: the
+    caller keeps it for the next connection of this UE, so a radio dropout does not destroy the interface (the
+    n3iwue's IPsec runs over it and did not survive a new tun of the same name)."""
     stop = threading.Event()
 
     # Queueing happens here, not in the tun: the tun tail-drops once its ring is full, which with full-size
@@ -196,11 +198,10 @@ def pump(sock, tun, name):
         pass
     t.join(2)
     rt.join(2)
-    for c in (sock.close, lambda: os.close(tun)):
-        try:
-            c()
-        except OSError:
-            pass
+    try:
+        sock.close()
+    except OSError:
+        pass
     log(f"{name}: link down ({rx} packets received; dropped {drops[0]} bulk over {RATE_KBPS} kbit/s (queue > {MAX_WAIT} s), {drops[1]} on a full send buffer)")
 
 
@@ -241,6 +242,7 @@ def listen(args):
     srv.listen(4)
     log(f"L2CAP listener on PSM {PSM:#06x} ({local}), link subnet {NET}.0/24, waiting for the UEs")
     busy = set()
+    tuns = {}   # UE index -> tun fd, kept across reconnects
 
     def serve(conn, peer):
         k = None
@@ -259,15 +261,18 @@ def listen(args):
             k = h[4]
             busy.add(k)
             name = f"ble{k}"
-            tun = tun_open(name)
-            try:
-                tun_up(tun, name, f"{NET}.1", f"{NET}.1{k}")
-            except subprocess.CalledProcessError:
-                os.close(tun)
-                raise
+            again = k in tuns
+            if not again:
+                tun = tun_open(name)
+                try:
+                    tun_up(tun, name, f"{NET}.1", f"{NET}.1{k}")
+                except subprocess.CalledProcessError:
+                    os.close(tun)
+                    raise
+                tuns[k] = tun
             conn.send(HELLO + bytes([k]))   # only once the tun is up, so the UE never sees a link that is not there
-            log(f"{name}: UE {k} connected from {peer}, {NET}.1 <-> {NET}.1{k}")
-            pump(conn, tun, name)
+            log(f"{name}: UE {k} {'reconnected' if again else 'connected'} from {peer}, {NET}.1 <-> {NET}.1{k}")
+            pump(conn, tuns[k], name)
         except (OSError, subprocess.CalledProcessError) as e:   # tun/ip failures too: never leave UE k marked busy
             log(f"{peer}: {e}")
             conn.close()
@@ -287,6 +292,7 @@ def connect(args):
     peer_type = BDADDR_LE_RANDOM if args.peer_random else BDADDR_LE_PUBLIC
     backoff = 2
     s = None
+    tun = None   # kept across reconnects, see pump()
     while True:
         if args.netns and not os.path.exists(f"/proc/{args.netns}"):
             log(f"{name}: pid {args.netns} (target network namespace) is gone, exiting")
@@ -302,9 +308,17 @@ def connect(args):
             if s.recv(16) != HELLO + bytes([k]):
                 raise OSError("no hello from the access point")
             s.settimeout(None)
-            tun = tun_open(name)
-            tun_up(tun, name, f"{NET}.1{k}", f"{NET}.1", netns=args.netns, routes=routes)
-            log(f"{name}: up, {NET}.1{k} <-> {NET}.1" + (f" in netns of pid {args.netns}" if args.netns else "")
+            again = tun is not None
+            if not again:
+                t = tun_open(name)
+                try:
+                    tun_up(t, name, f"{NET}.1{k}", f"{NET}.1", netns=args.netns, routes=routes)
+                except subprocess.CalledProcessError:
+                    os.close(t)
+                    raise
+                tun = t
+            log(f"{name}: {'up again' if again else 'up'}, {NET}.1{k} <-> {NET}.1"
+                + (f" in netns of pid {args.netns}" if args.netns else "")
                 + (f", routes {' '.join(routes)}" if routes else ""))
             backoff = 2
             pump(s, tun, name)
