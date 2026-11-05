@@ -1,0 +1,472 @@
+{
+ "started": "2026-11-05 15:59:00 EST",
+ "dn": "192.168.70.132",
+ "udp_len": 500,
+ "tcp_window": "32K",
+ "rates_kbps": {
+  "nr": [
+   25,
+   50,
+   100,
+   200,
+   400
+  ],
+  "n3": [
+   10,
+   20,
+   30,
+   40,
+   50
+  ]
+ },
+ "ues": {
+  "nrUE1": {
+   "class": "eMBB",
+   "kind": "nr",
+   "iface": "oaitun_ue1",
+   "before": {
+    "pdu_addr": "12.1.1.3",
+    "ok": true
+   },
+   "rtt_idle": {
+    "sent": 20,
+    "recv": 20,
+    "loss_pct": 0.0,
+    "min": 226.103,
+    "avg": 477.316,
+    "max": 757.208,
+    "mdev": 168.46
+   },
+   "tcp_ul": {
+    "kbps": 35.6,
+    "bytes": 108600,
+    "secs": 24.4,
+    "retransmits": 1,
+    "rtt_loaded": {
+     "sent": 32,
+     "recv": 32,
+     "loss_pct": 0.0,
+     "min": 2663.962,
+     "avg": 4409.976,
+     "max": 4792.445,
+     "mdev": 415.987
+    }
+   },
+   "tcp_dl": {
+    "kbps": 42.5,
+    "bytes": 106260,
+    "secs": 20.0,
+    "retransmits": 15,
+    "rtt_loaded": {
+     "sent": 32,
+     "recv": 32,
+     "loss_pct": 0.0,
+     "min": 1603.149,
+     "avg": 3303.363,
+     "max": 3903.843,
+     "mdev": 544.774
+    }
+   },
+   "udp_ul": [
+    {
+     "offered_kbps": 25,
+     "kbps": 24.2,
+     "loss_pct": 0,
+     "jitter_ms": 104.6
+    },
+    {
+     "offered_kbps": 50,
+     "kbps": 42.5,
+     "loss_pct": 0,
+     "jitter_ms": 38.6
+    },
+    {
+     "offered_kbps": 100,
+     "kbps": 43.7,
+     "loss_pct": 0,
+     "jitter_ms": 62.7
+    },
+    {
+     "offered_kbps": 200,
+     "kbps": 44.4,
+     "loss_pct": 0,
+     "jitter_ms": 75.8
+    },
+    {
+     "error": "control socket has closed unexpectedly"
+    }
+   ],
+   "udp_dl": [
+    {
+     "offered_kbps": 25,
+     "kbps": 25.2,
+     "loss_pct": 0,
+     "jitter_ms": 50.7
+    },
+    {
+     "offered_kbps": 50,
+     "kbps": 50.4,
+     "loss_pct": 0,
+     "jitter_ms": 82.8
+    },
+    {
+     "offered_kbps": 100,
+     "kbps": 90.0,
+     "loss_pct": 0,
+     "jitter_ms": 46.3
+    },
+    {
+     "error": "unable to send control message - port may not be available, the other side may have stopped running, etc.: Broken pipe"
+    },
+    {
+     "error": "unable to connect to server - server may have stopped running or use a different port, firewall issue, etc.: Connection timed out"
+    }
+   ],
+   "after_solo": {
+    "pdu_addr": "12.1.1.3",
+    "ok": true
+   },
+   "after": {
+    "pdu_addr": "12.1.1.3",
+    "ok": true
+   }
+  },
+  "nrUE2": {
+   "class": "URLLC",
+   "kind": "nr",
+   "iface": "oaitun_ue1",
+   "before": {
+    "pdu_addr": "12.1.1.2",
+    "ok": true
+   },
+   "rtt_idle": {
+    "sent": 20,
+    "recv": 20,
+    "loss_pct": 0.0,
+    "min": 276.219,
+    "avg": 888.506,
+    "max": 1465.242,
+    "mdev": 407.785
+   },
+   "tcp_ul": {
+    "kbps": 17.7,
+    "bytes": 62227,
+    "secs": 28.2,
+    "retransmits": 1,
+    "rtt_loaded": {
+     "sent": 32,
+     "recv": 32,
+     "loss_pct": 0.0,
+     "min": 451.875,
+     "avg": 7413.848,
+     "max": 10513.931,
+     "mdev": 3288.71
+    }
+   },
+   "tcp_dl": {
+    "kbps": 39.6,
+    "bytes": 99128,
+    "secs": 20.0,
+    "retransmits": 15,
+    "rtt_loaded": {
+     "sent": 32,
+     "recv": 32,
+     "loss_pct": 0.0,
+     "min": 2047.47,
+     "avg": 3394.76,
+     "max": 6356.179,
+     "mdev": 733.795
+    }
+   },
+   "udp_ul": [
+    {
+     "offered_kbps": 25,
+     "kbps": 24.6,
+     "loss_pct": 0,
+     "jitter_ms": 76.4
+    },
+    {
+     "offered_kbps": 50,
+     "kbps": 42.2,
+     "loss_pct": 0,
+     "jitter_ms": 44.6
+    },
+    {
+     "offered_kbps": 100,
+     "kbps": 43.9,
+     "loss_pct": 0,
+     "jitter_ms": 63.6
+    },
+    {
+     "offered_kbps": 200,
+     "kbps": 44.5,
+     "loss_pct": 0,
+     "jitter_ms": 74.2
+    },
+    {
+     "error": "control socket has closed unexpectedly"
+    }
+   ],
+   "udp_dl": [
+    {
+     "offered_kbps": 25,
+     "kbps": 25.2,
+     "loss_pct": 0,
+     "jitter_ms": 41.1
+    },
+    {
+     "offered_kbps": 50,
+     "kbps": 50.0,
+     "loss_pct": 0,
+     "jitter_ms": 79.5
+    },
+    {
+     "offered_kbps": 100,
+     "kbps": 89.6,
+     "loss_pct": 0,
+     "jitter_ms": 47.3
+    },
+    {
+     "error": "unable to send control message - port may not be available, the other side may have stopped running, etc.: Broken pipe"
+    },
+    {
+     "error": "unable to connect to server - server may have stopped running or use a different port, firewall issue, etc.: Connection timed out"
+    }
+   ],
+   "after_solo": {
+    "pdu_addr": "12.1.1.2",
+    "ok": true
+   },
+   "after": {
+    "pdu_addr": "12.1.1.2",
+    "ok": true
+   }
+  },
+  "n3iwue1": {
+   "class": "non-3GPP",
+   "kind": "n3",
+   "iface": "gretun-id-2-1",
+   "before": {
+    "pdu_addr": "12.1.1.22",
+    "ok": true
+   },
+   "rtt_idle": {
+    "sent": 20,
+    "error": "Error response from daemon: container 2c4ab0f819fe4cdec93ddedab05cb8c71a01b71c7e0630e6c57fe8c4b5a200b4 is not running"
+   },
+   "tcp_ul": {
+    "error": "gretun-id-2-1 has no PDU address",
+    "rtt_loaded": {
+     "sent": 32,
+     "error": "Error response from daemon: container 2c4ab0f819fe4cdec93ddedab05cb8c71a01b71c7e0630e6c57fe8c4b5a200b4 is not running"
+    }
+   },
+   "tcp_dl": {
+    "error": "gretun-id-2-1 has no PDU address",
+    "rtt_loaded": {
+     "sent": 32,
+     "error": "Error response from daemon: container 2c4ab0f819fe4cdec93ddedab05cb8c71a01b71c7e0630e6c57fe8c4b5a200b4 is not running"
+    }
+   },
+   "udp_ul": [
+    {
+     "error": "gretun-id-2-1 has no PDU address"
+    },
+    {
+     "error": "gretun-id-2-1 has no PDU address"
+    },
+    {
+     "error": "gretun-id-2-1 has no PDU address"
+    },
+    {
+     "error": "gretun-id-2-1 has no PDU address"
+    },
+    {
+     "error": "gretun-id-2-1 has no PDU address"
+    }
+   ],
+   "udp_dl": [
+    {
+     "error": "gretun-id-2-1 has no PDU address"
+    },
+    {
+     "error": "gretun-id-2-1 has no PDU address"
+    },
+    {
+     "error": "gretun-id-2-1 has no PDU address"
+    },
+    {
+     "error": "gretun-id-2-1 has no PDU address"
+    },
+    {
+     "error": "gretun-id-2-1 has no PDU address"
+    }
+   ],
+   "after_solo": {
+    "pdu_addr": null,
+    "ok": false
+   },
+   "after": {
+    "pdu_addr": null,
+    "ok": false
+   }
+  },
+  "n3iwue2": {
+   "class": "non-3GPP",
+   "kind": "n3",
+   "iface": "gretun-id-2-1",
+   "before": {
+    "pdu_addr": "12.1.1.21",
+    "ok": true
+   },
+   "rtt_idle": {
+    "sent": 20,
+    "error": "Error response from daemon: container adf23aff3ddb251e74dfdc754eed25efc26c2e8660cd1e4aa06f880b7eff2572 is not running"
+   },
+   "tcp_ul": {
+    "error": "gretun-id-2-1 has no PDU address",
+    "rtt_loaded": {
+     "sent": 32,
+     "error": "Error response from daemon: container adf23aff3ddb251e74dfdc754eed25efc26c2e8660cd1e4aa06f880b7eff2572 is not running"
+    }
+   },
+   "tcp_dl": {
+    "error": "gretun-id-2-1 has no PDU address",
+    "rtt_loaded": {
+     "sent": 32,
+     "error": "Error response from daemon: container adf23aff3ddb251e74dfdc754eed25efc26c2e8660cd1e4aa06f880b7eff2572 is not running"
+    }
+   },
+   "udp_ul": [
+    {
+     "error": "gretun-id-2-1 has no PDU address"
+    },
+    {
+     "error": "gretun-id-2-1 has no PDU address"
+    },
+    {
+     "error": "gretun-id-2-1 has no PDU address"
+    },
+    {
+     "error": "gretun-id-2-1 has no PDU address"
+    },
+    {
+     "error": "gretun-id-2-1 has no PDU address"
+    }
+   ],
+   "udp_dl": [
+    {
+     "error": "gretun-id-2-1 has no PDU address"
+    },
+    {
+     "error": "gretun-id-2-1 has no PDU address"
+    },
+    {
+     "error": "gretun-id-2-1 has no PDU address"
+    },
+    {
+     "error": "gretun-id-2-1 has no PDU address"
+    },
+    {
+     "error": "gretun-id-2-1 has no PDU address"
+    }
+   ],
+   "after_solo": {
+    "pdu_addr": null,
+    "ok": false
+   },
+   "after": {
+    "pdu_addr": null,
+    "ok": false
+   }
+  }
+ },
+ "all": {
+  "tcp_ul": {
+   "n3iwue1": {
+    "error": "gretun-id-2-1 has no PDU address",
+    "rtt_loaded": {
+     "sent": 52,
+     "error": "Error response from daemon: container 2c4ab0f819fe4cdec93ddedab05cb8c71a01b71c7e0630e6c57fe8c4b5a200b4 is not running"
+    }
+   },
+   "n3iwue2": {
+    "error": "gretun-id-2-1 has no PDU address",
+    "rtt_loaded": {
+     "sent": 52,
+     "error": "Error response from daemon: container adf23aff3ddb251e74dfdc754eed25efc26c2e8660cd1e4aa06f880b7eff2572 is not running"
+    }
+   },
+   "nrUE2": {
+    "error": "unable to connect to server - server may have stopped running or use a different port, firewall issue, etc.: Connection timed out",
+    "rtt_loaded": {
+     "sent": 52,
+     "recv": 0,
+     "loss_pct": 100.0
+    }
+   },
+   "nrUE1": {
+    "kbps": 20.6,
+    "bytes": 108724,
+    "secs": 42.2,
+    "retransmits": 1,
+    "rtt_loaded": {
+     "sent": 52,
+     "recv": 52,
+     "loss_pct": 0.0,
+     "min": 271.883,
+     "avg": 11403.589,
+     "max": 15160.395,
+     "mdev": 4212.164
+    }
+   }
+  },
+  "tcp_dl": {
+   "n3iwue1": {
+    "error": "gretun-id-2-1 has no PDU address",
+    "rtt_loaded": {
+     "sent": 52,
+     "error": "Error response from daemon: container 2c4ab0f819fe4cdec93ddedab05cb8c71a01b71c7e0630e6c57fe8c4b5a200b4 is not running"
+    }
+   },
+   "n3iwue2": {
+    "error": "gretun-id-2-1 has no PDU address",
+    "rtt_loaded": {
+     "sent": 52,
+     "error": "Error response from daemon: container adf23aff3ddb251e74dfdc754eed25efc26c2e8660cd1e4aa06f880b7eff2572 is not running"
+    }
+   },
+   "nrUE2": {
+    "kbps": 29.0,
+    "bytes": 108724,
+    "secs": 30.0,
+    "retransmits": 0,
+    "rtt_loaded": {
+     "sent": 52,
+     "recv": 52,
+     "loss_pct": 0.0,
+     "min": 2871.596,
+     "avg": 6250.195,
+     "max": 7287.25,
+     "mdev": 894.846
+    }
+   },
+   "nrUE1": {
+    "kbps": 29.4,
+    "bytes": 110272,
+    "secs": 30.0,
+    "retransmits": 16,
+    "rtt_loaded": {
+     "sent": 52,
+     "recv": 52,
+     "loss_pct": 0.0,
+     "min": 1412.552,
+     "avg": 6286.725,
+     "max": 7566.715,
+     "mdev": 1384.227
+    }
+   }
+  }
+ },
+ "finished": "2026-11-05 16:10:56 EST"
+}
