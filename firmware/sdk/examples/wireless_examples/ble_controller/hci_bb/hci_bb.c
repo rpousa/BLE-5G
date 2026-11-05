@@ -166,9 +166,98 @@ static detectState_t            mPacketDetectStep;
 #define HCIT_RX_GAP_RESET_US            100000U
 static uint64_t                 mHcitLastRxUs;
 uint32_t                        gHcitResyncCount;   /* partial packets dropped (readable with a debugger) */
+
+/* nrlink v4 diagnostics: when the application stops (assert, HardFault, or a main loop that makes no progress for
+ * 2 s), send the host an HCI vendor event 0xFF, subevent 0xF7, every 2 s:
+ *   kind(1: 1 assert, 2 hardfault, 3 stall) pc(4) lr(4) xpsr(4) info(4: assert line / CFSR / stalled ms)
+ *   resyncs(4) uartTxQueue(2) sendErrors(4) lastSendError(4) text(<= 32: assert file or expression)
+ * Written by polling LPUART1, so it works with interrupts blocked. btmon shows it as a vendor event. */
+extern volatile uint32_t gOsaLoopCount;
+static volatile uint32_t mDiagSendErrors, mDiagLastSendError;
+static volatile uint8_t  mDiagKind;
+static volatile uint32_t mDiagInfo;
+static const char * volatile mDiagText;
+static uint16_t                 nb_pkt_in_uart_tx_queue;
+
+static void Diag_PutByte(uint8_t b)
+{
+    for (volatile uint32_t i = 0U; ((LPUART1->STAT & LPUART_STAT_TDRE_MASK) == 0U) && (i < 200000U); i++) { }
+    LPUART1->DATA = b;
+}
+
+static void Diag_Report(uint8_t kind, uint32_t pc, uint32_t lr, uint32_t xpsr, uint32_t info)
+{
+    uint8_t p[64];
+    uint8_t n = 0U;
+    uint32_t w[] = {pc, lr, xpsr, info, gHcitResyncCount};
+    p[n++] = 0xF7U;
+    p[n++] = kind;
+    for (uint8_t k = 0U; k < 5U; k++) { for (uint8_t b = 0U; b < 4U; b++) { p[n++] = (uint8_t)(w[k] >> (8U * b)); } }
+    p[n++] = (uint8_t)nb_pkt_in_uart_tx_queue; p[n++] = (uint8_t)(nb_pkt_in_uart_tx_queue >> 8);
+    for (uint8_t b = 0U; b < 4U; b++) { p[n++] = (uint8_t)(mDiagSendErrors >> (8U * b)); }
+    for (uint8_t b = 0U; b < 4U; b++) { p[n++] = (uint8_t)(mDiagLastSendError >> (8U * b)); }
+    if (mDiagText != NULL)
+    {
+        const char *t = mDiagText, *base = mDiagText;
+        for (; *t != '\0'; t++) { if (*t == '/') { base = t + 1; } }
+        for (uint8_t k = 0U; (base[k] != '\0') && (n < sizeof(p)); k++) { p[n++] = (uint8_t)base[k]; }
+    }
+    Diag_PutByte(0x04U); Diag_PutByte(0xFFU); Diag_PutByte(n);
+    for (uint8_t k = 0U; k < n; k++) { Diag_PutByte(p[k]); }
+}
+
+void BOARD_AppAssertHook(const char *file, int line)
+{
+    mDiagText = file;
+    mDiagInfo = (uint32_t)line;
+    mDiagKind = 1U;       /* __assert_func now loops; the tick hook reports it */
+}
+
+void OSA_SysTickHook(uint32_t *frame)
+{
+    static uint32_t lastLoop, stillMs;
+    if (gOsaLoopCount != lastLoop)
+    {
+        lastLoop = gOsaLoopCount;
+        stillMs  = 0U;
+        return;
+    }
+    stillMs++;
+    if ((stillMs >= 2000U) && ((stillMs % 2000U) == 0U))
+    {
+        Diag_Report((mDiagKind != 0U) ? mDiagKind : 3U, frame[6], frame[5], frame[7],
+                    (mDiagKind != 0U) ? mDiagInfo : stillMs);
+    }
+}
+
+void HardFault_C(uint32_t *frame)
+{
+    for (;;)
+    {
+        Diag_Report(2U, frame[6], frame[5], frame[7], SCB->CFSR);
+        for (volatile uint32_t i = 0U; i < 30000000U; i++) { }
+    }
+}
+
+void HardFault_Handler(void) __attribute__((naked));
+void HardFault_Handler(void)
+{
+    __asm volatile(
+        "tst lr, #4      \n"
+        "ite eq          \n"
+        "mrseq r0, msp   \n"
+        "mrsne r0, psp   \n"
+        "b HardFault_C   \n");
+}
+
+static void Diag_PlatformError(uint32_t id, int32_t error_status)
+{
+    mDiagSendErrors++;
+    mDiagLastSendError = (id << 16) | ((uint32_t)error_status & 0xFFFFU);
+}
 static hcitPacket_t             mHcitPacketRaw;
 #if (!defined(gAppUseDtm2Wire) || (gAppUseDtm2Wire == 0))
-static uint16_t                 nb_pkt_in_uart_tx_queue = 0;
+/* nb_pkt_in_uart_tx_queue: declared with the nrlink diagnostics above */
 #endif
 #ifdef ENABLE_HCI_CMD_HOOK
 // HCI command buffer
@@ -629,6 +718,8 @@ void main_task(uint32_t param)
         }
 
         PLATFORM_SetHciRxCallback(HCI_AppControllerRxCallback);
+        PLATFORM_RegisterErrorCallback(Diag_PlatformError);
+        NVIC_SetPriority(SysTick_IRQn, 0U);   /* nrlink: the stall detector must preempt a stuck interrupt handler */
 
 #else
         if (gBleSuccess_c != DTM_Init((serial_handle_t) gSerMgrIf))
