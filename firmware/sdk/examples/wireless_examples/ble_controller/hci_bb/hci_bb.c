@@ -275,6 +275,21 @@ void HardFault_Handler(void)
         "b HardFault_C   \n");
 }
 
+/* v8: board RGB LED (active low: PTA19 green, PTA20 blue, PTA21 red) steady green, so the Bluetooth boards are
+ * told apart from the nrlink boards (blue/red) at a glance. */
+static void Hcibb_LedGreen(void)
+{
+    const uint32_t g = 1UL << 19, b = 1UL << 20, r = 1UL << 21;
+    CLOCK_EnableClock(kCLOCK_PortA);
+    CLOCK_EnableClock(kCLOCK_GpioA);
+    PORTA->PCR[19] = PORT_PCR_MUX(1);
+    PORTA->PCR[20] = PORT_PCR_MUX(1);
+    PORTA->PCR[21] = PORT_PCR_MUX(1);
+    GPIOA->PSOR = b | r;     /* blue and red off */
+    GPIOA->PCOR = g;         /* green on */
+    GPIOA->PDDR |= g | b | r;
+}
+
 uint32_t OSA_NrlinkIrqNesting(void);
 void OSA_NrlinkIrqReset(void);
 uint32_t gDiagIrqHeals;   /* times v6 had to turn interrupts back on */
@@ -761,6 +776,7 @@ void main_task(uint32_t param)
     {
         platformInitialized = 1;
         Diag_PaintStack();
+        Hcibb_LedGreen();
 #if defined(gBoardUse3MbOnUart0_d) && (gBoardUse3MbOnUart0_d > 0U)
         // Uart Flow Control Watermark - Temp workaround while waiting for LL-1854 and MCUX-77821
         LPUART0->MODIR &= ~LPUART_MODIR_RTSWATER_MASK;
