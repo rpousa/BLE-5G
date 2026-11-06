@@ -1647,3 +1647,13 @@ osa_semaphore_count_t OSA_SemaphoreGetCount(osa_semaphore_handle_t semaphoreHand
 
     return 0;
 }
+
+/* nrlink: let the application check and repair the global-interrupt nesting (see hci_bb.c, v6 diagnostics) */
+uint32_t OSA_NrlinkIrqNesting(void)
+{
+    return s_osaState.disableIRQGlobalNesting;
+}
+void OSA_NrlinkIrqReset(void)
+{
+    s_osaState.disableIRQGlobalNesting = 0U;
+}

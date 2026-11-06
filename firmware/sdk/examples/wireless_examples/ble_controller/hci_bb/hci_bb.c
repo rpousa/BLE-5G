@@ -176,7 +176,8 @@ uint32_t                        gHcitResyncCount;   /* partial packets dropped (
  *   main-loop count << 8) text(assert file)
  * v6: kind 6 = interrupts found disabled at the top of the main loop, where they must be on: PRIMASK, BASEPRI,
  *   OSA nesting count, loops seen masked (in pc, lr, xpsr, info). After 4 reports interrupts are turned back on.
- * v5: kind 4 = on request (vendor command 0xFDB2, proves the path works), kind 5 = UART input left unread for 1 s
+ * v5: kind 4 = on request (vendor command 0xFDB2, proves the path works); v7: its pc/lr/xpsr/info slots carry stack
+ *   bytes used (high-water mark), stack size, LPUART1 CTRL, interrupt heals, kind 5 = UART input left unread for 1 s
  *   (pc of the interrupted code, then LPUART1 STAT, CTRL, WATER instead of lr, xpsr, info).
  * Written by polling LPUART1, so it works with interrupts blocked. btmon shows it as a vendor event. */
 extern volatile uint32_t gOsaLoopCount;
@@ -277,6 +278,23 @@ void HardFault_Handler(void)
 uint32_t OSA_NrlinkIrqNesting(void);
 void OSA_NrlinkIrqReset(void);
 uint32_t gDiagIrqHeals;   /* times v6 had to turn interrupts back on */
+
+/* v7: stack high-water mark. The stack is painted at start; the report on request (0xFDB2) gives the deepest use. */
+#define DIAG_STACK_PAINT 0xA5C3A5C3U
+extern uint32_t __StackLimit[];
+extern uint32_t __StackTop[];
+static void Diag_PaintStack(void)
+{
+    uint32_t *p = __StackLimit;
+    uint32_t *sp = (uint32_t *)__get_MSP();
+    while (p < (sp - 64)) { *p++ = DIAG_STACK_PAINT; }
+}
+static uint32_t Diag_StackUsed(void)
+{
+    uint32_t *p = __StackLimit;
+    while ((p < __StackTop) && (*p == DIAG_STACK_PAINT)) { p++; }
+    return (uint32_t)((uint8_t *)__StackTop - (uint8_t *)p);
+}
 
 static void Diag_CheckIrqMasked(void)
 {
@@ -742,6 +760,7 @@ void main_task(uint32_t param)
     if (!platformInitialized)
     {
         platformInitialized = 1;
+        Diag_PaintStack();
 #if defined(gBoardUse3MbOnUart0_d) && (gBoardUse3MbOnUart0_d > 0U)
         // Uart Flow Control Watermark - Temp workaround while waiting for LL-1854 and MCUX-77821
         LPUART0->MODIR &= ~LPUART_MODIR_RTSWATER_MASK;
@@ -846,7 +865,7 @@ void main_task(uint32_t param)
             /* the report bypasses the serial manager: let queued packets leave first */
             for (volatile uint32_t i = 0U; i < 2000000U && nb_pkt_in_uart_tx_queue != 0U; i++) { }
             for (volatile uint32_t i = 0U; ((LPUART1->STAT & LPUART_STAT_TC_MASK) == 0U) && (i < 2000000U); i++) { }
-            Diag_Report(4U, 0U, LPUART1->STAT, LPUART1->CTRL, LPUART1->WATER);
+            Diag_Report(4U, Diag_StackUsed(), (uint32_t)((uint8_t *)__StackTop - (uint8_t *)__StackLimit), LPUART1->CTRL, gDiagIrqHeals);
             HCI_AppControllerRxCallback(0x04, event, 6U);
         }
         else
