@@ -1,0 +1,439 @@
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
+<title>Factory Floor Downlink</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Semi+Condensed:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+<style>
+/* Layout: control-room board, same family as the nrlink architecture page. Player bar, then the shared floor
+   (LiDAR + robots) beside the two camera feeds, then the delay timeline and the level table.
+   Colour = which radio carries it, matching the board LEDs: blue eMBB (nrUE1), red URLLC (nrUE2), green Bluetooth. */
+:root {
+  --bg: #eef1f4; --panel: #ffffff; --panel-2: #f5f7f9; --line: #d3d9e0;
+  --ink: #17202b; --ink-2: #4b5866; --ink-3: #7a8693;
+  --embb: #1f63d6; --urllc: #d0342c; --ble: #1d8a3c; --ble2: #0f7f86; --warn: #b86e00; --bad: #b3261e;
+  --floor: #e3e7eb; --machine: #9aa6b2; --tape: #c9a227; --zone: #1d8a3c;
+  --display: "Barlow Semi Condensed", "Arial Narrow", "Roboto Condensed", system-ui, sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+  --r: 6px;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #0e141b; --panel: #151d26; --panel-2: #1b2530; --line: #2a3644; --ink: #e6ebf0; --ink-2: #a9b4bf; --ink-3: #74808c;
+  --embb: #5b93f5; --urllc: #f0605a; --ble: #45c06a; --ble2: #3cc3c9; --warn: #f0a830; --bad: #f2786f;
+  --floor: #1c2631; --machine: #44515f; --tape: #a98a20; --zone: #45c06a; color-scheme: dark } }
+:root[data-theme="dark"] {
+  --bg: #0e141b; --panel: #151d26; --panel-2: #1b2530; --line: #2a3644; --ink: #e6ebf0; --ink-2: #a9b4bf; --ink-3: #74808c;
+  --embb: #5b93f5; --urllc: #f0605a; --ble: #45c06a; --ble2: #3cc3c9; --warn: #f0a830; --bad: #f2786f;
+  --floor: #1c2631; --machine: #44515f; --tape: #a98a20; --zone: #45c06a; color-scheme: dark }
+* { box-sizing: border-box; }
+body { background: var(--bg); color: var(--ink); font-family: var(--display); font-size: 15px; line-height: 1.4; }
+.wrap { max-width: 1380px; margin: 0 auto; padding-block: 14px 40px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); display: grid; gap: 14px; }
+.mono { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+h1, h2, h3 { margin: 0; font-weight: 600; text-wrap: balance; }
+h1 { font-size: 1.55rem; } h2 { font-size: 1.15rem; } h3 { font-size: 1rem; }
+.label { font-size: .72rem; letter-spacing: .09em; text-transform: uppercase; color: var(--ink-3); font-weight: 600; }
+.sub { color: var(--ink-2); font-size: .95rem; max-width: 92ch; }
+.card { background: var(--panel); border: 1px solid var(--line); border-radius: var(--r); min-width: 0; }
+.card > .hd { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 12px; padding: 11px 14px 9px; border-bottom: 1px solid var(--line); }
+.card > .hd .meta { margin-left: auto; color: var(--ink-3); font-size: .82rem; }
+.bd { padding: 12px 14px; display: grid; gap: 12px; min-width: 0; }
+header { display: grid; gap: 4px; }
+
+/* player */
+.player { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 16px; padding: 10px 14px; }
+.lv { display: flex; flex-wrap: wrap; gap: 6px; }
+.lv button, .ctl button { font: inherit; font-size: .9rem; color: var(--ink); background: var(--panel-2); border: 1px solid var(--line); border-radius: 999px; padding: 5px 12px; cursor: pointer; display: inline-flex; gap: 6px; align-items: baseline; }
+.lv button small { font-family: var(--mono); font-size: .72rem; color: var(--ink-3); }
+.lv button[aria-pressed="true"] { border-color: var(--ink); box-shadow: inset 0 0 0 1px var(--ink); font-weight: 600; }
+button:focus-visible, input:focus-visible { outline: 2px solid var(--embb); outline-offset: 2px; }
+.ctl { display: flex; align-items: center; gap: 8px; flex: 1 1 320px; min-width: 0; }
+.ctl input[type=range] { flex: 1; min-width: 80px; accent-color: var(--ink-2); }
+.clock { font-family: var(--mono); font-size: .9rem; min-width: 9ch; text-align: right; }
+
+/* main */
+.main { display: grid; grid-template-columns: minmax(0, 1.75fr) minmax(0, 1fr); gap: 14px; align-items: start; }
+.floorbox { position: relative; }
+canvas#floor { display: block; width: 100%; height: auto; aspect-ratio: 64 / 40; max-width: 100%; }
+.cams { display: grid; gap: 12px; }
+.cam { display: grid; gap: 6px; }
+.cam .view { position: relative; background: #0b0f14; border-radius: 4px; overflow: hidden; aspect-ratio: 160 / 96; max-width: 100%; }
+.cam img { display: block; width: 100%; height: 100%; object-fit: contain; image-rendering: pixelated; }
+.cam .badge { position: absolute; right: 6px; top: 6px; font-family: var(--mono); font-size: .72rem; font-weight: 600; padding: 2px 7px; border-radius: 4px; background: rgba(0,0,0,.65); color: #fff; }
+.cam .badge.stale { background: var(--bad); }
+.cam .none { position: absolute; inset: 0; display: grid; place-items: center; color: #9aa6b2; font-family: var(--mono); font-size: .8rem; text-align: center; padding: 8px; }
+.row { display: flex; flex-wrap: wrap; gap: 4px 14px; align-items: baseline; font-size: .86rem; color: var(--ink-2); }
+.row b { color: var(--ink); font-family: var(--mono); font-weight: 600; font-size: .84rem; }
+.swatch { display: inline-block; width: 10px; height: 10px; border-radius: 2px; background: var(--c); margin-right: 6px; vertical-align: -1px; }
+.tiles { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
+.tile { border-top: 3px solid var(--c); padding-top: 6px; display: grid; gap: 2px; min-width: 0; }
+.tile .v { font-family: var(--mono); font-size: 1.05rem; font-weight: 600; }
+.tile .v.bad { color: var(--bad); }
+.tile small { color: var(--ink-3); font-size: .78rem; }
+.legend { display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: .84rem; color: var(--ink-2); }
+.chartbox { position: relative; }
+canvas#chart { display: block; width: 100%; height: 300px; }
+.tip { position: absolute; pointer-events: none; background: var(--panel); border: 1px solid var(--line); border-radius: 4px; padding: 6px 9px; font-family: var(--mono); font-size: .76rem; display: grid; gap: 2px; box-shadow: 0 2px 8px rgba(0,0,0,.12); white-space: nowrap; }
+.tbl { overflow-x: auto; }
+table { border-collapse: collapse; width: 100%; font-size: .88rem; }
+th { text-align: left; font-size: .72rem; letter-spacing: .09em; text-transform: uppercase; color: var(--ink-3); font-weight: 600; padding: 6px 10px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+td { padding: 6px 10px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+td.mono { font-size: .8rem; }
+td.bad { color: var(--bad); font-weight: 600; } td.warn { color: var(--warn); font-weight: 600; }
+tr.sel td { background: var(--panel-2); }
+ol.next { margin: 0; padding-left: 20px; display: grid; gap: 8px; color: var(--ink-2); font-size: .92rem; max-width: 100ch; }
+ol.next b { color: var(--ink); font-weight: 600; }
+code { font-family: var(--mono); font-size: .8rem; background: var(--panel-2); padding: 1px 5px; border-radius: 4px; overflow-wrap: anywhere; }
+.loading { color: var(--ink-3); font-family: var(--mono); font-size: .8rem; }
+@media (max-width: 980px) { .main { grid-template-columns: minmax(0, 1fr); } .cams { grid-template-columns: 1fr 1fr; } }
+@media (max-width: 620px) { .cams { grid-template-columns: 1fr; } .tiles { grid-template-columns: 1fr 1fr; } }
+</style>
+
+<div class="wrap">
+  <header>
+    <span class="label">nrlink · downlink-only stress test · 6 Nov 2026 · replay of the recorded run, on repeat · live version on the LAN: http://192.168.10.223:8090/</span>
+    <h1>Factory Floor Downlink</h1>
+    <p class="sub">One factory floor, three downlinks from the edge (ext-dn) at the same time. A LiDAR on a pole in the middle of the floor streams its scans to nrUE1 (eMBB). The positioning server sends where each of the four AGVs is to nrUE2 (URLLC). Two ceiling cameras send JPEG video to n3iwue1 and n3iwue2 over Bluetooth. Every scan, position and frame below is the one that actually arrived, at the time it arrived. Pick a load level and watch what each UE knows about the floor.</p>
+  </header>
+
+  <section class="card">
+    <div class="player">
+      <div class="lv" id="levels" role="group" aria-label="Load level"></div>
+      <div class="ctl">
+        <button type="button" id="play" aria-label="Pause">❚❚ Pause</button>
+        <input type="range" id="scrub" min="0" max="62" step="0.05" value="0" aria-label="Replay time">
+        <span class="clock" id="clock">0.0 s</span>
+        <button type="button" id="speed" aria-label="Replay speed">1×</button>
+      </div>
+    </div>
+    <div class="bd" style="border-top:1px solid var(--line)"><div class="tiles" id="tiles"></div></div>
+  </section>
+
+  <section class="main">
+    <article class="card">
+      <div class="hd"><h2>The floor, as the UEs see it</h2><span class="meta">60 × 36 m · LiDAR at the centre pole, 3 m up</span></div>
+      <div class="bd">
+        <div class="floorbox"><canvas id="floor" aria-label="Factory floor map with the last LiDAR scan nrUE1 received and the AGV positions nrUE2 last received, next to where the AGVs really are"></canvas></div>
+        <div class="legend">
+          <span><i class="swatch" style="--c:var(--embb)"></i>last LiDAR scan received (nrUE1)</span>
+          <span><i class="swatch" style="--c:var(--urllc)"></i>AGV where nrUE2 last heard it</span>
+          <span><i class="swatch" style="--c:transparent;outline:1.5px solid var(--ink-2)"></i>AGV where it really is</span>
+          <span><i class="swatch" style="--c:var(--zone);opacity:.5"></i>camera views</span>
+        </div>
+        <div class="row" id="agvrow"></div>
+      </div>
+    </article>
+    <div class="cams">
+      <article class="card cam"><div class="hd"><h3>CAM1 · west half</h3><span class="meta">n3iwue1 · BLE1</span></div>
+        <div class="bd"><div class="view"><img id="cam1img" hidden alt="Last CAM1 frame received by n3iwue1"><div class="none" id="cam1none">no frame yet</div><span class="badge" id="cam1badge">–</span></div><div class="row" id="cam1row"></div></div></article>
+      <article class="card cam"><div class="hd"><h3>CAM2 · east half</h3><span class="meta">n3iwue2 · BLE2</span></div>
+        <div class="bd"><div class="view"><img id="cam2img" hidden alt="Last CAM2 frame received by n3iwue2"><div class="none" id="cam2none">no frame yet</div><span class="badge" id="cam2badge">–</span></div><div class="row" id="cam2row"></div></div></article>
+    </div>
+  </section>
+
+  <section class="card">
+    <div class="hd"><h2>One-way delay of every frame</h2><span class="meta">ext-dn → UE · log scale · lost frames along the top</span></div>
+    <div class="bd">
+      <div class="legend" id="chartlegend"></div>
+      <div class="chartbox"><canvas id="chart" aria-label="One-way delay of every frame against the time it was sent, for the four flows"></canvas><div class="tip" id="tip" hidden></div></div>
+    </div>
+  </section>
+
+  <section class="card">
+    <div class="hd"><h2>All four levels</h2><span class="meta">60 s each, run back to back with 10 s gaps · a frame counts only if all its packets arrived and its CRC matches</span></div>
+    <div class="tbl"><table id="table"></table></div>
+  </section>
+
+  <section class="card">
+    <div class="hd"><h2>What the run shows</h2></div>
+    <div class="bd">
+      <ol class="next" id="findings">
+        <li><b>5G NR downlink.</b> LiDAR and robot positions share one gNB radio. At level 1 and 2 (22 and 45 kbit/s together) every frame arrives: LiDAR scans in 230–280 ms (median), robot updates in 110–145 ms. Level 3 asks for 95 kbit/s, just above the 90 kbit/s the path carried cleanly on 5 Nov. Nothing is lost, but the queue grows to 17 s for LiDAR and 6 s for the robots. The backlog does not drain in the 10 s gap, so level 4 starts 22 s behind and then drops 57 % of the scans and 31 % of the positions.</li>
+        <li><b>For the robots, the delay is the error.</b> An AGV at 1.4 m/s moves 15–20 cm in the 110–145 ms an update takes at levels 1 and 2. At level 3 the controller sees each AGV where it was seconds ago, metres off. The floor map shows that gap live.</li>
+        <li><b>Bluetooth video.</b> Level 1 (8 kbit/s per camera) is clean: every frame in 380–440 ms, mostly the time a 2 KB frame needs at the 40 kbit/s link pacing. At level 2 (16.5 kbit/s) a third of the frames are lost and the rest take 5–6 s, even though both links stay under their pacing: they share the core's one Intel adapter, and IPsec and GRE add about 10 % per packet. At levels 3 and 4 almost nothing gets through.</li>
+        <li><b>No board hung.</b> Downlink-only load never hung a BLE board (watchdog log: no HCI timeouts), which fits the firmware finding that only PC→board traffic hangs hci_bb. n3iwue1 did lose its session under the overload: its IKE and NAS share the starved link. The watchdog restarted it at the end of level 2 (dead for all of level 3) and again in level 4, so CAM1 shows nothing from level 3 on.</li>
+        <li><b>How the delay is measured.</b> The sender in ext-dn stamps each packet with the core PC's clock. The UE PC stamps its arrival. The two clocks differ by 8 h 48 min, so a LAN exchange (best of 100, 0.4 ms round trip) measured the offset before and after the run. It drifted 1.7 ms in 5 minutes, which is the measurement's error bar. A frame's delay runs from its first packet leaving to its last packet arriving.</li>
+      </ol>
+      <span class="label">Raw data on the core PC</span>
+      <span class="loading">~/oai/nrlink/logs/factory/run1/ (receiver logs, clocks, sender log) · scenes: logs/factory/scen · generator and sender: apps/factory_dl.py · report: apps/factory_report.py</span>
+    </div>
+  </section>
+</div>
+
+<script>
+"use strict";
+const $ = id => document.getElementById(id);
+const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+const FLOWS = [
+  { id: "lidar", name: "LiDAR scans", ue: "nrUE1 · eMBB", c: "--embb", shape: "circle", unit: "scan" },
+  { id: "robots", name: "Robot positions", ue: "nrUE2 · URLLC", c: "--urllc", shape: "tri", unit: "update" },
+  { id: "cam1", name: "CAM1 video", ue: "n3iwue1 · BLE1", c: "--ble", shape: "square", unit: "frame" },
+  { id: "cam2", name: "CAM2 video", ue: "n3iwue2 · BLE2", c: "--ble2", shape: "diamond", unit: "frame" },
+];
+
+// ---------------------------------------------------------------- scene (same model as factory_dl.py)
+let F = null, SEGS = [], PER = [], LOOP = 0;
+const AGV_V = 1.4, AGV_DWELL = 3.0;
+function setupScene(floor) {
+  F = floor;
+  const p = F.stations.map(s => [s[1], s[2]]);
+  SEGS = p.map((a, i) => [a, p[(i + 1) % p.length]]);
+  PER = SEGS.map(([a, b]) => Math.hypot(b[0] - a[0], b[1] - a[1]) / AGV_V + AGV_DWELL);
+  LOOP = PER.reduce((x, y) => x + y, 0);
+}
+function agvs(t) {
+  const out = [];
+  for (let i = 0; i < F.agvs; i++) {
+    let u = ((t + i * LOOP / F.agvs) % LOOP + LOOP) % LOOP, k = 0;
+    while (k < SEGS.length - 1 && u >= PER[k]) { u -= PER[k]; k++; }
+    const [a, b] = SEGS[k], mv = PER[k] - AGV_DWELL, hd = Math.atan2(b[1] - a[1], b[0] - a[0]);
+    if (u < mv) { const f = u / mv; out.push([a[0] + (b[0] - a[0]) * f, a[1] + (b[1] - a[1]) * f, hd]); }
+    else out.push([b[0], b[1], hd]);
+  }
+  return out;
+}
+function movers(t) {
+  const out = [];
+  [[26, 36, 28.5, 0.9], [8, 22, 9.0, 1.1]].forEach(([x0, x1, y, sp], i) => {
+    const span = x1 - x0, u = ((t * sp / span + i * 0.37) % 2 + 2) % 2;
+    out.push(["worker", x0 + span * (u < 1 ? u : 2 - u), y]);
+  });
+  const u = ((t * 1.6 / 44) % 2 + 2) % 2;
+  out.push(["forklift", 8 + 44 * (u < 1 ? u : 2 - u), 33]);
+  return out;
+}
+
+// ---------------------------------------------------------------- data
+let R = null, L = null, P = null, cur = 0, T = 0, playing = true, speed = 1;
+const cache = {};
+let arrivals = {};   // flow -> frames delivered, sorted by arrival: [arr, n, ts, delay]
+let scans = {};      // n -> Float32Array of points (x, y, z)
+async function inflate(b64) {
+  const bin = Uint8Array.from(atob(b64), c => c.charCodeAt(0));
+  const ds = new Blob([bin]).stream().pipeThrough(new DecompressionStream("deflate"));
+  return new Uint8Array(await new Response(ds).arrayBuffer());
+}
+async function decodeScan(b64) {
+  const raw = await inflate(b64), dv = new DataView(raw.buffer), az = F.az, o = F.lidar, pts = [];
+  for (let i = 0; i < raw.length / 2; i++) {
+    const cm = dv.getUint16(i * 2, true); if (!cm) continue;
+    const el = F.beams[Math.floor(i / az)] * Math.PI / 180, a = (i % az) * 2 * Math.PI / az, r = cm / 100;
+    const x = o[0] + r * Math.cos(el) * Math.cos(a), y = o[1] + r * Math.cos(el) * Math.sin(a), z = o[2] + r * Math.sin(el);
+    if (x < -0.5 || x > F.w + 0.5 || y < -0.5 || y > F.h + 0.5) continue;
+    pts.push(x, y, z);
+  }
+  return new Float32Array(pts);
+}
+async function loadLevel(i) {
+  cur = i; L = R.levels[i];
+  document.querySelectorAll("#levels button").forEach((b, k) => b.setAttribute("aria-pressed", k === i));
+  $("scrub").max = L.t_end;
+  arrivals = {};
+  for (const f of FLOWS) arrivals[f.id] = L.flows[f.id].frames.filter(x => x[2] !== null).map(x => [x[2], x[0], x[1], x[3]]).sort((a, b) => a[0] - b[0]);
+  renderTable(); renderTiles(true);
+  if (!cache[L.name]) cache[L.name] = fetch(`data/payload_${L.name}.json`).then(r => r.json());
+  P = null; scans = {};
+  const p = await cache[L.name];
+  if (L !== R.levels[i]) return;
+  P = p;
+  for (const [n, b64] of Object.entries(P.lidar)) scans[n] = await decodeScan(b64);
+  drawChart();
+}
+function latest(flow, t) {   // last frame delivered by play time t
+  const a = arrivals[flow]; let lo = 0, hi = a.length - 1, best = null;
+  while (lo <= hi) { const m = (lo + hi) >> 1; if (a[m][0] <= t) { best = a[m]; lo = m + 1; } else hi = m - 1; }
+  return best;
+}
+
+// ---------------------------------------------------------------- floor
+const fc = $("floor"); let fs = 1, fw = 0, fh = 0, M = 2;
+function sizeFloor() {
+  const dpr = window.devicePixelRatio || 1; fw = fc.clientWidth; fh = fw * (F.h + 2 * M) / (F.w + 2 * M);
+  fc.width = Math.round(fw * dpr); fc.height = Math.round(fh * dpr); fc.getContext("2d").setTransform(dpr, 0, 0, dpr, 0, 0); fs = fw / (F.w + 2 * M);
+}
+const X = x => (x + M) * fs, Y = y => (y + M) * fs;
+function drawFloor() {
+  const g = fc.getContext("2d"); g.clearRect(0, 0, fw, fh);
+  g.fillStyle = css("--floor"); g.fillRect(X(0), Y(0), F.w * fs, F.h * fs);
+  g.strokeStyle = css("--ink-3"); g.lineWidth = 1.5; g.strokeRect(X(0), Y(0), F.w * fs, F.h * fs);
+  // camera zones
+  g.setLineDash([6, 4]); g.strokeStyle = css("--zone"); g.lineWidth = 1.2;
+  for (const [k, [x0, x1]] of Object.entries(F.cams)) { g.strokeRect(X(x0) + 3, Y(0) + 3, (x1 - x0) * fs - 6, F.h * fs - 6); }
+  g.setLineDash([]);
+  g.font = `600 ${Math.max(10, fs * 0.9)}px ${css("--mono")}`; g.fillStyle = css("--zone");
+  g.fillText("CAM1", X(0.8), Y(1.6)); g.fillText("CAM2", X(30.8), Y(1.6));
+  // aisle loop
+  g.strokeStyle = css("--tape"); g.lineWidth = Math.max(2, 1.4 * fs); g.globalAlpha = .55; g.beginPath();
+  F.stations.forEach((s, i) => i ? g.lineTo(X(s[1]), Y(s[2])) : g.moveTo(X(s[1]), Y(s[2]))); g.closePath(); g.stroke(); g.globalAlpha = 1;
+  // machines
+  for (const b of F.machines) { g.fillStyle = css("--machine"); g.fillRect(X(b[0]), Y(b[1]), (b[3] - b[0]) * fs, (b[4] - b[1]) * fs); }
+  // stations
+  g.font = `500 ${Math.max(10, fs * 0.85)}px ${css("--display")}`; g.fillStyle = css("--ink-2"); g.textAlign = "center";
+  for (const [n, x, y] of F.stations) { g.strokeStyle = css("--ink-3"); g.lineWidth = 1; g.strokeRect(X(x - 2), Y(y - 2), 4 * fs, 4 * fs); g.fillText(n, X(x), Y(y < 18 ? y + 3.4 : y - 2.6)); }
+  g.textAlign = "start";
+  // LiDAR scan as received
+  const ld = latest("lidar", T);
+  if (ld && scans[ld[1]]) {
+    const p = scans[ld[1]], age = T - ld[2], col = css("--embb");
+    g.fillStyle = col;
+    for (let i = 0; i < p.length; i += 3) {
+      const z = p[i + 2]; g.globalAlpha = z < 0.15 ? .22 : .85;
+      const s = z < 0.15 ? 1.2 : 2; g.fillRect(X(p[i]) - s / 2, Y(p[i + 1]) - s / 2, s, s);
+    }
+    g.globalAlpha = 1;
+    g.font = `600 ${Math.max(10, fs * 0.8)}px ${css("--mono")}`; g.fillStyle = css("--embb");
+    g.fillText(`scan #${ld[1]} · ${age.toFixed(1)} s old`, X(F.lidar[0] + 1.2), Y(F.lidar[1] - 1));
+  }
+  // pole
+  g.fillStyle = css("--embb"); g.beginPath(); g.arc(X(F.lidar[0]), Y(F.lidar[1]), Math.max(4, fs * 0.5), 0, 7); g.fill();
+  // workers and forklift (truth)
+  for (const [k, x, y] of movers(T)) {
+    g.fillStyle = css("--ink-2");
+    if (k === "worker") { g.beginPath(); g.arc(X(x), Y(y), Math.max(2.5, fs * 0.3), 0, 7); g.fill(); }
+    else g.fillRect(X(x - 1.1), Y(y - 0.6), 2.2 * fs, 1.2 * fs);
+  }
+  // AGVs: truth outline, received solid, line between
+  const truth = agvs(T), rb = latest("robots", T), seen = rb ? agvs(rb[2]) : null;
+  const tri = (x, y, hd, fill) => {
+    const c = Math.cos(hd), s = Math.sin(hd), pts = [[1.0, 0], [-0.8, 0.65], [-0.8, -0.65]].map(([dx, dy]) => [X(x + c * dx - s * dy), Y(y + s * dx + c * dy)]);
+    g.beginPath(); g.moveTo(...pts[0]); g.lineTo(...pts[1]); g.lineTo(...pts[2]); g.closePath();
+    if (fill) { g.fillStyle = css("--urllc"); g.fill(); g.strokeStyle = css("--panel"); g.lineWidth = 1.5; g.stroke(); }
+    else { g.strokeStyle = css("--ink-2"); g.lineWidth = 1.5; g.stroke(); }
+  };
+  const errs = [];
+  truth.forEach((a, i) => {
+    if (seen) {
+      const b = seen[i], e = Math.hypot(a[0] - b[0], a[1] - b[1]); errs.push(e);
+      if (e > 0.05) { g.strokeStyle = css("--urllc"); g.lineWidth = 1; g.setLineDash([3, 3]); g.beginPath(); g.moveTo(X(a[0]), Y(a[1])); g.lineTo(X(b[0]), Y(b[1])); g.stroke(); g.setLineDash([]); }
+      tri(b[0], b[1], b[2], true);
+    }
+    tri(a[0], a[1], a[2], false);
+    g.font = `600 ${Math.max(10, fs * 0.8)}px ${css("--mono")}`; g.fillStyle = css("--ink");
+    g.fillText(`AGV${i + 1}`, X(a[0] + 1.1), Y(a[1] - 0.9));
+  });
+  const age = rb ? T - rb[2] : null;
+  $("agvrow").innerHTML = rb
+    ? `<span><i class="swatch" style="--c:var(--urllc)"></i>last position update <b>#${rb[1]}</b>, <b>${(age * 1000).toFixed(0)} ms</b> old</span>` +
+      errs.map((e, i) => `<span>AGV${i + 1} off by <b>${e < 1 ? (e * 100).toFixed(0) + " cm" : e.toFixed(1) + " m"}</b></span>`).join("")
+    : `<span>nrUE2 has no position update yet</span>`;
+}
+
+// ---------------------------------------------------------------- cameras
+const camShown = {};
+function drawCams() {
+  for (const cam of ["cam1", "cam2"]) {
+    const f = latest(cam, T), img = $(cam + "img"), none = $(cam + "none"), badge = $(cam + "badge");
+    const fl = L.flows[cam], sentSoFar = fl.frames.filter(x => x[1] <= T).length, gotSoFar = arrivals[cam].filter(x => x[0] <= T).length;
+    if (f && P && P[cam][f[1]]) {
+      if (camShown[cam] !== `${L.name}/${f[1]}`) { img.src = "data:image/jpeg;base64," + P[cam][f[1]]; camShown[cam] = `${L.name}/${f[1]}`; }
+      img.hidden = false; none.hidden = true;
+      const age = T - f[2]; badge.textContent = `#${f[1]} · ${age.toFixed(1)} s old`; badge.classList.toggle("stale", age > 3); badge.hidden = false;
+    } else {
+      img.hidden = true; none.hidden = false; badge.hidden = true; camShown[cam] = null;
+      none.textContent = fl.whole ? "no frame yet" : "no frame got through at this level";
+    }
+    $(cam + "row").innerHTML = `<span>frames sent <b>${sentSoFar}</b></span><span>received whole <b>${gotSoFar}</b></span>` + (f ? `<span>last took <b>${(f[3] / 1000).toFixed(2)} s</b></span>` : "");
+  }
+}
+
+// ---------------------------------------------------------------- tiles, table
+const fmtMs = v => v == null ? "–" : v >= 1000 ? (v / 1000).toFixed(v >= 10000 ? 0 : 1) + " s" : v.toFixed(0) + " ms";
+function renderTiles() {
+  $("tiles").innerHTML = FLOWS.map(f => { const v = L.flows[f.id];
+    return `<div class="tile" style="--c:var(${f.c})"><span class="label">${f.name} · ${f.ue}</span>
+      <span class="v ${v.delivered_pct < 99 ? "bad" : ""}">${v.delivered_pct}% <span style="font-weight:400;color:var(--ink-3);font-size:.85rem">delivered</span></span>
+      <small>${v.offered_kbps} kbit/s offered · median ${fmtMs(v.delay_ms.p50)} · p90 ${fmtMs(v.delay_ms.p90)}</small></div>`; }).join("");
+}
+function renderTable() {
+  let h = `<thead><tr><th>Level</th><th>Flow</th><th>UE</th><th>Rate</th><th>Offered</th><th>Delivered</th><th>Goodput</th><th>Median</th><th>p90</th><th>p99</th><th>Jitter (σ)</th></tr></thead><tbody>`;
+  R.levels.forEach((Lv, i) => FLOWS.forEach((f, j) => { const v = Lv.flows[f.id], inf = Lv.info;
+    const rate = { lidar: `${inf.lidar_hz} scans/s`, robots: `${inf.robot_hz} updates/s`, cam1: `${inf.cam_fps} fps`, cam2: `${inf.cam_fps} fps` }[f.id];
+    const dcls = v.delivered_pct < 50 ? "bad" : v.delivered_pct < 99 ? "warn" : "";
+    const lcls = v.delay_ms.p50 > 2000 ? "bad" : v.delay_ms.p50 > 600 ? "warn" : "";
+    h += `<tr class="${i === cur ? "sel" : ""}">${j === 0 ? `<td rowspan="4"><b>${Lv.name}</b></td>` : ""}<td><i class="swatch" style="--c:var(${f.c})"></i>${f.name}</td><td>${f.ue}</td><td class="mono">${rate}</td><td class="mono">${v.offered_kbps} kbit/s</td><td class="mono ${dcls}">${v.whole} / ${v.sent} · ${v.delivered_pct}%</td><td class="mono">${v.goodput_kbps} kbit/s</td><td class="mono ${lcls}">${fmtMs(v.delay_ms.p50)}</td><td class="mono">${fmtMs(v.delay_ms.p90)}</td><td class="mono">${fmtMs(v.delay_ms.p99)}</td><td class="mono">${fmtMs(v.jitter_ms)}</td></tr>`;
+  }));
+  $("table").innerHTML = h + "</tbody>";
+}
+
+// ---------------------------------------------------------------- delay chart
+const cc = $("chart"); let cw = 0, ch = 0;
+const PAD = { l: 52, r: 14, t: 34, b: 28 }, YMIN = 10, YMAX = 100000;
+const cx = t => PAD.l + (cw - PAD.l - PAD.r) * t / L.t_end;
+const cy = ms => { const v = Math.log10(Math.min(YMAX, Math.max(YMIN, ms))); return ch - PAD.b - (ch - PAD.t - PAD.b) * (v - 1) / 4; };
+function mark(g, shape, x, y, s) {
+  g.beginPath();
+  if (shape === "circle") g.arc(x, y, s, 0, 7);
+  else if (shape === "square") g.rect(x - s, y - s, 2 * s, 2 * s);
+  else if (shape === "tri") { g.moveTo(x, y - s * 1.2); g.lineTo(x + s * 1.1, y + s * .8); g.lineTo(x - s * 1.1, y + s * .8); g.closePath(); }
+  else { g.moveTo(x, y - s * 1.3); g.lineTo(x + s * 1.1, y); g.lineTo(x, y + s * 1.3); g.lineTo(x - s * 1.1, y); g.closePath(); }
+}
+let chartImg = null;
+function drawChart() {
+  const dpr = window.devicePixelRatio || 1; cw = cc.clientWidth; ch = cc.clientHeight;
+  cc.width = Math.round(cw * dpr); cc.height = Math.round(ch * dpr);
+  const g = cc.getContext("2d"); g.setTransform(dpr, 0, 0, dpr, 0, 0); g.clearRect(0, 0, cw, ch);
+  g.font = `400 11px ${css("--mono")}`; g.fillStyle = css("--ink-3"); g.strokeStyle = css("--line"); g.lineWidth = 1;
+  for (const v of [10, 100, 1000, 10000, 100000]) { const y = cy(v); g.beginPath(); g.moveTo(PAD.l, y); g.lineTo(cw - PAD.r, y); g.stroke(); g.textAlign = "right"; g.fillText(fmtMs(v), PAD.l - 6, y + 4); }
+  g.textAlign = "center";
+  for (let t = 0; t <= L.t_end; t += 10) g.fillText(t + " s", cx(t), ch - 8);
+  g.textAlign = "left"; g.fillText("lost", 6, PAD.t - 8);
+  // level window
+  g.fillStyle = css("--panel-2"); g.globalAlpha = .7; g.fillRect(cx(60), PAD.t, cx(L.t_end) - cx(60), ch - PAD.t - PAD.b); g.globalAlpha = 1;
+  g.fillStyle = css("--ink-3"); g.textAlign = "right"; g.fillText("sending stops →", cx(60) - 4, PAD.t + 12); g.textAlign = "left";
+  FLOWS.forEach((f, k) => {
+    const fr = L.flows[f.id].frames, many = fr.length > 1500, col = css(f.c);
+    g.fillStyle = col; g.strokeStyle = css("--panel"); g.lineWidth = 1;
+    for (const x of fr) {
+      if (x[2] === null) { g.globalAlpha = .8; mark(g, f.shape, cx(x[1]), PAD.t - 12 + k * 0 , 2.2); g.fill(); continue; }
+      g.globalAlpha = many ? .5 : .85; mark(g, f.shape, cx(x[1]), cy(x[3]), many ? 2 : 3); g.fill(); if (!many) g.stroke();
+    }
+    g.globalAlpha = 1;
+  });
+  chartImg = g.getImageData(0, 0, cc.width, cc.height);
+  $("chartlegend").innerHTML = FLOWS.map(f => { const v = L.flows[f.id];
+    return `<span><svg width="12" height="12" viewBox="-6 -6 12 12" aria-hidden="true" style="vertical-align:-1px;margin-right:6px">${{ circle: '<circle r="4.5"/>', square: '<rect x="-4" y="-4" width="8" height="8"/>', tri: '<path d="M0-5 5 3.5h-10z"/>', diamond: '<path d="M0-5.5 4.5 0 0 5.5-4.5 0z"/>' }[f.shape].replace("/>", ` fill="var(${f.c})"/>`)}</svg>${f.name} · ${v.whole}/${v.sent} · median ${fmtMs(v.delay_ms.p50)}</span>`; }).join("");
+}
+function drawPlayhead() {
+  if (!chartImg) return;
+  const g = cc.getContext("2d"); g.putImageData(chartImg, 0, 0);
+  const dpr = window.devicePixelRatio || 1; g.setTransform(dpr, 0, 0, dpr, 0, 0);
+  g.strokeStyle = css("--ink"); g.lineWidth = 1.5; g.beginPath(); g.moveTo(cx(T), PAD.t - 18); g.lineTo(cx(T), ch - PAD.b); g.stroke();
+}
+cc.addEventListener("mousemove", e => {
+  if (!L) return;
+  const r = cc.getBoundingClientRect(), t = (e.clientX - r.left - PAD.l) / (cw - PAD.l - PAD.r) * L.t_end, tip = $("tip");
+  if (t < 0 || t > L.t_end) { tip.hidden = true; return; }
+  const rows = FLOWS.map(f => { let best = null; for (const x of L.flows[f.id].frames) if (!best || Math.abs(x[1] - t) < Math.abs(best[1] - t)) best = x;
+    return best ? `<span><i class="swatch" style="--c:var(${f.c})"></i>${f.name} #${best[0]} sent ${best[1].toFixed(2)} s: ${best[2] === null ? "lost" : fmtMs(best[3])}</span>` : ""; });
+  tip.innerHTML = rows.join(""); tip.hidden = false;
+  const x = e.clientX - r.left; tip.style.left = Math.min(x + 12, cw - tip.offsetWidth - 4) + "px"; tip.style.top = "8px";
+});
+cc.addEventListener("mouseleave", () => { $("tip").hidden = true; });
+
+// ---------------------------------------------------------------- player
+function setT(t) { T = t; $("scrub").value = t; $("clock").textContent = `${t.toFixed(1)} s`; if (P || L) { drawFloor(); drawCams(); drawPlayhead(); } }
+let last = 0;
+function frame(ts) {
+  const dt = last ? Math.min(0.1, (ts - last) / 1000) : 0; last = ts;
+  if (playing && L) { let t = T + dt * speed; if (t > L.t_end) t = 0; setT(t); }
+  requestAnimationFrame(frame);
+}
+$("play").addEventListener("click", () => { playing = !playing; $("play").textContent = playing ? "❚❚ Pause" : "▶ Play"; $("play").setAttribute("aria-label", playing ? "Pause" : "Play"); });
+$("speed").addEventListener("click", () => { speed = speed === 1 ? 2 : speed === 2 ? 4 : 1; $("speed").textContent = speed + "×"; });
+$("scrub").addEventListener("input", e => setT(+e.target.value));
+window.addEventListener("resize", () => { if (!F) return; sizeFloor(); if (L) { drawChart(); setT(T); } });
+if (matchMedia("(prefers-reduced-motion: reduce)").matches) { playing = false; $("play").textContent = "▶ Play"; }
+matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => { if (L) { drawChart(); setT(T); } });
+new MutationObserver(() => { if (L) { drawChart(); setT(T); } }).observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
+
+async function boot() {
+  R = await (await fetch("data/report.json")).json();
+  setupScene(R.meta.floor); sizeFloor();
+  $("levels").innerHTML = R.levels.map((Lv, i) => { const k = Lv.info.kbps;
+    return `<button type="button" aria-pressed="false" data-i="${i}">${Lv.name}<small>NR ${(k.lidar + k.robots).toFixed(0)} · BLE ${(k.cam1).toFixed(0)}+${(k.cam2).toFixed(0)} kbit/s</small></button>`; }).join("");
+  document.querySelectorAll("#levels button").forEach(b => b.addEventListener("click", () => { loadLevel(+b.dataset.i); setT(0); }));
+  await loadLevel(0); drawChart(); setT(0);
+  requestAnimationFrame(frame);
+}
+boot().catch(e => { $("tiles").innerHTML = `<span class="loading">Could not load the recorded run (${e.message}). Reload the page to try again.</span>`; });
+</script>
+
+</body></html>

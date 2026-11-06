@@ -181,7 +181,8 @@ hci_of() {   # hci_of <address>: the hciN adapter with that address, if attached
   local h n
   for h in /sys/class/bluetooth/hci*; do
     [ -e "$h" ] || continue
-    n=${h##*/}; btmgmt --index "${n#hci}" info 2>/dev/null | grep -qi "addr $1" && { echo "$n"; return; }
+    # hciconfig, not btmgmt: btmgmt hangs or prints nothing without a terminal
+    n=${h##*/}; timeout 5 hciconfig "$n" </dev/null 2>/dev/null | grep -qi "BD Address: $1" && { echo "$n"; return; }
   done
 }
 ble_pid() { pgrep -f "^python.* -u $HERE/[b]le_ip_link.py --connect .* --index $1 " 2>/dev/null | head -1; }

@@ -27,13 +27,16 @@ class GnbBridge:
         self.board = Board(config.GNB_BOARD)
         print("gNB board:", self.board.ping(), flush=True)
         self.board.configure(config.RADIO_CHANNEL, config.RADIO_POWER)
+        self.board.led_solid(OFF, False)   # clear LED1 left on by an older bridge
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         self.sock.setsockopt(socket.SOL_SOCKET, socket.SO_RCVBUF, 4 << 20)
         self.sock.bind(("0.0.0.0", config.GNB_UDP_PORT))
         self.reasm = Reassembler()
         self.rnti_ue = {}            # C-RNTI -> ue_id, learnt from the UEs' UL messages
-        self.led = None
+        self.led = (OFF, False)
         self.led_t = 0.0
+        self.recent = {}      # ue_id -> last time it was served
+        self.rr = 0
         self.stats = dict(slots=0, dl_bytes=0, ul_bytes=0, polls=0, poll_timeouts=0, air_pkts=0)
         self.t_stats = time.time()
         self.tele = self.new_tele()
@@ -89,19 +92,22 @@ class GnbBridge:
                 return msg
 
     def show_leds(self, served_dl, served_ul):
-        """served_*: ue_id -> bytes in this slot."""
+        """served_*: ue_id -> bytes in this slot. The board blinks the colour of each UE served in the last second
+        in turn, every 0.4 s: blue for eMBB (nrUE1), red for URLLC (nrUE2), so with both active it alternates."""
         now = time.time()
-        if served_dl or served_ul:
-            ue = max(set(served_dl) | set(served_ul), key=lambda u: served_dl.get(u, 0) + served_ul.get(u, 0))
-            want = (config.CLASS_LED[config.UES[ue][2]][0], ue in served_ul)
+        for u in set(served_dl) | set(served_ul):
+            self.recent[u] = now
+        if now - self.led_t >= 0.4:
             self.led_t = now
-        elif now - self.led_t > 0.3:
-            want = (OFF, False)
-        else:
-            return
-        if want != self.led:
-            self.board.led_solid(want[0], want[1])
-            self.led = want
+            active = sorted(u for u, t in self.recent.items() if now - t < 1.0)
+            if active:
+                self.rr = (self.rr + 1) % len(active)
+                u = active[self.rr]
+                color = config.CLASS_LED[config.UES[u][2]][0]
+                self.board.led_blink(color, 1)
+                self.led = (color, u in served_ul)
+            else:
+                self.led = (OFF, False)
         if now - self.t_led >= 0.1:  # mirror of the board LEDs for the dashboard, 10 Hz
             self.t_led = now
             ue = next((u for u in config.UES if config.CLASS_LED[config.UES[u][2]][0] == self.led[0]), 0)
