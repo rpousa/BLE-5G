@@ -21,6 +21,13 @@
 #include "fwk_platform.h"
 #include "fwk_platform_ble.h"
 #include "board.h"
+#include "fsl_lpuart.h"
+#include "pin_mux.h"
+
+/* nrlink v9: HCI UART (LPUART0, RTS/CTS) and the VCOM (LPUART1, "isp" text command only) */
+#define HCI_UART      LPUART0
+#define HCI_UART_IRQn LPUART0_IRQn
+#define VCOM_UART     LPUART1
 
 #include "controller_interface.h"
 #include "controller_api.h"
@@ -172,14 +179,14 @@ uint32_t                        gHcitResyncCount;   /* partial packets dropped (
 /* nrlink v4 diagnostics: when the application stops (assert, HardFault, or a main loop that makes no progress for
  * 2 s), send the host an HCI vendor event 0xFF, subevent 0xF7, every 2 s:
  *   kind(1: 1 assert, 2 hardfault, 3 stall) pc(4) lr(4) xpsr(4) info(4: assert line / CFSR / stalled ms)
- *   resyncs(4) uartTxQueue(2) sendErrors(4) lastSendError(4) irq(4: LPUART1 NVIC enabled b0, active b1, pending b2,
+ *   resyncs(4) uartTxQueue(2) sendErrors(4) lastSendError(4) irq(4: HCI UART NVIC enabled b0, active b1, pending b2,
  *   main-loop count << 8) text(assert file)
  * v6: kind 6 = interrupts found disabled at the top of the main loop, where they must be on: PRIMASK, BASEPRI,
  *   OSA nesting count, loops seen masked (in pc, lr, xpsr, info). After 4 reports interrupts are turned back on.
  * v5: kind 4 = on request (vendor command 0xFDB2, proves the path works); v7: its pc/lr/xpsr/info slots carry stack
- *   bytes used (high-water mark), stack size, LPUART1 CTRL, interrupt heals, kind 5 = UART input left unread for 1 s
- *   (pc of the interrupted code, then LPUART1 STAT, CTRL, WATER instead of lr, xpsr, info).
- * Written by polling LPUART1, so it works with interrupts blocked. btmon shows it as a vendor event. */
+ *   bytes used (high-water mark), stack size, HCI UART CTRL, interrupt heals, kind 5 = UART input left unread for 1 s
+ *   (pc of the interrupted code, then HCI UART STAT, CTRL, WATER instead of lr, xpsr, info).
+ * v9: written by polling the HCI UART (LPUART0), so it works with interrupts blocked. btmon shows it as a vendor event. */
 extern volatile uint32_t gOsaLoopCount;
 static volatile uint32_t mDiagSendErrors, mDiagLastSendError;
 static volatile uint8_t  mDiagKind;
@@ -189,8 +196,8 @@ static uint16_t                 nb_pkt_in_uart_tx_queue;
 
 static void Diag_PutByte(uint8_t b)
 {
-    for (volatile uint32_t i = 0U; ((LPUART1->STAT & LPUART_STAT_TDRE_MASK) == 0U) && (i < 200000U); i++) { }
-    LPUART1->DATA = b;
+    for (volatile uint32_t i = 0U; ((HCI_UART->STAT & LPUART_STAT_TDRE_MASK) == 0U) && (i < 200000U); i++) { }
+    HCI_UART->DATA = b;
 }
 
 static void Diag_Report(uint8_t kind, uint32_t pc, uint32_t lr, uint32_t xpsr, uint32_t info)
@@ -198,8 +205,8 @@ static void Diag_Report(uint8_t kind, uint32_t pc, uint32_t lr, uint32_t xpsr, u
     uint8_t p[64];
     uint8_t n = 0U;
     uint32_t w[] = {pc, lr, xpsr, info, gHcitResyncCount};
-    uint32_t irq = (NVIC_GetEnableIRQ(LPUART1_IRQn) ? 1U : 0U) | (NVIC_GetActive(LPUART1_IRQn) ? 2U : 0U) |
-                   (NVIC_GetPendingIRQ(LPUART1_IRQn) ? 4U : 0U) | (gOsaLoopCount << 8);
+    uint32_t irq = (NVIC_GetEnableIRQ(HCI_UART_IRQn) ? 1U : 0U) | (NVIC_GetActive(HCI_UART_IRQn) ? 2U : 0U) |
+                   (NVIC_GetPendingIRQ(HCI_UART_IRQn) ? 4U : 0U) | (gOsaLoopCount << 8);
     p[n++] = 0xF7U;
     p[n++] = kind;
     for (uint8_t k = 0U; k < 5U; k++) { for (uint8_t b = 0U; b < 4U; b++) { p[n++] = (uint8_t)(w[k] >> (8U * b)); } }
@@ -224,17 +231,88 @@ void BOARD_AppAssertHook(const char *file, int line)
     mDiagKind = 1U;       /* __assert_func now loops; the tick hook reports it */
 }
 
+/* nrlink v9: jump to the ROM ISP bootloader with a quiet core (same sequence as nrlink's enter_isp). Both UARTs are
+ * reset so the ROM can autobaud on the VCOM (blhost). Used by HCI vendor command 0xFDB1 and the VCOM text "isp". */
+static void Hcibb_EnterIsp(void)
+{
+    static const uint32_t bootArg = ROM_ISP_BOOT_ARG;
+    void (*runBootloader)(void *arg) = *(void (**)(void *))ROM_API_TREE_ADDR;
+    LPUART_Type *const uarts[2] = {LPUART0, LPUART1};
+    __disable_irq();
+    SysTick->CTRL = 0U;
+    for (uint32_t i = 0U; i < (sizeof(NVIC->ICER) / sizeof(NVIC->ICER[0])); i++)
+    {
+        NVIC->ICER[i] = 0xFFFFFFFFU;
+        NVIC->ICPR[i] = 0xFFFFFFFFU;
+    }
+    for (uint32_t i = 0U; i < 2U; i++)
+    {
+        if ((uarts[i]->CTRL & (LPUART_CTRL_TE_MASK | LPUART_CTRL_RE_MASK)) == 0U) { continue; }
+        uarts[i]->CTRL  = 0U;
+        uarts[i]->FIFO  = LPUART_FIFO_TXFLUSH_MASK | LPUART_FIFO_RXFLUSH_MASK;
+        uarts[i]->WATER = 0U;
+        uarts[i]->MODIR = 0U;
+        uarts[i]->STAT  = uarts[i]->STAT;
+    }
+    SCB->VTOR = 0U;
+    __DSB();
+    __ISB();
+    runBootloader((void *)&bootArg);
+    for (;;) { }
+}
+
+/* nrlink v9: the VCOM at 115200, receive polled from the SysTick hook; only "isp" is understood (board.sh isp) */
+static volatile uint8_t mVcomReady;
+static void Vcom_Init(void)
+{
+    lpuart_config_t cfg;
+    CLOCK_SetIpSrc(BOARD_DEBUG_UART_CLK, BOARD_DEBUG_UART_CLKSRC);
+    CLOCK_EnableClockLPMode(BOARD_DEBUG_UART_CLK, kCLOCK_IpClkControl_fun3);
+    BOARD_InitPinLPUART1_RX();
+    BOARD_InitPinLPUART1_TX();
+    LPUART_GetDefaultConfig(&cfg);
+    cfg.baudRate_Bps = 115200U;
+    cfg.enableTx     = true;
+    cfg.enableRx     = true;
+    if (LPUART_Init(VCOM_UART, &cfg, BOARD_DEBUG_UART_CLK_FREQ) == kStatus_Success) { mVcomReady = 1U; }
+}
+
+static void Vcom_Poll(void)
+{
+    static uint8_t matched;
+    static const char cmd[] = "isp";
+    if (mVcomReady == 0U) { return; }
+    if ((VCOM_UART->STAT & LPUART_STAT_OR_MASK) != 0U) { VCOM_UART->STAT = LPUART_STAT_OR_MASK; }
+    while ((VCOM_UART->STAT & LPUART_STAT_RDRF_MASK) != 0U)
+    {
+        char c = (char)(VCOM_UART->DATA & 0xFFU);
+        matched = (c == cmd[matched]) ? (uint8_t)(matched + 1U) : ((c == cmd[0]) ? 1U : 0U);
+        if (matched == 3U)
+        {
+            static const char reply[] = "ISP\r\n";
+            for (uint32_t i = 0U; i < sizeof(reply) - 1U; i++)
+            {
+                while ((VCOM_UART->STAT & LPUART_STAT_TDRE_MASK) == 0U) { }
+                VCOM_UART->DATA = (uint8_t)reply[i];
+            }
+            while ((VCOM_UART->STAT & LPUART_STAT_TC_MASK) == 0U) { }
+            Hcibb_EnterIsp();
+        }
+    }
+}
+
 void OSA_SysTickHook(uint32_t *frame)
 {
     static uint32_t lastLoop, stillMs, rxWaitMs;
+    Vcom_Poll();
     /* v5: input sitting in the RX FIFO (or an overrun) for 1 s means nobody services the UART */
-    if ((((LPUART1->WATER & LPUART_WATER_RXCOUNT_MASK) >> LPUART_WATER_RXCOUNT_SHIFT) != 0U) ||
-        ((LPUART1->STAT & LPUART_STAT_OR_MASK) != 0U))
+    if ((((HCI_UART->WATER & LPUART_WATER_RXCOUNT_MASK) >> LPUART_WATER_RXCOUNT_SHIFT) != 0U) ||
+        ((HCI_UART->STAT & LPUART_STAT_OR_MASK) != 0U))
     {
         rxWaitMs++;
         if ((rxWaitMs % 2000U) == 1000U)
         {
-            Diag_Report(5U, frame[6], LPUART1->STAT, LPUART1->CTRL, LPUART1->WATER);
+            Diag_Report(5U, frame[6], HCI_UART->STAT, HCI_UART->CTRL, HCI_UART->WATER);
         }
     }
     else
@@ -282,12 +360,11 @@ static void Hcibb_LedGreen(void)
     const uint32_t g = 1UL << 19, b = 1UL << 20, r = 1UL << 21;
     CLOCK_EnableClock(kCLOCK_PortA);
     CLOCK_EnableClock(kCLOCK_GpioA);
-    PORTA->PCR[19] = PORT_PCR_MUX(1);
+    (void)g;                 /* v9: PTA19 is LPUART0_RTS_b, so green is lit whenever the board can take HCI input */
     PORTA->PCR[20] = PORT_PCR_MUX(1);
     PORTA->PCR[21] = PORT_PCR_MUX(1);
     GPIOA->PSOR = b | r;     /* blue and red off */
-    GPIOA->PCOR = g;         /* green on */
-    GPIOA->PDDR |= g | b | r;
+    GPIOA->PDDR |= b | r;
 }
 
 uint32_t OSA_NrlinkIrqNesting(void);
@@ -777,7 +854,9 @@ void main_task(uint32_t param)
         platformInitialized = 1;
         Diag_PaintStack();
         Hcibb_LedGreen();
-#if defined(gBoardUse3MbOnUart0_d) && (gBoardUse3MbOnUart0_d > 0U)
+        Vcom_Init();
+#if (defined(gBoardUse3MbOnUart0_d) && (gBoardUse3MbOnUart0_d > 0U)) || \
+    (defined(gBoardUseUart0HwFlowControl) && (gBoardUseUart0HwFlowControl > 0))
         // Uart Flow Control Watermark - Temp workaround while waiting for LL-1854 and MCUX-77821
         LPUART0->MODIR &= ~LPUART_MODIR_RTSWATER_MASK;
         LPUART0->MODIR |= LPUART_MODIR_RTSWATER(3);
@@ -880,8 +959,8 @@ void main_task(uint32_t param)
             uint8_t event[6] = {0x0E, 0x04, 0x01, maPendingHciCmd[1], maPendingHciCmd[2], 0x00};
             /* the report bypasses the serial manager: let queued packets leave first */
             for (volatile uint32_t i = 0U; i < 2000000U && nb_pkt_in_uart_tx_queue != 0U; i++) { }
-            for (volatile uint32_t i = 0U; ((LPUART1->STAT & LPUART_STAT_TC_MASK) == 0U) && (i < 2000000U); i++) { }
-            Diag_Report(4U, Diag_StackUsed(), (uint32_t)((uint8_t *)__StackTop - (uint8_t *)__StackLimit), LPUART1->CTRL, gDiagIrqHeals);
+            for (volatile uint32_t i = 0U; ((HCI_UART->STAT & LPUART_STAT_TC_MASK) == 0U) && (i < 2000000U); i++) { }
+            Diag_Report(4U, Diag_StackUsed(), (uint32_t)((uint8_t *)__StackTop - (uint8_t *)__StackLimit), HCI_UART->CTRL, gDiagIrqHeals);
             HCI_AppControllerRxCallback(0x04, event, 6U);
         }
         else
@@ -893,24 +972,9 @@ void main_task(uint32_t param)
             HCI_AppControllerRxCallback(0x04, event, 6U);
             /* let the command complete event leave the UART */
             for (volatile uint32_t i = 0U; i < 2000000U && nb_pkt_in_uart_tx_queue != 0U; i++) { }
-            while ((LPUART1->STAT & LPUART_STAT_TC_MASK) == 0U) { }
-            /* hand the ROM a quiet core (same sequence as nrlink's enter_isp) */
-            __disable_irq();
-            SysTick->CTRL = 0U;
-            for (uint32_t i = 0U; i < (sizeof(NVIC->ICER) / sizeof(NVIC->ICER[0])); i++)
-            {
-                NVIC->ICER[i] = 0xFFFFFFFFU;
-                NVIC->ICPR[i] = 0xFFFFFFFFU;
-            }
-            LPUART1->CTRL  = 0U;
-            LPUART1->FIFO  = LPUART_FIFO_TXFLUSH_MASK | LPUART_FIFO_RXFLUSH_MASK;
-            LPUART1->WATER = 0U;
-            LPUART1->STAT  = LPUART1->STAT;
-            SCB->VTOR      = 0U;
-            __DSB();
-            __ISB();
-            runBootloader((void *)&bootArg);
-            for (;;) { }
+            while ((HCI_UART->STAT & LPUART_STAT_TC_MASK) == 0U) { }
+            (void)bootArg; (void)runBootloader;
+            Hcibb_EnterIsp();
         }
         else
 #ifdef HCI_HW_RESET_OPCODE

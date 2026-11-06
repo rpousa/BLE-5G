@@ -97,9 +97,14 @@
 /* define the max tx power setting, allowed value 0, 7 or 10 */
 #define gAppMaxTxPowerDbm_c                    10U
 
-/* nrlink: HCI UART at 115200 baud, host side: btattach -N -P h4 -S 115200. 1 Mbaud loses bytes in bursts longer than
- * ~11 bytes (interrupt-driven serial manager, no RTS/CTS on the MCU-Link VCOM), which breaks e.g. LE scan commands. */
-#define BOARD_APP_UART_BAUDRATE                115200U
+/* nrlink v9: HCI on LPUART0 with RTS/CTS, wired to a Raspberry Pi Pico (USB-UART bridge):
+ *   PTA16 RX = J1-1, PTA17 TX = J1-2, PTA18 CTS_b = J2-9, PTA19 RTS_b = J1-5 (also the green LED), GND = J2-4.
+ * board.c muxes PTA18/PTA19 and board_comp.c enables RX RTS / TX CTS when gBoardUseUart0HwFlowControl is set.
+ * Up to v8 HCI ran on the MCU-Link VCOM (LPUART1, no flow control) at 115200: 1 Mbaud lost bytes there.
+ * LPUART1 (VCOM) now only answers the text command "isp" (115200) for remote reflashing. */
+#define BOARD_APP_UART_INSTANCE                0U
+#define gBoardUseUart0HwFlowControl            1
+#define BOARD_APP_UART_BAUDRATE                1000000U
 
 /* nrlink v3: receive ring buffer of the HCI UART. The SDK default is 128 bytes, less than one full ACL packet from the
  * host (256 + 5). The host may send 12 of them back to back (ACL credits), and while the main loop hands a packet
