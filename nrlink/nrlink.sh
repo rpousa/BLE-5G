@@ -11,6 +11,10 @@
 #   ./nrlink.sh boards    find the boards and assign this PC's roles (boards.json); bridges must be stopped.
 #                         Without --role it uses the role of this PC's IP (UE_PC -> ue, CORE_PC -> core, else all)
 #   ./nrlink.sh flash <serial>   back up, then write the nrlink firmware to a board in bootloader mode
+#   ./nrlink.sh live start|stop|status   the live pages: core PC serves http://<core>:8090/ (factory, closed loop)
+#                         and /arch (architecture); the UE PC runs the agent feeding it. Role from this PC's IP.
+#                         "up" starts them and "down" stops them.
+#   ./nrlink.sh live enable|disable      start them at every boot (user crontab @reboot); they wait for the stack
 #
 #   --role all|core|ue   (up, down, restart, status) which PC of the split setup this is; default all
 #     all   everything on this PC (the original single-PC setup)
@@ -77,6 +81,66 @@ stop_proc() {    # stop_proc <name>: TERM, then KILL after 5 s
 alive() { [ -f "$PID/$1.pid" ] && kill -0 "$(cat "$PID/$1.pid")" 2>/dev/null; }
 
 nstep() { step "$((++S))/$T $*"; }
+
+# ---- live pages (apps/factory_live2.py on the core PC, apps/factory2.py agent on the UE PC)
+LIVE_SIDECARS_CORE="fdl2-edge fdl-live-tx"
+LIVE_SIDECARS_UE="fdl2-robots fdl2-lidar fdl-live-rx-cam1 fdl-live-rx-cam2 fdl-live-rx-lidar fdl-live-rx-robots"
+live_role() { [ "$ROLE_SET" = 1 ] && echo "$ROLE" || host_role; }
+live_start() {
+  local r; r=$(live_role)
+  step "live pages ($r PC)"
+  case "$r" in
+    core)
+      if alive live_server; then ok "live server already running (pid $(cat "$PID/live_server.pid"))"; return 0; fi
+      pkill -f "[f]actory_live2\.py" 2>/dev/null; pkill -f "[f]actory_live\.py" 2>/dev/null; pkill -f "[c]amsrc --truth" 2>/dev/null
+      mkdir -p "$LOG/factory/live2_core"
+      start_proc live_server python3 -u apps/factory_live2.py --http 8090 --level L1
+      wait_for 20 "live pages on :8090" curl -sf -o /dev/null http://127.0.0.1:8090/arch
+      ok "http://$CORE_PC:8090/  (factory floor)   http://$CORE_PC:8090/arch  (architecture)" ;;
+    ue)
+      if alive live_agent; then ok "live agent already running (pid $(cat "$PID/live_agent.pid"))"; return 0; fi
+      pkill -f "[f]actory2\.py agent" 2>/dev/null; pkill -f "[f]actory_dl\.py agent" 2>/dev/null
+      mkdir -p "$LOG/factory/live2"
+      start_proc live_agent python3 -u apps/factory2.py agent --core "$CORE_PC"
+      sleep 2; alive live_agent && ok "agent feeding the core PC $CORE_PC:5300" || die "live agent exited (log $LOG/live_agent.log)" ;;
+    *) printf '   skipped: the live pages need the two-PC split (core and UE PC)\n' ;;
+  esac
+}
+live_stop() {
+  local r c; r=$(live_role)
+  step "live pages ($r PC)"
+  case "$r" in
+    core) stop_proc live_server; pkill -f "[f]actory_live2\.py" 2>/dev/null; pkill -f "[c]amsrc --truth" 2>/dev/null
+          for c in $LIVE_SIDECARS_CORE; do dk rm -f "$c" >/dev/null 2>&1; done ;;
+    ue)   stop_proc live_agent; pkill -f "[f]actory2\.py agent" 2>/dev/null
+          for c in $LIVE_SIDECARS_UE; do dk rm -f "$c" >/dev/null 2>&1; done ;;
+  esac
+  ok "stopped"
+}
+live_status() {
+  local r; r=$(live_role)
+  case "$r" in
+    core) alive live_server && printf 'live server   running (pid %s)  http://%s:8090/  /arch\n' "$(cat "$PID/live_server.pid")" "$CORE_PC" \
+            || printf 'live server   stopped\n'; c=$LIVE_SIDECARS_CORE ;;
+    ue)   alive live_agent && printf 'live agent    running (pid %s) -> %s\n' "$(cat "$PID/live_agent.pid")" "$CORE_PC" || printf 'live agent    stopped\n'
+          c=$LIVE_SIDECARS_UE ;;
+    *) printf 'live pages need the two-PC split\n'; return ;;
+  esac
+  for n in $c; do st=$(dk inspect -f '{{.State.Status}}' "$n" 2>/dev/null) && printf '  %-20s %s\n' "$n" "$st"; done
+  crontab -l 2>/dev/null | grep -q "nrlink.sh live start" && printf 'at boot       enabled (crontab @reboot)\n' || printf 'at boot       disabled\n'
+}
+live_boot() {   # live_boot enable|disable
+  local line="@reboot sleep 45 && $HERE/nrlink.sh live start >> $LOG/live_boot.log 2>&1"
+  { crontab -l 2>/dev/null | grep -v "nrlink.sh live start"; [ "$1" = enable ] && echo "$line"; } | crontab -
+  [ "$1" = enable ] && ok "live pages start at boot: $line" || ok "live pages no longer start at boot"
+}
+live() {
+  case "$ARG" in
+    start) live_start ;; stop) live_stop ;; status) live_status ;; restart) live_stop; live_start ;;
+    enable | disable) live_boot "$ARG" ;;
+    *) die "usage: $0 live start|stop|restart|status|enable|disable" ;;
+  esac
+}
 
 # RAN configs for the free5GC core, generated from the OAI-core ones in ~/oai/deploy/nrlink:
 # the gNB also advertises slice 1/010203 and the nrUEs ask for it with DNN internet
@@ -266,10 +330,12 @@ up_ue() {
     printf '     here:     sudo %s/ue_routing.sh\n     core PC:  sudo ~/oai/nrlink/core_routing.sh --lan\n' "$HERE"
   fi
 
+  ROLE_SET=1 live_start
   printf '\n\033[1mUp (UE PC).\033[0m nrUE1 eMBB, nrUE2 URLLC over the boards; n3iwue1/2 via the core PC N3IWF (%s).\n' "$TRANSPORT"
 }
 
 down_ue() {
+  ROLE_SET=1 live_stop
   step "non-3GPP UEs"
   if [ -n "$(ble_pid 1)$(ble_pid 2)" ]; then   # root processes: stop them through sudo
     sudo -n pkill -TERM -f "[b]le_ip_link.py --connect" 2>/dev/null && ok "stopped the Bluetooth links ble1/ble2" \
@@ -359,6 +425,7 @@ up() {
 
   if [ "$ROLE" = core ]; then
     ble_ap
+    ROLE_SET=1 live_start
     printf '\n\033[1mUp (core PC).\033[0m gNB waiting for the UE PC nrUEs over the air; non-3GPP UEs via the N3IWF 192.168.70.139.\n'
     printf '   gNB telemetry -> %s (dashboard on the UE PC)\n' "$NRLINK_TELEMETRY"
     return 0
@@ -374,6 +441,7 @@ up() {
 
 down() {
   [ "$ROLE" = ue ] && { down_ue; return; }
+  [ "$ROLE" = core ] && ROLE_SET=1 live_stop
   if [ "$ROLE" = core ] && [ -f "$PID/ble_link.pid" ]; then
     step "Bluetooth access point"
     sudo -n pkill -TERM -f "[b]le_ip_link.py --listen" 2>/dev/null && ok "stopped the L2CAP listener" \
@@ -475,6 +543,7 @@ case "$cmd" in
   flash) flash "$ARG" ;;
   down) down ;;
   restart) KEEP_CORE=1; down; KEEP_CORE=0; up ;;
-  status) status ;;
-  *) sed -n '2,25p' "$0"; exit 1 ;;
+  status) status; [ "$ROLE" = all ] || { printf '\n'; ROLE_SET=1 live_status; } ;;
+  live) live ;;
+  *) sed -n '2,29p' "$0"; exit 1 ;;
 esac

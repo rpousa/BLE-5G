@@ -3,6 +3,7 @@
 
   IMSI 208950000000036-038  the three OAI nrUEs (3GPP access over the boards)
   IMSI 208950000000040      the non-3GPP UE (n3iwue, via the N3IWF)
+  IMSI 208950000000041-042  the two non-3GPP UEs over Bluetooth (UE PC n3iwue1/2, same K/OPc as 040)
 
 All on slice SST 1 / SD 010203, DNN internet (UE pool 12.1.1.0/24).
 """
@@ -21,6 +22,8 @@ SUBSCRIBERS = {
     "208950000000037": NRUE,
     "208950000000038": NRUE,
     "208950000000040": N3UE,
+    "208950000000041": N3UE,
+    "208950000000042": N3UE,
 }
 
 

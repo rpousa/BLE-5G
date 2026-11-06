@@ -3,6 +3,8 @@
 
   boards.py            probe every MCU-Link, assign roles, write boards.json, print the table
   boards.py --check    same, but exit 1 when a role has no board (used by nrlink.sh up)
+  --need gnb,ue1,...   only these roles are required and written to boards.json (default: all four);
+                       nrlink.sh up --role core uses --need gnb
 
 A board counts when its firmware answers the nrlink PING. Boards keep the role they had in
 boards.json (or the defaults in config.py) when they are present; a missing role goes to any other
@@ -57,6 +59,20 @@ def probe(sn):
             b.close()
 
 
+def probe_hci(sn):
+    """True if the board runs the hci_bb Bluetooth controller firmware (answers HCI Reset, 115200 or 1M baud)."""
+    try:
+        sys.path.insert(0, os.path.expanduser("~/nxp"))
+        from hci_probe import open_hci  # noqa: E402
+        s, _ = open_hci(sn)
+        if s is None:
+            return False
+        s.close()
+        return True
+    except Exception:  # noqa: BLE001  port busy, gone, or not HCI
+        return False
+
+
 def previous():
     if os.path.exists(FILE):
         with open(FILE) as f:
@@ -65,7 +81,16 @@ def previous():
 
 
 def main():
+    global ROLES
     check = "--check" in sys.argv
+    if "--need" in sys.argv:
+        i = sys.argv.index("--need")
+        need = sys.argv[i + 1].split(",") if i + 1 < len(sys.argv) else []
+        bad = [r for r in need if r not in ROLES]
+        if not need or bad:
+            print(f"  --need takes a comma list of {','.join(ROLES)}")
+            return 2
+        ROLES = [r for r in ROLES if r in need]
     found = {sn: probe(sn) for sn in connected()}
     nrlink = [sn for sn, v in found.items() if v and v.startswith("nrlink")]
     prev = previous()
@@ -88,6 +113,11 @@ def main():
     for sn in spare:
         print(f"  {'spare':<10} {sn:<15} {found[sn]}")
     other = [sn for sn, v in found.items() if sn not in nrlink]
+    ble = [sn for sn in other if probe_hci(sn)]   # Bluetooth boards (non-3GPP UEs), roles ble1, ble2 by serial order
+    other = [sn for sn in other if sn not in ble]
+    roles.update({f"ble{i + 1}": sn for i, sn in enumerate(sorted(ble))})
+    for i, sn in enumerate(sorted(ble)):
+        print(f"  {'BLE' + str(i + 1):<10} {sn:<15} Bluetooth controller (hci_bb)")
     for sn in other:
         print(f"  {'no nrlink':<10} {sn:<15} not running the nrlink firmware")
 

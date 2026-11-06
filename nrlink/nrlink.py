@@ -172,8 +172,11 @@ def items(msg):
         off += ln
 
 
-# ---- telemetry for the dashboard server (fire and forget, JSON over UDP to localhost)
-TELEMETRY_ADDR = ("127.0.0.1", 8091)
+# ---- telemetry for the dashboard server (fire and forget, JSON over UDP; localhost unless
+# NRLINK_TELEMETRY=host:port points it at a dashboard on another PC)
+_tele_env = os.environ.get("NRLINK_TELEMETRY", "").strip()
+TELEMETRY_ADDR = ((_tele_env.rsplit(":", 1)[0], int(_tele_env.rsplit(":", 1)[1])) if ":" in _tele_env
+                  else ("127.0.0.1", 8091))
 _tele_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 
 

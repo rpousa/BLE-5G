@@ -1,0 +1,356 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Factory Floor Live</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Semi+Condensed:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+<style>
+/* Layout: control-room board, same family as the nrlink architecture page. Player bar, then the shared floor
+   (LiDAR + robots) beside the two camera feeds, then the delay timeline and the level table.
+   Colour = which radio carries it, matching the board LEDs: blue eMBB (nrUE1), red URLLC (nrUE2), green Bluetooth. */
+:root {
+  --bg: #eef1f4; --panel: #ffffff; --panel-2: #f5f7f9; --line: #d3d9e0;
+  --ink: #17202b; --ink-2: #4b5866; --ink-3: #7a8693;
+  --embb: #1f63d6; --urllc: #d0342c; --ble: #1d8a3c; --ble2: #0f7f86; --warn: #b86e00; --bad: #b3261e;
+  --floor: #e3e7eb; --machine: #9aa6b2; --tape: #c9a227; --zone: #1d8a3c;
+  --display: "Barlow Semi Condensed", "Arial Narrow", "Roboto Condensed", system-ui, sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+  --r: 6px;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #0e141b; --panel: #151d26; --panel-2: #1b2530; --line: #2a3644; --ink: #e6ebf0; --ink-2: #a9b4bf; --ink-3: #74808c;
+  --embb: #5b93f5; --urllc: #f0605a; --ble: #45c06a; --ble2: #3cc3c9; --warn: #f0a830; --bad: #f2786f;
+  --floor: #1c2631; --machine: #44515f; --tape: #a98a20; --zone: #45c06a; color-scheme: dark } }
+:root[data-theme="dark"] {
+  --bg: #0e141b; --panel: #151d26; --panel-2: #1b2530; --line: #2a3644; --ink: #e6ebf0; --ink-2: #a9b4bf; --ink-3: #74808c;
+  --embb: #5b93f5; --urllc: #f0605a; --ble: #45c06a; --ble2: #3cc3c9; --warn: #f0a830; --bad: #f2786f;
+  --floor: #1c2631; --machine: #44515f; --tape: #a98a20; --zone: #45c06a; color-scheme: dark }
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+body { margin: 0; }
+body { background: var(--bg); color: var(--ink); font-family: var(--display); font-size: 15px; line-height: 1.4; }
+.wrap { max-width: 1380px; margin: 0 auto; padding-block: 14px 40px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); display: grid; gap: 14px; }
+.mono { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+h1, h2, h3 { margin: 0; font-weight: 600; text-wrap: balance; }
+h1 { font-size: 1.55rem; } h2 { font-size: 1.15rem; } h3 { font-size: 1rem; }
+.label { font-size: .72rem; letter-spacing: .09em; text-transform: uppercase; color: var(--ink-3); font-weight: 600; }
+.sub { color: var(--ink-2); font-size: .95rem; max-width: 92ch; }
+.card { background: var(--panel); border: 1px solid var(--line); border-radius: var(--r); min-width: 0; }
+.card > .hd { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 12px; padding: 11px 14px 9px; border-bottom: 1px solid var(--line); }
+.card > .hd .meta { margin-left: auto; color: var(--ink-3); font-size: .82rem; }
+.bd { padding: 12px 14px; display: grid; gap: 12px; min-width: 0; }
+header { display: grid; gap: 4px; }
+
+/* player */
+.player { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 16px; padding: 10px 14px; }
+.lv { display: flex; flex-wrap: wrap; gap: 6px; }
+.lv button, .ctl button { font: inherit; font-size: .9rem; color: var(--ink); background: var(--panel-2); border: 1px solid var(--line); border-radius: 999px; padding: 5px 12px; cursor: pointer; display: inline-flex; gap: 6px; align-items: baseline; }
+.lv button small { font-family: var(--mono); font-size: .72rem; color: var(--ink-3); }
+.lv button:disabled { opacity: .45; cursor: not-allowed; }
+.lv button[aria-pressed="true"] { border-color: var(--ink); box-shadow: inset 0 0 0 1px var(--ink); font-weight: 600; }
+button:focus-visible, input:focus-visible { outline: 2px solid var(--embb); outline-offset: 2px; }
+.ctl { display: flex; align-items: center; gap: 8px; flex: 1 1 320px; min-width: 0; }
+.ctl input[type=range] { flex: 1; min-width: 80px; accent-color: var(--ink-2); }
+.clock { font-family: var(--mono); font-size: .9rem; min-width: 9ch; text-align: right; }
+
+/* main */
+.main { display: grid; grid-template-columns: minmax(0, 1.75fr) minmax(0, 1fr); gap: 14px; align-items: start; }
+.floorbox { position: relative; }
+canvas#floor { display: block; width: 100%; height: auto; aspect-ratio: 64 / 40; max-width: 100%; }
+.cams { display: grid; gap: 12px; }
+.cam { display: grid; gap: 6px; }
+.cam .view { position: relative; background: #0b0f14; border-radius: 4px; overflow: hidden; aspect-ratio: 160 / 96; max-width: 100%; }
+.cam img { display: block; width: 100%; height: 100%; object-fit: contain; image-rendering: pixelated; }
+.cam .badge { position: absolute; right: 6px; top: 6px; font-family: var(--mono); font-size: .72rem; font-weight: 600; padding: 2px 7px; border-radius: 4px; background: rgba(0,0,0,.65); color: #fff; }
+.cam .badge.stale { background: var(--bad); }
+.cam .none { position: absolute; inset: 0; display: grid; place-items: center; color: #9aa6b2; font-family: var(--mono); font-size: .8rem; text-align: center; padding: 8px; }
+.row { display: flex; flex-wrap: wrap; gap: 4px 14px; align-items: baseline; font-size: .86rem; color: var(--ink-2); }
+.row b { color: var(--ink); font-family: var(--mono); font-weight: 600; font-size: .84rem; }
+.swatch { display: inline-block; width: 10px; height: 10px; border-radius: 2px; background: var(--c); margin-right: 6px; vertical-align: -1px; }
+.tiles { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
+.tile { border-top: 3px solid var(--c); padding-top: 6px; display: grid; gap: 2px; min-width: 0; }
+.tile .v { font-family: var(--mono); font-size: 1.05rem; font-weight: 600; }
+.tile .v.bad { color: var(--bad); }
+.tile small { color: var(--ink-3); font-size: .78rem; }
+.legend { display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: .84rem; color: var(--ink-2); }
+.chartbox { position: relative; }
+canvas#chart { display: block; width: 100%; height: 300px; }
+.tip { position: absolute; pointer-events: none; background: var(--panel); border: 1px solid var(--line); border-radius: 4px; padding: 6px 9px; font-family: var(--mono); font-size: .76rem; display: grid; gap: 2px; box-shadow: 0 2px 8px rgba(0,0,0,.12); white-space: nowrap; }
+.tbl { overflow-x: auto; }
+table { border-collapse: collapse; width: 100%; font-size: .88rem; }
+th { text-align: left; font-size: .72rem; letter-spacing: .09em; text-transform: uppercase; color: var(--ink-3); font-weight: 600; padding: 6px 10px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+td { padding: 6px 10px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+td.mono { font-size: .8rem; }
+td.bad { color: var(--bad); font-weight: 600; } td.warn { color: var(--warn); font-weight: 600; }
+tr.sel td { background: var(--panel-2); }
+ol.next { margin: 0; padding-left: 20px; display: grid; gap: 8px; color: var(--ink-2); font-size: .92rem; max-width: 100ch; }
+ol.next b { color: var(--ink); font-weight: 600; }
+code { font-family: var(--mono); font-size: .8rem; background: var(--panel-2); padding: 1px 5px; border-radius: 4px; overflow-wrap: anywhere; }
+.loading { color: var(--ink-3); font-family: var(--mono); font-size: .8rem; }
+@media (max-width: 980px) { .main { grid-template-columns: minmax(0, 1fr); } .cams { grid-template-columns: 1fr 1fr; } }
+@media (max-width: 620px) { .cams { grid-template-columns: 1fr; } .tiles { grid-template-columns: 1fr 1fr; } }
+.pill { display: inline-flex; align-items: center; gap: 7px; padding: 4px 11px; border-radius: 999px; font-family: var(--mono); font-size: .78rem; font-weight: 600; border: 1px solid var(--line); background: var(--panel); }
+.pill .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--ink-3); }
+.pill.on .dot { background: var(--ble); animation: pulse 1.6s ease-in-out infinite; } .pill.off .dot { background: var(--bad); }
+@keyframes pulse { 50% { opacity: .35; } }
+ul.log { margin: 0; padding: 0; list-style: none; display: grid; gap: 3px; font-family: var(--mono); font-size: .76rem; color: var(--ink-2); max-height: 200px; overflow: auto; }
+ul.log b { color: var(--ink-3); font-weight: 500; margin-right: 8px; }
+.top { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 18px; }
+.top .title { display: grid; gap: 4px; margin-right: auto; min-width: 0; }
+</style></head><body>
+<div class="wrap">
+  <header class="top">
+    <div class="title">
+      <span class="label">nrlink · live downlink from ext-dn · served by the core PC</span>
+      <h1>Factory Floor Live</h1>
+      <p class="sub">The factory scene runs in 60 s loops, back to back, without end. LiDAR scans go to nrUE1 over 5G NR, robot positions to nrUE2, and two camera feeds to n3iwue1 and n3iwue2 over Bluetooth. Everything below is what the UEs receive right now, with each frame's one-way delay.</p>
+    </div>
+    <span class="pill" id="conn"><span class="dot"></span><span id="conntxt">connecting…</span></span>
+  </header>
+
+  <section class="card">
+    <div class="player">
+      <div class="lv" id="levels" role="group" aria-label="Load level for the next loop"></div>
+      <div class="row" id="loopinfo" style="flex:1 1 300px"></div>
+    </div>
+    <div class="bd" style="border-top:1px solid var(--line)"><div class="tiles" id="tiles"></div></div>
+  </section>
+
+  <section class="main">
+    <article class="card">
+      <div class="hd"><h2>The floor, as the UEs see it now</h2><span class="meta">60 × 36 m · LiDAR at the centre pole, 3 m up</span></div>
+      <div class="bd">
+        <div class="floorbox"><canvas id="floor" aria-label="Factory floor with the last LiDAR scan nrUE1 received and the AGV positions nrUE2 last received, next to where the AGVs are now"></canvas></div>
+        <div class="legend">
+          <span><i class="swatch" style="--c:var(--embb)"></i>last LiDAR scan received (nrUE1)</span>
+          <span><i class="swatch" style="--c:var(--urllc)"></i>AGV where nrUE2 last heard it</span>
+          <span><i class="swatch" style="--c:transparent;outline:1.5px solid var(--ink-2)"></i>AGV where it is now</span>
+          <span><i class="swatch" style="--c:var(--zone);opacity:.5"></i>camera views</span>
+        </div>
+        <div class="row" id="agvrow"></div>
+      </div>
+    </article>
+    <div class="cams">
+      <article class="card cam"><div class="hd"><h3>CAM1 · west half</h3><span class="meta">n3iwue1 · BLE1</span></div>
+        <div class="bd"><div class="view"><img id="cam1img" hidden alt="Last CAM1 frame received by n3iwue1"><div class="none" id="cam1none">no frame yet</div><span class="badge" id="cam1badge" hidden>–</span></div><div class="row" id="cam1row"></div></div></article>
+      <article class="card cam"><div class="hd"><h3>CAM2 · east half</h3><span class="meta">n3iwue2 · BLE2</span></div>
+        <div class="bd"><div class="view"><img id="cam2img" hidden alt="Last CAM2 frame received by n3iwue2"><div class="none" id="cam2none">no frame yet</div><span class="badge" id="cam2badge" hidden>–</span></div><div class="row" id="cam2row"></div></div></article>
+    </div>
+  </section>
+
+  <section class="card">
+    <div class="hd"><h2>One-way delay, last 2 minutes</h2><span class="meta">ext-dn → UE, by send time · log scale · lost frames along the top (called after 30 s)</span></div>
+    <div class="bd">
+      <div class="legend" id="chartlegend"></div>
+      <div class="chartbox"><canvas id="chart" aria-label="One-way delay of every frame in the last two minutes"></canvas></div>
+    </div>
+  </section>
+
+  <section class="card">
+    <div class="hd"><h2>Events</h2><span class="meta">sender, receivers, UE addresses, BLE watchdog</span></div>
+    <div class="bd"><ul class="log" id="log"></ul></div>
+  </section>
+</div>
+<script>
+"use strict";
+const $ = id => document.getElementById(id);
+const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+const FLOWS = [
+  { id: "lidar", name: "LiDAR scans", ue: "nrUE1 · eMBB", c: "--embb", shape: "circle" },
+  { id: "robots", name: "Robot positions", ue: "nrUE2 · URLLC", c: "--urllc", shape: "tri" },
+  { id: "cam1", name: "CAM1 video", ue: "n3iwue1 · BLE1", c: "--ble", shape: "square" },
+  { id: "cam2", name: "CAM2 video", ue: "n3iwue2 · BLE2", c: "--ble2", shape: "diamond" },
+];
+let F = null, SEGS = [], PER = [], LOOP = 0;
+const AGV_V = 1.4, AGV_DWELL = 3.0;
+function setupScene(floor) {
+  F = floor;
+  const p = F.stations.map(s => [s[1], s[2]]);
+  SEGS = p.map((a, i) => [a, p[(i + 1) % p.length]]);
+  PER = SEGS.map(([a, b]) => Math.hypot(b[0] - a[0], b[1] - a[1]) / AGV_V + AGV_DWELL);
+  LOOP = PER.reduce((x, y) => x + y, 0);
+}
+function agvs(t) {
+  const out = [];
+  for (let i = 0; i < F.agvs; i++) {
+    let u = ((t + i * LOOP / F.agvs) % LOOP + LOOP) % LOOP, k = 0;
+    while (k < SEGS.length - 1 && u >= PER[k]) { u -= PER[k]; k++; }
+    const [a, b] = SEGS[k], mv = PER[k] - AGV_DWELL, hd = Math.atan2(b[1] - a[1], b[0] - a[0]);
+    if (u < mv) { const f = u / mv; out.push([a[0] + (b[0] - a[0]) * f, a[1] + (b[1] - a[1]) * f, hd]); }
+    else out.push([b[0], b[1], hd]);
+  }
+  return out;
+}
+function movers(t) {
+  const out = [];
+  [[26, 36, 28.5, 0.9], [8, 22, 9.0, 1.1]].forEach(([x0, x1, y, sp], i) => {
+    const span = x1 - x0, u = ((t * sp / span + i * 0.37) % 2 + 2) % 2;
+    out.push(["worker", x0 + span * (u < 1 ? u : 2 - u), y]);
+  });
+  const u = ((t * 1.6 / 44) % 2 + 2) % 2;
+  out.push(["forklift", 8 + 44 * (u < 1 ? u : 2 - u), 33]);
+  return out;
+}
+// ---------------------------------------------------------------- live state
+let skew = 0;                       // server clock - browser clock, s
+const nowS = () => Date.now() / 1000 + skew;
+let loops = [], levels = [], allowed = [], level = "L1", stats = {}, statusT = 0;
+const recent = { lidar: [], robots: [], cam1: [], cam2: [] };   // {sent, delay|null}
+const last = { lidar: null, robots: null, cam1: null, cam2: null };   // last frame received
+let scan = null, scanFor = null;
+async function inflate(b64) {
+  const bin = Uint8Array.from(atob(b64), c => c.charCodeAt(0));
+  const ds = new Blob([bin]).stream().pipeThrough(new DecompressionStream("deflate"));
+  return new Uint8Array(await new Response(ds).arrayBuffer());
+}
+async function decodeScan(b64) {
+  const raw = await inflate(b64), dv = new DataView(raw.buffer), az = F.az, o = F.lidar, pts = [];
+  for (let i = 0; i < raw.length / 2; i++) {
+    const cm = dv.getUint16(i * 2, true); if (!cm) continue;
+    const el = F.beams[Math.floor(i / az)] * Math.PI / 180, a = (i % az) * 2 * Math.PI / az, r = cm / 100;
+    const x = o[0] + r * Math.cos(el) * Math.cos(a), y = o[1] + r * Math.cos(el) * Math.sin(a), z = o[2] + r * Math.sin(el);
+    if (x < -0.5 || x > F.w + 0.5 || y < -0.5 || y > F.h + 0.5) continue;
+    pts.push(x, y, z);
+  }
+  return new Float32Array(pts);
+}
+function curLoop() { const n = nowS(); let b = null; for (const l of loops) if (l.t0 <= n) b = l; return b; }
+// ---------------------------------------------------------------- floor
+const fc = $("floor"); let fs = 1, fw = 0, fh = 0, M = 2;
+function sizeFloor() {
+  const dpr = window.devicePixelRatio || 1; fw = fc.clientWidth; fh = fw * (F.h + 2 * M) / (F.w + 2 * M);
+  fc.width = Math.round(fw * dpr); fc.height = Math.round(fh * dpr); fc.getContext("2d").setTransform(dpr, 0, 0, dpr, 0, 0); fs = fw / (F.w + 2 * M);
+}
+const X = x => (x + M) * fs, Y = y => (y + M) * fs;
+function drawFloor() {
+  const g = fc.getContext("2d"); g.clearRect(0, 0, fw, fh);
+  const lp = curLoop(), T = lp ? nowS() - lp.t0 : 0, now = nowS();
+  g.fillStyle = css("--floor"); g.fillRect(X(0), Y(0), F.w * fs, F.h * fs);
+  g.strokeStyle = css("--ink-3"); g.lineWidth = 1.5; g.strokeRect(X(0), Y(0), F.w * fs, F.h * fs);
+  g.setLineDash([6, 4]); g.strokeStyle = css("--zone"); g.lineWidth = 1.2;
+  for (const [x0, x1] of Object.values(F.cams)) g.strokeRect(X(x0) + 3, Y(0) + 3, (x1 - x0) * fs - 6, F.h * fs - 6);
+  g.setLineDash([]);
+  g.font = `600 ${Math.max(10, fs * 0.9)}px ${css("--mono")}`; g.fillStyle = css("--zone");
+  g.fillText("CAM1", X(0.8), Y(1.6)); g.fillText("CAM2", X(30.8), Y(1.6));
+  g.strokeStyle = css("--tape"); g.lineWidth = Math.max(2, 1.4 * fs); g.globalAlpha = .55; g.beginPath();
+  F.stations.forEach((s, i) => i ? g.lineTo(X(s[1]), Y(s[2])) : g.moveTo(X(s[1]), Y(s[2]))); g.closePath(); g.stroke(); g.globalAlpha = 1;
+  for (const b of F.machines) { g.fillStyle = css("--machine"); g.fillRect(X(b[0]), Y(b[1]), (b[3] - b[0]) * fs, (b[4] - b[1]) * fs); }
+  g.font = `500 ${Math.max(10, fs * 0.85)}px ${css("--display")}`; g.fillStyle = css("--ink-2"); g.textAlign = "center";
+  for (const [n, x, y] of F.stations) { g.strokeStyle = css("--ink-3"); g.lineWidth = 1; g.strokeRect(X(x - 2), Y(y - 2), 4 * fs, 4 * fs); g.fillText(n, X(x), Y(y < 18 ? y + 3.4 : y - 2.6)); }
+  g.textAlign = "start";
+  if (scan && last.lidar) {
+    g.fillStyle = css("--embb");
+    for (let i = 0; i < scan.length; i += 3) { const z = scan[i + 2]; g.globalAlpha = z < 0.15 ? .22 : .85; const s = z < 0.15 ? 1.2 : 2; g.fillRect(X(scan[i]) - s / 2, Y(scan[i + 1]) - s / 2, s, s); }
+    g.globalAlpha = 1; g.font = `600 ${Math.max(10, fs * 0.8)}px ${css("--mono")}`;
+    g.fillText(`scan #${last.lidar.n} · ${(now - last.lidar.sent).toFixed(1)} s old`, X(F.lidar[0] + 1.2), Y(F.lidar[1] - 1));
+  }
+  g.fillStyle = css("--embb"); g.beginPath(); g.arc(X(F.lidar[0]), Y(F.lidar[1]), Math.max(4, fs * 0.5), 0, 7); g.fill();
+  for (const [k, x, y] of movers(T)) { g.fillStyle = css("--ink-2"); if (k === "worker") { g.beginPath(); g.arc(X(x), Y(y), Math.max(2.5, fs * 0.3), 0, 7); g.fill(); } else g.fillRect(X(x - 1.1), Y(y - 0.6), 2.2 * fs, 1.2 * fs); }
+  const truth = agvs(T), rb = last.robots, seen = rb ? agvs(rb.ts) : null;
+  const tri = (x, y, hd, fill) => { const c = Math.cos(hd), s = Math.sin(hd), pts = [[1.0, 0], [-0.8, 0.65], [-0.8, -0.65]].map(([dx, dy]) => [X(x + c * dx - s * dy), Y(y + s * dx + c * dy)]);
+    g.beginPath(); g.moveTo(...pts[0]); g.lineTo(...pts[1]); g.lineTo(...pts[2]); g.closePath();
+    if (fill) { g.fillStyle = css("--urllc"); g.fill(); g.strokeStyle = css("--panel"); g.lineWidth = 1.5; g.stroke(); } else { g.strokeStyle = css("--ink-2"); g.lineWidth = 1.5; g.stroke(); } };
+  const errs = [];
+  truth.forEach((a, i) => {
+    if (seen) { const b = seen[i], e = Math.hypot(a[0] - b[0], a[1] - b[1]); errs.push(e);
+      if (e > 0.05) { g.strokeStyle = css("--urllc"); g.lineWidth = 1; g.setLineDash([3, 3]); g.beginPath(); g.moveTo(X(a[0]), Y(a[1])); g.lineTo(X(b[0]), Y(b[1])); g.stroke(); g.setLineDash([]); }
+      tri(b[0], b[1], b[2], true); }
+    tri(a[0], a[1], a[2], false);
+    g.font = `600 ${Math.max(10, fs * 0.8)}px ${css("--mono")}`; g.fillStyle = css("--ink"); g.fillText(`AGV${i + 1}`, X(a[0] + 1.1), Y(a[1] - 0.9));
+  });
+  $("agvrow").innerHTML = rb ? `<span><i class="swatch" style="--c:var(--urllc)"></i>last update <b>#${rb.n}</b>, <b>${((now - rb.sent) * 1000).toFixed(0)} ms</b> old, took <b>${rb.delay.toFixed(0)} ms</b></span>` +
+    errs.map((e, i) => `<span>AGV${i + 1} off by <b>${e < 1 ? (e * 100).toFixed(0) + " cm" : e.toFixed(1) + " m"}</b></span>`).join("") : `<span>no position update yet</span>`;
+}
+function drawCams() {
+  const now = nowS();
+  for (const cam of ["cam1", "cam2"]) {
+    const f = last[cam];
+    if (f) { const age = now - f.sent; $(cam + "badge").textContent = `#${f.n} · ${age.toFixed(1)} s old`; $(cam + "badge").classList.toggle("stale", age > 5); $(cam + "badge").hidden = false; }
+    const r = recent[cam].filter(x => x.sent > now - 60), got = r.filter(x => x.delay != null).length, lost = r.length - got;
+    $(cam + "row").innerHTML = `<span>last 60 s: received <b>${got}</b> · lost <b>${lost}</b></span>` + (f ? `<span>last took <b>${(f.delay / 1000).toFixed(2)} s</b></span>` : "");
+  }
+}
+const fmtMs = v => v == null ? "–" : v >= 1000 ? (v / 1000).toFixed(v >= 10000 ? 0 : 1) + " s" : v.toFixed(0) + " ms";
+function renderTiles() {
+  $("tiles").innerHTML = FLOWS.map(f => { const v = stats[f.id] || {};
+    return `<div class="tile" style="--c:var(${f.c})"><span class="label">${f.name} · ${f.ue}</span>
+      <span class="v ${v.delivered_pct != null && v.delivered_pct < 99 ? "bad" : ""}">${v.delivered_pct == null ? "–" : v.delivered_pct + "%"} <span style="font-weight:400;color:var(--ink-3);font-size:.85rem">delivered</span></span>
+      <small>last 60 s · median ${fmtMs(v.p50)} · p90 ${fmtMs(v.p90)} · ${v.n60 || 0} frames</small></div>`; }).join("");
+}
+function renderLevels() {
+  $("levels").innerHTML = levels.map(L => { const k = L.kbps, ok = allowed.includes(L.name);
+    return `<button type="button" data-l="${L.name}" aria-pressed="${L.name === level}" ${ok ? "" : "disabled title=\"overloads both radios; not offered live\""}>${L.name}<small>NR ${(k.lidar + k.robots).toFixed(0)} · BLE ${k.cam1.toFixed(0)}+${k.cam2.toFixed(0)} kbit/s</small></button>`; }).join("");
+  document.querySelectorAll("#levels button").forEach(b => b.addEventListener("click", async () => {
+    const r = await fetch("/level", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ level: b.dataset.l }) });
+    if (r.ok) { level = b.dataset.l; renderLevels(); }
+  }));
+}
+function renderLoop() {
+  const lp = curLoop(), n = nowS();
+  $("loopinfo").innerHTML = lp ? `<span>loop <b>#${lp.loop}</b> at <b>${lp.level}</b></span><span>scene <b>${Math.min(60, n - lp.t0).toFixed(1)} s</b> of 60</span>${level !== lp.level ? `<span>next loop: <b>${level}</b></span>` : ""}` : `<span>waiting for the first loop…</span>`;
+}
+// ---------------------------------------------------------------- chart
+const cc = $("chart"); let cw = 0, ch = 0; const PAD = { l: 52, r: 14, t: 34, b: 28 }, SPAN = 120;
+const cy = ms => { const v = Math.log10(Math.min(1e5, Math.max(10, ms))); return ch - PAD.b - (ch - PAD.t - PAD.b) * (v - 1) / 4; };
+function mark(g, shape, x, y, s) {
+  g.beginPath();
+  if (shape === "circle") g.arc(x, y, s, 0, 7); else if (shape === "square") g.rect(x - s, y - s, 2 * s, 2 * s);
+  else if (shape === "tri") { g.moveTo(x, y - s * 1.2); g.lineTo(x + s * 1.1, y + s * .8); g.lineTo(x - s * 1.1, y + s * .8); g.closePath(); }
+  else { g.moveTo(x, y - s * 1.3); g.lineTo(x + s * 1.1, y); g.lineTo(x, y + s * 1.3); g.lineTo(x - s * 1.1, y); g.closePath(); }
+}
+function drawChart() {
+  const dpr = window.devicePixelRatio || 1; cw = cc.clientWidth; ch = cc.clientHeight;
+  if (cc.width !== Math.round(cw * dpr)) { cc.width = Math.round(cw * dpr); cc.height = Math.round(ch * dpr); }
+  const g = cc.getContext("2d"); g.setTransform(dpr, 0, 0, dpr, 0, 0); g.clearRect(0, 0, cw, ch);
+  const now = nowS(), cx = t => PAD.l + (cw - PAD.l - PAD.r) * (t - (now - SPAN)) / SPAN;
+  g.font = `400 11px ${css("--mono")}`; g.fillStyle = css("--ink-3"); g.strokeStyle = css("--line"); g.lineWidth = 1;
+  for (const v of [10, 100, 1000, 10000, 100000]) { const y = cy(v); g.beginPath(); g.moveTo(PAD.l, y); g.lineTo(cw - PAD.r, y); g.stroke(); g.textAlign = "right"; g.fillText(fmtMs(v), PAD.l - 6, y + 4); }
+  g.textAlign = "center"; for (let s = 0; s <= SPAN; s += 20) g.fillText(s ? `−${s} s` : "now", cx(now - s), ch - 8);
+  g.textAlign = "left"; g.fillText("lost", 6, PAD.t - 8);
+  for (const l of loops) if (l.t0 > now - SPAN) { g.strokeStyle = css("--ink-3"); g.setLineDash([2, 3]); g.beginPath(); g.moveTo(cx(l.t0), PAD.t - 4); g.lineTo(cx(l.t0), ch - PAD.b); g.stroke(); g.setLineDash([]); g.fillText(`#${l.loop} ${l.level}`, cx(l.t0) + 3, PAD.t + 10); }
+  FLOWS.forEach(f => { g.fillStyle = css(f.c);
+    for (const x of recent[f.id]) { if (x.sent < now - SPAN) continue;
+      if (x.delay == null) { g.globalAlpha = .8; mark(g, f.shape, cx(x.sent), PAD.t - 12, 2.2); g.fill(); }
+      else { g.globalAlpha = .75; mark(g, f.shape, cx(x.sent), cy(x.delay), 2.4); g.fill(); } }
+    g.globalAlpha = 1; });
+  $("chartlegend").innerHTML = FLOWS.map(f => `<span><svg width="12" height="12" viewBox="-6 -6 12 12" aria-hidden="true" style="vertical-align:-1px;margin-right:6px">${{ circle: '<circle r="4.5"/>', square: '<rect x="-4" y="-4" width="8" height="8"/>', tri: '<path d="M0-5 5 3.5h-10z"/>', diamond: '<path d="M0-5.5 4.5 0 0 5.5-4.5 0z"/>' }[f.shape].replace("/>", ` fill="var(${f.c})"/>`)}</svg>${f.name} · ${f.ue}</span>`).join("");
+}
+// ---------------------------------------------------------------- events
+function addLog(e) {
+  const li = document.createElement("li"); li.innerHTML = `<b>${new Date(e.t * 1000).toLocaleTimeString([], { hour12: false })}</b>`; li.append(e.line);
+  $("log").prepend(li); while ($("log").children.length > 40) $("log").lastChild.remove();
+}
+function connect() {
+  const es = new EventSource("/events");
+  es.onmessage = async m => {
+    const e = JSON.parse(m.data);
+    if (e.k === "hello") { skew = e.now - Date.now() / 1000; setupScene(e.meta); sizeFloor(); levels = e.levels; allowed = e.allowed; level = e.level; loops = e.loops; renderLevels(); $("log").textContent = ""; e.log.forEach(addLog); drawFloor(); drawChart(); }
+    else if (e.k === "loop") { loops = [...loops, e].slice(-6); }
+    else if (e.k === "status") { skew = e.now - Date.now() / 1000; stats = e.stats; statusT = Date.now(); level = e.level; renderTiles();
+      const ok = e.agent_age != null && e.agent_age < 15;
+      $("conn").className = "pill " + (ok ? "on" : "off");
+      $("conntxt").textContent = ok ? `live · clock sync ±${(e.rtt_ms / 2).toFixed(2)} ms` : `UE PC agent silent${e.agent_age != null ? " for " + e.agent_age.toFixed(0) + " s" : ""}`;
+      document.querySelectorAll("#levels button").forEach(b => b.setAttribute("aria-pressed", b.dataset.l === level)); }
+    else if (e.k === "frame") {
+      recent[e.flow].push({ sent: e.sent, delay: e.delay });
+      if (!last[e.flow] || e.sent >= last[e.flow].sent) {
+        last[e.flow] = e;
+        if (e.flow === "lidar" && e.b64) { const d = await decodeScan(e.b64); if (last.lidar === e) scan = d; }
+        if ((e.flow === "cam1" || e.flow === "cam2") && e.b64) { $(e.flow + "img").src = "data:image/jpeg;base64," + e.b64; $(e.flow + "img").hidden = false; $(e.flow + "none").hidden = true; }
+      }
+    }
+    else if (e.k === "lost") recent[e.flow].push({ sent: e.sent, delay: null });
+    else if (e.k === "log") addLog(e);
+  };
+  es.onerror = () => { $("conn").className = "pill off"; $("conntxt").textContent = "reconnecting to the core PC…"; };
+}
+function tick() {
+  const now = nowS();
+  for (const f of FLOWS) { const r = recent[f.id]; while (r.length && r[0].sent < now - SPAN - 5) r.shift(); }
+  if (F) { drawFloor(); drawCams(); renderLoop(); }
+  if (statusT && Date.now() - statusT > 5000) { $("conn").className = "pill off"; $("conntxt").textContent = "no updates from the core PC"; }
+  requestAnimationFrame(tick);
+}
+let tChart = 0; setInterval(() => { if (F) drawChart(); }, 500);
+window.addEventListener("resize", () => { if (F) sizeFloor(); });
+renderTiles(); connect(); requestAnimationFrame(tick);
+</script>
+</body></html>

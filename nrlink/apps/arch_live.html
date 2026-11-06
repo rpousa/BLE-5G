@@ -1,0 +1,716 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>nrlink Two-PC Split</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Semi+Condensed:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+<style>
+/* Layout: control-room board, same as the earlier nrlink page. Swimlane schematic (one lane per software project, two PC frames), then a who-is-where table and the address plan. Colour = traffic class. */
+:root {
+  --bg: #eef1f4; --panel: #ffffff; --panel-2: #f5f7f9; --line: #d3d9e0;
+  --ink: #17202b; --ink-2: #4b5866; --ink-3: #7a8693;
+  --signal: #b86e00; --embb: #1f63d6; --urllc: #d0342c; --n3: #1d8a3c; --ok: #0f7a55; --warn: #b86e00;
+  --f5gc: #0d857c; --oai: #3d5a99; --nxp: #b86e00; --intel: #0068b5; --host: #6b7684;
+  --display: "Barlow Semi Condensed", "Arial Narrow", "Roboto Condensed", system-ui, sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+  --r: 6px;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0e141b; --panel: #151d26; --panel-2: #1b2530; --line: #2a3644; --ink: #e6ebf0; --ink-2: #a9b4bf; --ink-3: #74808c;
+    --signal: #f0a830; --embb: #5b93f5; --urllc: #f0605a; --n3: #45c06a; --ok: #3dbb72; --warn: #f0a830;
+    --f5gc: #2fc0b3; --oai: #7e9be0; --nxp: #f0a830; --intel: #4ea3e6; --host: #8f9aa6; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0e141b; --panel: #151d26; --panel-2: #1b2530; --line: #2a3644; --ink: #e6ebf0; --ink-2: #a9b4bf; --ink-3: #74808c;
+  --signal: #f0a830; --embb: #5b93f5; --urllc: #f0605a; --n3: #45c06a; --ok: #3dbb72; --warn: #f0a830;
+  --f5gc: #2fc0b3; --oai: #7e9be0; --nxp: #f0a830; --intel: #4ea3e6; --host: #8f9aa6; color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body { background: var(--bg); color: var(--ink); font-family: var(--display); font-size: 15px; line-height: 1.4; }
+.wrap { max-width: 1480px; margin: 0 auto; padding-block: 14px 40px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); display: grid; gap: 14px; }
+.mono { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+h1, h2, h3 { margin: 0; font-weight: 600; text-wrap: balance; }
+h1 { font-size: 1.55rem; letter-spacing: .01em; }
+h2 { font-size: 1.15rem; }
+.label { font-size: .72rem; letter-spacing: .09em; text-transform: uppercase; color: var(--ink-3); font-weight: 600; }
+
+header.top { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 22px; }
+header.top .title { display: grid; gap: 2px; margin-right: auto; min-width: 0; max-width: 760px; }
+header.top .sub { color: var(--ink-2); font-size: .95rem; }
+.kpis { display: flex; flex-wrap: wrap; gap: 6px 22px; }
+.kpi { display: grid; }
+.kpi .v { font-family: var(--mono); font-size: 1.05rem; font-weight: 600; font-variant-numeric: tabular-nums; }
+.kpi .v.warn { color: var(--warn); }
+.pill { display: inline-flex; align-items: center; gap: 7px; padding: 4px 11px; border-radius: 999px; font-family: var(--mono); font-size: .78rem; font-weight: 600; border: 1px solid var(--line); background: var(--panel); }
+.pill .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--warn); }
+
+.card { background: var(--panel); border: 1px solid var(--line); border-radius: var(--r); min-width: 0; }
+.card > .hd { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 12px; padding: 11px 14px 9px; border-bottom: 1px solid var(--line); }
+.card > .hd .meta { margin-left: auto; color: var(--ink-3); font-size: .82rem; }
+.bd { padding: 12px 14px; display: grid; gap: 12px; min-width: 0; }
+
+.net .diagram { overflow-x: auto; padding: 6px 4px 2px; border-bottom: 1px solid var(--line); }
+.net svg { display: block; width: 100%; min-width: 1240px; height: auto; }
+.net .side { padding: 12px 14px; display: grid; grid-template-columns: minmax(220px, 300px) minmax(0, 1fr); align-items: start; gap: 10px 28px; }
+.legend { display: grid; gap: 7px; font-size: .84rem; color: var(--ink-2); }
+.legend i { display: inline-block; width: 22px; height: 0; border-top: 3px solid; vertical-align: middle; margin-right: 7px; }
+.legend b { font-weight: 600; color: var(--ink); }
+.hint { font-size: .84rem; color: var(--ink-3); }
+.detail h3 { font-size: 1.05rem; }
+.detail dl { display: grid; grid-template-columns: auto 1fr; gap: 4px 12px; margin: 8px 0 0; font-size: .88rem; }
+.detail dt { color: var(--ink-3); }
+.detail dd { margin: 0; font-family: var(--mono); font-size: .82rem; overflow-wrap: anywhere; }
+.detail p { margin: 8px 0 0; color: var(--ink-2); font-size: .92rem; max-width: 70ch; }
+
+svg .band { opacity: 1; }
+svg .lanehd { font-family: var(--display); font-size: 14px; font-weight: 700; letter-spacing: .09em; text-transform: uppercase; }
+svg .lanesub { font-family: var(--mono); font-size: 10.5px; fill: var(--ink-3); }
+svg .pcframe { fill: none; stroke: var(--ink-3); stroke-width: 1.5; stroke-dasharray: 8 5; }
+svg .pctitle { font-family: var(--display); font-size: 15px; font-weight: 700; letter-spacing: .06em; fill: var(--ink); }
+svg .pcsub { font-family: var(--mono); font-size: 11px; fill: var(--ink-3); }
+svg .node { cursor: pointer; }
+svg .node rect.box { fill: var(--panel); stroke: var(--line); stroke-width: 1.2; }
+svg .node.pending rect.box { stroke-dasharray: 5 4; stroke: var(--warn); }
+svg .node:hover rect.box, svg .node.sel rect.box, svg .node:focus-visible rect.box { stroke: var(--signal); stroke-width: 2.2; stroke-dasharray: none; }
+svg .node:focus { outline: none; }
+svg .node .n1 { font-family: var(--display); font-size: 16px; font-weight: 600; fill: var(--ink); }
+svg .node .n2 { font-family: var(--mono); font-size: 10.5px; fill: var(--ink-2); }
+svg .node .n3 { font-family: var(--mono); font-size: 10.5px; fill: var(--ink-3); }
+svg .link { cursor: pointer; }
+svg .link:focus { outline: none; }
+svg .link .hit { stroke: transparent; stroke-width: 18; fill: none; }
+svg .link .base { fill: none; stroke-width: 3; stroke-linejoin: round; stroke-linecap: round; }
+svg .link.ctl .base { stroke-width: 1.6; stroke: var(--ink-3); }
+svg .link.ready .base { opacity: .55; }
+svg .link.pending .base { stroke-dasharray: 7 6; stroke: var(--warn); }
+svg .link .flow { fill: none; stroke-width: 3; stroke: var(--panel); stroke-dasharray: 2 14; stroke-linecap: round; animation: flow 2.4s linear infinite; opacity: .9; }
+svg .link:hover .base, svg .link.sel .base, svg .link:focus-visible .base { stroke: var(--signal); opacity: 1; }
+@keyframes flow { to { stroke-dashoffset: -64; } }
+svg .ltxt { font-family: var(--mono); font-size: 11px; fill: var(--ink-2); paint-order: stroke; stroke: var(--panel-2); stroke-width: 4px; stroke-linejoin: round; pointer-events: none; }
+svg .ltxt.warn { fill: var(--warn); font-weight: 600; }
+svg .gaplbl { font-family: var(--display); font-size: 13px; font-weight: 700; letter-spacing: .06em; fill: var(--ink-2); paint-order: stroke; stroke: var(--panel-2); stroke-width: 4px; }
+
+.grid2 { display: grid; grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr); gap: 14px; }
+.tbl { overflow-x: auto; }
+table { border-collapse: collapse; width: 100%; font-size: .9rem; }
+th { text-align: left; font-size: .72rem; letter-spacing: .09em; text-transform: uppercase; color: var(--ink-3); font-weight: 600; padding: 6px 10px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+td { padding: 7px 10px; border-bottom: 1px solid var(--line); vertical-align: top; }
+tr:last-child td { border-bottom: 0; }
+td.mono { font-size: .82rem; white-space: nowrap; }
+.cls { display: inline-block; font-family: var(--mono); font-size: .72rem; font-weight: 600; padding: 1px 7px; border-radius: 4px; color: #fff; }
+.st { display: inline-flex; align-items: center; gap: 6px; font-family: var(--mono); font-size: .8rem; font-weight: 600; white-space: nowrap; }
+.st::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: currentColor; }
+.st.up { color: var(--ok); } .st.pend { color: var(--warn); } .st.ready { color: var(--ink-3); }
+.addr { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 6px 14px; font-size: .88rem; margin: 0; }
+.addr dt { font-family: var(--mono); font-size: .82rem; color: var(--ink); white-space: nowrap; }
+.addr dd { margin: 0; color: var(--ink-2); }
+ol.next { margin: 0; padding-left: 20px; display: grid; gap: 8px; color: var(--ink-2); font-size: .92rem; }
+ol.next b { color: var(--ink); font-weight: 600; }
+code { font-family: var(--mono); font-size: .8rem; background: var(--panel-2); padding: 1px 5px; border-radius: 4px; color: var(--ink); overflow-wrap: anywhere; }
+
+svg .led { stroke: var(--panel); stroke-width: 1.5; }
+svg .led-gnb { animation: ledgnb 1.6s steps(1) infinite; }
+svg .led-b1 { animation: ledb1 1s steps(1) infinite; }
+svg .led-r2 { animation: ledr2 1s steps(1) infinite; }
+svg .led-g { fill: var(--n3); }
+@keyframes ledgnb { 0% { fill: var(--embb); } 50% { fill: var(--urllc); } }
+@keyframes ledb1 { 0% { fill: var(--embb); } 12% { fill: var(--line); } }
+@keyframes ledr2 { 0% { fill: var(--urllc); } 12% { fill: var(--line); } 24% { fill: var(--urllc); } 36% { fill: var(--line); } }
+svg .ver { font-family: var(--mono); font-size: 10px; font-weight: 600; }
+svg .lat { font-family: var(--mono); font-size: 10.5px; font-weight: 600; fill: var(--ink); paint-order: stroke; stroke: var(--panel-2); stroke-width: 4px; pointer-events: none; }
+.ledkey { display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: .84rem; color: var(--ink-2); }
+.ledkey span { display: inline-flex; align-items: center; gap: 6px; }
+.ledkey i { width: 11px; height: 11px; border-radius: 50%; display: inline-block; }
+.bars { display: grid; gap: 10px; }
+.bar { display: grid; grid-template-columns: 150px minmax(0, 1fr) 80px; gap: 10px; align-items: center; font-size: .86rem; }
+.bar .track { display: flex; height: 22px; border-radius: 4px; overflow: hidden; background: var(--panel-2); gap: 2px; }
+.bar .seg { height: 100%; min-width: 3px; background: var(--c); display: flex; align-items: center; padding: 0 6px; color: #fff; font-family: var(--mono); font-size: .7rem; white-space: nowrap; overflow: hidden; }
+.bar .tot { font-family: var(--mono); font-size: .82rem; text-align: right; }
+.slotsvg { display: block; width: 100%; min-width: 760px; height: auto; }
+.slotsvg text { font-family: var(--mono); font-size: 11px; fill: var(--ink-2); }
+.slotsvg .t { font-family: var(--display); font-size: 13px; font-weight: 600; fill: var(--ink); }
+.fwtbl td:nth-child(3) { white-space: normal; min-width: 280px; } .fwtbl td:nth-child(4) { white-space: normal; min-width: 220px; }
+@media (max-width: 620px) { .bar { grid-template-columns: minmax(0, 1fr); } }
+@media (prefers-reduced-motion: reduce) { svg .led-gnb, svg .led-b1, svg .led-r2 { animation: none; } svg .led-gnb { fill: var(--embb); } svg .led-b1 { fill: var(--embb); } svg .led-r2 { fill: var(--urllc); } }
+@media (max-width: 980px) { .grid2 { grid-template-columns: minmax(0, 1fr); } }
+@media (max-width: 760px) { .net .side { grid-template-columns: minmax(0, 1fr); } }
+@media (prefers-reduced-motion: reduce) { svg .link .flow { animation: none; } }
+</style><style>
+svg .node.down rect.box { stroke: var(--bad); stroke-width: 2.4; stroke-dasharray: 5 3; }
+svg .node .stdot { stroke: var(--panel); stroke-width: 1.5; }
+svg .link.down .base { stroke: var(--bad) !important; stroke-dasharray: 6 5; opacity: 1; }
+svg .link.down .flow { display: none; }
+svg .link .lat.live { fill: var(--ink); font-weight: 600; }
+svg .led.live { animation: none !important; transition: fill .05s; }
+.kpi .v.bad { color: var(--bad); }
+</style>
+</head><body>
+
+
+<div class="wrap">
+  <header class="top">
+    <div class="title">
+      <h1>nrlink Two-PC Split · Live</h1>
+      <div class="sub">free5GC core and N3IWF, OpenAirInterface gNB split over nFAPI with two NR UEs, and NXP FRDM-MCXW72 boards carrying both the 5G radio and the Bluetooth LE non-3GPP access, spread over a core PC and a UE PC.</div>
+    </div>
+    <div class="kpis">
+      <div class="kpi"><span class="label">UEs answering</span><span class="v" id="kpi-ue">–</span></div>
+      <div class="kpi"><span class="label">gNB slots/s</span><span class="v" id="kpi-slots">–</span></div>
+      <div class="kpi"><span class="label">NR uplink · kbit/s</span><span class="v" id="kpi-ul">–</span></div>
+      <div class="kpi"><span class="label">Bluetooth links</span><span class="v" id="kpi-ble">–</span></div>
+      <div class="kpi"><span class="label">BLE down · kbit/s</span><span class="v" id="kpi-bledl">–</span></div>
+    </div>
+    <span class="pill" id="livepill"><span class="dot" id="livedot" style="background:var(--ink-3)"></span><span id="livetxt">connecting to the core PC…</span></span>
+  </header>
+
+  <section class="card net" aria-label="Architecture">
+    <div class="hd"><h2>Architecture</h2><span class="meta">one lane per project · click any box or link</span></div>
+    <div class="diagram"><svg id="arch" role="img" aria-label="Architecture: free5GC, OpenAirInterface, host software, NXP boards and the Intel adapter across the core PC and the UE PC"></svg></div>
+    <div class="side">
+      <div class="legend">
+        <span><i style="border-color:var(--embb)"></i><b>eMBB</b> nrUE1 path</span>
+        <span><i style="border-color:var(--urllc)"></i><b>URLLC</b> nrUE2 path</span>
+        <span><i style="border-color:var(--n3)"></i><b>Non-3GPP</b> n3iwue paths (Bluetooth)</span>
+        <span><i style="border-color:var(--ink-2)"></i>shared user plane</span>
+        <span><i style="border-color:var(--ink-3);border-top-width:2px"></i>control plane</span>
+        <span class="hint"><b>Live:</b> boxes and links turn red when a container, process, board or Bluetooth link is down. Figures on links are measured now: gnb_bridge and ue_bridge telemetry, pings from ext-dn and the core every 10 s, and the factory flows' medians (<a href="/">Factory Floor Live</a>). Moving dots run faster with more traffic. ↓ is downlink (core → UE) and ↑ uplink. Bluetooth throughput comes from the core's ble1/ble2 tunnel counters (down = core → UE). The LEDs follow the gNB bridge's real LED state.</span>
+        <span class="label" style="margin-top:6px">Board LEDs, as on the desk</span>
+        <div class="ledkey">
+          <span><i style="background:linear-gradient(90deg,var(--embb) 50%,var(--urllc) 50%)"></i>gNB board: blinks blue (eMBB) and red (URLLC) in turn</span>
+          <span><i style="background:var(--embb)"></i>UE1 board: blue, 1 blink</span>
+          <span><i style="background:var(--urllc)"></i>UE2 board: red, 2 blinks</span>
+          <span><i style="background:var(--n3)"></i>BLE1, BLE2: steady green (hci_bb v8)</span>
+        </div>
+      </div>
+      <div class="detail" id="detail" aria-live="polite"></div>
+    </div>
+  </section>
+
+  <section class="grid2">
+    <article class="card">
+      <div class="hd"><h2>Who is connected where</h2><span class="meta">6 Nov · 30 pings from ext-dn 192.168.70.132 (UEs) or the core (links), idle · addresses change when a UE re-registers</span></div>
+      <div class="tbl">
+        <table>
+          <thead><tr><th>UE</th><th>Access</th><th>Path to the core</th><th>Address</th><th>RTT</th><th>State</th></tr></thead>
+          <tbody>
+            <tr><td><span class="cls" style="background:var(--embb)">eMBB</span> nrUE1</td><td>5G NR</td><td>UE1 board 2HOKMMVEX1WMP → gNB board, 2402 MHz</td><td class="mono">12.1.1.27</td><td class="mono">529 ms (min 242)</td><td><span class="st up">up</span></td></tr>
+            <tr><td><span class="cls" style="background:var(--urllc)">URLLC</span> nrUE2</td><td>5G NR</td><td>UE2 board GBAMNH4BQ3CSB → gNB board, 2402 MHz</td><td class="mono">12.1.1.28</td><td class="mono">531 ms (min 287)</td><td><span class="st up">up</span></td></tr>
+            <tr><td><span class="cls" style="background:var(--n3)">N3GPP</span> n3iwue1</td><td>Untrusted non-3GPP</td><td>BLE1 board → core hci0 → N3IWF</td><td class="mono">12.1.1.66</td><td class="mono">96 ms (min 59)</td><td><span class="st up">up</span></td></tr>
+            <tr><td><span class="cls" style="background:var(--n3)">N3GPP</span> n3iwue2</td><td>Untrusted non-3GPP</td><td>BLE2 board → core hci0 → N3IWF</td><td class="mono">12.1.1.63</td><td class="mono">80 ms (min 56)</td><td><span class="st up">up</span></td></tr>
+            <tr><td>BLE1 link</td><td>Bluetooth LE</td><td>BLE1 board 02:4E:52:65:B3:A1 → core hci0</td><td class="mono">10.70.0.11</td><td class="mono">86 ms (min 54)</td><td><span class="st up">up</span></td></tr>
+            <tr><td>BLE2 link</td><td>Bluetooth LE</td><td>BLE2 board 02:4E:52:77:BF:5D → core hci0</td><td class="mono">10.70.0.12</td><td class="mono">75 ms (min 53)</td><td><span class="st up">up</span></td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="bd" style="border-top:1px solid var(--line)">
+        <span class="label">Next, in order</span>
+        <ol class="next">
+          <li><b>Make it one command.</b> These links were started by hand. <code>./nrlink.sh up --role ue --transport ble</code> does the same steps, but it needs root without a terminal on the UE PC: a sudoers rule like the core's, or run it from the user's terminal.</li>
+          <li><b>Bluetooth board hangs.</b> Only PC→board traffic hangs hci_bb. Seven firmware builds narrowed it down but did not fix it (see <i>Bluetooth board firmware</i> below). <code>ble_watchdog.sh</code> resets a hung board and restarts its n3iwue, and now also restarts an n3iwue whose tunnel has died. Next: a release build, and a diagnostic that ranks every interrupt below the tick.</li>
+          <li><b>Poll timeouts on the NR radio.</b> Half of gnb_bridge's polls wait out their 25 ms. That is about 0.7 s of every second, and it sets the slot rate (see <i>Slot schemes</i>).</li>
+          <li><b>Later.</b> Split-role support for the dashboard, and NTP on both PCs (their clocks differ by about 8 h 50 min).</li>
+        </ol>
+      </div>
+    </article>
+
+    <article class="card">
+      <div class="hd"><h2>Address plan</h2></div>
+      <div class="bd">
+        <dl class="addr">
+          <dt>192.168.10.223</dt><dd>Core PC, claudepc (Tailscale 100.64.0.74)</dd>
+          <dt>192.168.10.232</dt><dd>UE PC, claudepc2</dd>
+          <dt>192.168.70.128/26</dt><dd>demo-oai-public-net on the core PC: N3IWF .139, ext-dn .132, WebUI .147</dd>
+          <dt>10.70.0.0/24</dt><dd>Bluetooth links: core .1, UE <i>k</i> is .1<i>k</i></dd>
+          <dt>12.1.1.0/24</dt><dd>UE address pool, slice SST 1 / SD 010203, DNN internet</dd>
+          <dt>IMSI 2089500…</dt><dd>036–038 nrUEs, 040 docker n3iwue, 041–042 UE PC n3iwues</dd>
+        </dl>
+        <span class="label">Firmware on the NXP boards</span>
+        <dl class="addr">
+          <dt>nrlink v4</dt><dd>gNB 3TJ2B15JGASV3, UE1 2HOKMMVEX1WMP and UE2 GBAMNH4BQ3CSB: SLIP modem between USB (1 Mbaud) and the GenFSK radio, 1 Mbit/s on channel 0x2A = 2402 MHz</dd>
+          <dt>hci_bb v8</dt><dd>BLE1 3VWLILYT2A1AK and BLE2 GLNAOWUSDREB4: the NXP Bluetooth LE controller over HCI H4 at 115200 baud, with a 4 KB UART receive ring, an H4 parser that resynchronises, diagnostics (fault, stall and interrupt reports as HCI vendor event 0xF7, report on demand with 0xFDB2), an 8 KB stack and a steady green LED. It keeps the ROM-ISP vendor command 0xFDB1, and the address is set from the serial with 0xFC22.</dd>
+        </dl>
+      </div>
+    </article>
+  </section>
+
+  <section class="card" aria-label="Latency per hop">
+    <div class="hd"><h2>Latency per hop</h2><span class="meta">6 Nov 2026, idle network · ping round trips, one-way from the factory run, and serial or air times computed from bit rates</span></div>
+    <div class="bd">
+      <span class="label">Where one downlink packet spends its time, ext-dn → UE</span>
+      <div class="bars" id="bars"></div>
+      <span class="hint">Measured: totals, core hops and Bluetooth link pings. Computed: serial and air time from the bit rates. The rest is the part no single hop explains: waiting for the slot or connection event.</span>
+    </div>
+    <div class="tbl" style="border-top:1px solid var(--line)">
+      <table>
+        <thead><tr><th>Hop</th><th>Path</th><th>Round trip, avg</th><th>Min / max</th><th>How</th></tr></thead>
+        <tbody>
+          <tr><td>ext-dn ↔ UPF (N6)</td><td>all</td><td class="mono">0.15 ms</td><td class="mono">0.04 / 0.28 ms</td><td>30 pings, Docker bridge</td></tr>
+          <tr><td>UPF ↔ gNB VNF (N3, GTP-U)</td><td>NR</td><td class="mono">0.16 ms</td><td class="mono">0.08 / 0.22 ms</td><td>20 pings to 192.168.70.140</td></tr>
+          <tr><td>UPF ↔ N3IWF (N3, GTP-U)</td><td>Bluetooth</td><td class="mono">0.18 ms</td><td class="mono">0.06 / 0.45 ms</td><td>20 pings to 192.168.70.139</td></tr>
+          <tr><td>VNF ↔ PNF (nFAPI P7)</td><td>NR</td><td class="mono">0.14 ms</td><td class="mono">0.03 / 0.19 ms</td><td>30 pings; the slot exchange itself takes 10.6 ms</td></tr>
+          <tr><td>PNF ↔ gnb_bridge, one slot</td><td>NR</td><td class="mono">10.6 ms</td><td class="mono">≈ 3.5 DL / 28 UL</td><td>94 slots/s from gnb_bridge statistics</td></tr>
+          <tr><td>USB VCOM 1 Mbaud, each board</td><td>NR</td><td class="mono">2.6 ms</td><td class="mono">per 255 B packet</td><td>computed, SLIP framing</td></tr>
+          <tr><td>GenFSK air, 2402 MHz</td><td>NR</td><td class="mono">2.1 ms</td><td class="mono">per 255 B packet</td><td>computed, 1 Mbit/s plus preamble, header, CRC</td></tr>
+          <tr><td>core ↔ BLE1 over Bluetooth</td><td>Bluetooth</td><td class="mono">86 ms</td><td class="mono">54 / 169 ms</td><td>30 pings, 56 B · 443 ms with 1000 B</td></tr>
+          <tr><td>core ↔ BLE2 over Bluetooth</td><td>Bluetooth</td><td class="mono">75 ms</td><td class="mono">53 / 95 ms</td><td>30 pings, 56 B · 335 ms with 1000 B</td></tr>
+          <tr><td>HCI UART 115200, each BLE board</td><td>Bluetooth</td><td class="mono">≈ 2 ms</td><td class="mono">87 ms per 1000 B</td><td>20 HCI commands (2.8 ms with hcitool start-up); data time computed</td></tr>
+          <tr><td>ext-dn ↔ nrUE1, end to end</td><td>NR</td><td class="mono">529 ms</td><td class="mono">242 / 816 ms</td><td>30 pings · one-way down 111 ms (factory run)</td></tr>
+          <tr><td>ext-dn ↔ nrUE2, end to end</td><td>NR</td><td class="mono">531 ms</td><td class="mono">287 / 790 ms</td><td>30 pings</td></tr>
+          <tr><td>ext-dn ↔ n3iwue1, end to end</td><td>Bluetooth</td><td class="mono">96 ms</td><td class="mono">59 / 187 ms</td><td>30 pings, through IPsec and GRE</td></tr>
+          <tr><td>ext-dn ↔ n3iwue2, end to end</td><td>Bluetooth</td><td class="mono">80 ms</td><td class="mono">56 / 115 ms</td><td>30 pings</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section class="card" aria-label="Slot schemes">
+    <div class="hd"><h2>Slot schemes</h2><span class="meta">how each radio shares its time · drawn to scale</span></div>
+    <div class="bd">
+      <h3>nFAPI over nrlink: OAI's TDD pattern, slowed down</h3>
+      <p class="hint" style="max-width:100ch">The VNF schedules a normal NR TDD pattern: 30 kHz subcarriers, a 5 ms period of 10 slots, 7 downlink (D), 1 special (S: 6 DL symbols, 4 guard, 4 UL) and 2 uplink (U). The PNF does not run on a clock. It waits until gnb_bridge has broadcast the slot and, for S and U slots, polled both UE boards for their uplink. So a DL slot takes about 3.5 ms and an uplink slot about 28 ms, and the period stretches from 5 ms to about 106 ms (94 slots/s, 21× slower than real NR). Half of the polls wait out the full 25 ms timeout, which is most of the uplink slots' time.</p>
+      <div style="overflow-x:auto"><svg class="slotsvg" id="slotnr" viewBox="0 0 1100 250" role="img" aria-label="One TDD period: nominal 10 slots in 5 ms, and the real timing on nrlink, 106 ms"></svg></div>
+      <h3>Bluetooth LE: connection events on one shared adapter</h3>
+      <p class="hint" style="max-width:100ch">Each UE board is the central of its own LE connection to the core's Intel adapter. They talk only in connection events, every 45 ms (measured from the LE Enhanced Connection Complete event: interval 45 ms, latency 0, supervision timeout 420 ms). In each event the board sends first and the Intel adapter answers, with up to 27 B of data per packet (no data length extension), about 0.7 ms per exchange. Each event hops to the next of the 37 data channels (2404–2478 MHz). Both links share the Intel radio, so their events interleave. ble_ip_link paces each link to 40 kbit/s, about 225 B, or 9 packets, per event.</p>
+      <div style="overflow-x:auto"><svg class="slotsvg" id="slotble" viewBox="0 0 1100 170" role="img" aria-label="Two Bluetooth LE connections with 45 ms connection events interleaved on the Intel adapter"></svg></div>
+      <span class="hint">The offset between the two links' events is drawn at 20 ms for illustration; the controller chooses it. nrlink's fixed channel, 2402 MHz, is Bluetooth advertising channel 37, not one of the data channels.</span>
+    </div>
+  </section>
+
+  <section class="card" aria-label="Stress tests">
+    <div class="hd"><h2>Stress tests</h2><span class="meta">5 Nov 2026 · iperf3 3.16 and ping to ext-dn 192.168.70.132 · round trips only (the PC clocks differ)</span></div>
+    <div class="bd">
+      <p style="margin:0;max-width:100ch"><b>6 Nov, downlink only, one-way delay:</b> LiDAR to nrUE1, robot positions to nrUE2 and two camera feeds over Bluetooth, on one factory floor at four load levels. NR is clean up to 45 kbit/s combined (LiDAR 230–280 ms, robot updates 110–145 ms) and queues for seconds at 95 kbit/s. Bluetooth video is clean at 8 kbit/s per camera (about 0.4 s per frame) and loses a third of the frames at 16.5. No board hung. <a href="https://claude.ai/artifact/Caz6767fdoTZhy7DeoLaJm" target="_blank" rel="noopener">Replay it on the Factory Floor Downlink page</a>. A live closed-loop version runs at <code>http://192.168.10.223:8090/</code> (core PC, LAN only). There, LiDAR scans and AGV reports go uplink, stop/go commands come back downlink, and the operators' handhelds get camera video downlink over Bluetooth. At L1 the medians were: LiDAR 1.1 s up, reports 0.47 s up, commands 0.1 s down, report-to-command 0.56 s (p90 1.0 s), so the AGVs' 1 s fail-safe trips often.</p>
+      <div class="kpis">
+        <div class="kpi"><span class="label">5G NR, clean UDP</span><span class="v">≈ 44 up · 90 down kbit/s</span></div>
+        <div class="kpi"><span class="label">Bluetooth, clean UDP</span><span class="v">20–30 kbit/s each way</span></div>
+        <div class="kpi"><span class="label">RTT under TCP load</span><span class="v warn">3–7 s NR · 0.4–1.1 s BLE</span></div>
+        <div class="kpi"><span class="label">Board hangs in a 10 min run</span><span class="v warn">2, both auto-recovered</span></div>
+      </div>
+    </div>
+    <div class="tbl" style="border-top:1px solid var(--line)">
+      <table>
+        <thead><tr><th>Each UE alone</th><th>Idle RTT</th><th>TCP up</th><th>TCP down</th><th>RTT under TCP</th><th>UDP up, 0 % loss</th><th>UDP down, 0 % loss</th><th>Where it breaks</th></tr></thead>
+        <tbody>
+          <tr><td><span class="cls" style="background:var(--embb)">eMBB</span> nrUE1</td><td class="mono">477 ms</td><td class="mono">35.6 kbit/s</td><td class="mono">42.5 kbit/s</td><td class="mono">3.3–4.4 s</td><td class="mono">44 kbit/s</td><td class="mono">90 kbit/s</td><td>Uplink flattens at 44 kbit/s; 200 kbit/s down loses the iperf3 control connection</td></tr>
+          <tr><td><span class="cls" style="background:var(--urllc)">URLLC</span> nrUE2</td><td class="mono">889 ms</td><td class="mono">17.7 kbit/s</td><td class="mono">39.6 kbit/s</td><td class="mono">3.4–7.4 s</td><td class="mono">44 kbit/s</td><td class="mono">90 kbit/s</td><td>Same as nrUE1: both share the one gNB radio</td></tr>
+          <tr><td><span class="cls" style="background:var(--n3)">N3GPP</span> n3iwue1</td><td class="mono">194 ms</td><td class="mono">8.7 kbit/s</td><td class="mono">0.6 kbit/s</td><td class="mono">0.7–1.1 s</td><td class="mono">20 kbit/s</td><td class="mono">20 kbit/s</td><td>Losses from 30 kbit/s up: 13–30 % up, 9–17 % down</td></tr>
+          <tr><td><span class="cls" style="background:var(--n3)">N3GPP</span> n3iwue2</td><td class="mono">109 ms</td><td class="mono">board hung</td><td class="mono">10.0 kbit/s</td><td class="mono">0.4–0.5 s</td><td class="mono">30 kbit/s</td><td class="mono">30 kbit/s</td><td>BLE2 hung during TCP up; watchdog had it back before the next test</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="tbl" style="border-top:1px solid var(--line)">
+      <table>
+        <thead><tr><th>All four at once, 30 s TCP</th><th>nrUE1</th><th>nrUE2</th><th>n3iwue1</th><th>n3iwue2</th></tr></thead>
+        <tbody>
+          <tr><td>Up</td><td class="mono">14.5 kbit/s · RTT 9.7 s</td><td class="mono">19.9 kbit/s · RTT 9.6 s</td><td class="mono">22.8 kbit/s · RTT 0.7 s</td><td class="mono">14.7 kbit/s · RTT 0.9 s</td></tr>
+          <tr><td>Down</td><td class="mono">55.4 kbit/s · RTT 3.4 s</td><td class="mono">no connection</td><td class="mono">board hung</td><td class="mono">0 kbit/s, 77 % ping loss</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="bd" style="border-top:1px solid var(--line)">
+      <span class="label">What the numbers say</span>
+      <ol class="next">
+        <li><b>5G NR path.</b> It carries about 44 kbit/s up and 90 kbit/s down without loss, shared by both nrUEs. Its queues are deep, so a TCP flow pushes the round trip from about 0.5 s to 3–10 s.</li>
+        <li><b>Bluetooth path.</b> Each link is shaped to 40 kbit/s on air. After IPsec and GRE overhead, 20–30 kbit/s of UDP gets through cleanly. TCP stays poor: one lost segment at these round trips stalls it for seconds.</li>
+        <li><b>Why the n3iwues dropped out.</b> The hci_bb boards talk to the PC over a 115200-baud UART with no flow control. Under load a board stops answering HCI (<code>command tx timeout</code>) while its radio link stays up, and nothing gets through. The n3iwue's IKE then gives up and the container exits. This happened 2 times in the final 10-minute run, and 4 times earlier in the day.</li>
+        <li><b>What changed on the link.</b> <code>ble_ip_link.py</code> now paces traffic to 40 kbit/s itself. Small packets (pings, ACKs, IKE) go before bulk data, and the bulk queue keeps at most 1 s. That cut the Bluetooth RTT under load from 2–5 s to 0.4–1.1 s. <code>ble_watchdog.sh</code> resets a hung board and restarts its n3iwue; <code>stress.py</code> waits for the session and lists each recovery in its results.</li>
+        <li><b>The real fix.</b> Wire each BLE board's UART to a USB-serial adapter with RTS/CTS, or use ordinary USB Bluetooth adapters on the UE PC.</li>
+      </ol>
+      <span class="hint">Raw results: <code>~/oai/nrlink/logs/stress/run_nrue.json</code> (nrUEs alone) and <code>run_n3_all.json</code> (n3iwues alone, all four together) on the core PC.</span>
+    </div>
+  </section>
+  <section class="card" aria-label="Bluetooth board firmware">
+    <div class="hd"><h2>Bluetooth board firmware: the hang hunt</h2><span class="meta">5–6 Nov 2026 · every flash backed up first (UE PC ~/nxp/backups) · images and patches in ~/nxp/images</span></div>
+    <div class="bd">
+      <div class="kpis">
+        <div class="kpi"><span class="label">PC → board, 30–50 kbit/s</span><span class="v warn">hangs, 3 of 3 on v3</span></div>
+        <div class="kpi"><span class="label">Board → PC, up to 66 kbit/s</span><span class="v">never hung</span></div>
+        <div class="kpi"><span class="label">Both ways</span><span class="v warn">hangs at 15–25 kbit/s</span></div>
+        <div class="kpi"><span class="label">Root cause</span><span class="v warn">not found yet</span></div>
+      </div>
+      <p class="hint" style="max-width:100ch">When a board hangs, its main CPU goes completely silent: no HCI events, not even answers to vendor commands it handles itself (0xFDB0). The radio core keeps the LE link up, so the core still sees the connection. One link hangs as often as two.</p>
+    </div>
+    <div class="tbl" style="border-top:1px solid var(--line)">
+      <table class="fwtbl">
+        <thead><tr><th>Build</th><th>On</th><th>What changed</th><th>Result</th></tr></thead>
+        <tbody>
+          <tr><td class="mono">v1</td><td>–</td><td>1 Mbaud H4, vendor command 0xFDB1 enters ROM ISP</td><td>lost bytes in any burst over 11 B</td></tr>
+          <tr><td class="mono">v2</td><td>–</td><td>115200 baud, no flow control</td><td>works; hangs under PC → board load</td></tr>
+          <tr><td class="mono">v3</td><td><b>BLE2</b></td><td>UART receive ring 128 B → 4 KB; H4 parser resyncs after a 100 ms gap and rejects event bytes from the host</td><td>still hung 3 of 3 in uplink tests; kept, as a real fix for lost bytes</td></tr>
+          <tr><td class="mono">v4 diag</td><td>–</td><td>asserts, HardFaults and main-loop stalls reported to the PC as vendor event 0xF7 by polled UART; SysTick at top priority</td><td>survived 30 and 40 kbit/s, hung at 50, no report</td></tr>
+          <tr><td class="mono">v5 diag</td><td>–</td><td>adds interrupt state, a stuck-receive report and a report on demand (command 0xFDB2, verified working)</td><td>hung after 52 s with no report: the 1 ms tick itself had stopped</td></tr>
+          <tr><td class="mono">v6 diag</td><td>–</td><td>detects interrupts left masked in the main loop, reports and re-enables them</td><td>hung after 70 s, no report</td></tr>
+          <tr><td class="mono">v7</td><td>–</td><td>8 KB stack instead of 2 KB, stack high-water mark in the 0xFDB2 report</td><td>hung after 40 s; only 1.4 KB of stack ever used, so not the stack</td></tr>
+          <tr><td class="mono">v8</td><td><b>BLE1, BLE2</b></td><td>v7 plus the RGB LED steady green, so the Bluetooth boards stand out from the blue/red nrlink boards</td><td>flashed 6 Nov; same hang behaviour expected</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="bd" style="border-top:1px solid var(--line)">
+      <span class="label">Ruled out, and what is left</span>
+      <ol class="next">
+        <li><b>Ruled out by test:</b> the UART overrun flag (the NXP driver clears it), the 128 B receive ring, failed asserts and faults, a stalled main loop, unread UART input, interrupts masked in the main loop, and stack overflow.</li>
+        <li><b>Most likely now:</b> an interrupt handler that never returns, at the same top priority as the tick, so nothing can preempt it to report. The candidates are the UART and the radio-core message (RPMsg) handlers.</li>
+        <li><b>Next, cheapest first:</b> a release build (all of this is NXP's -O0 debug build, and an optimised build changes timing a lot); a diagnostic build that puts every other interrupt below the tick; then a debugger session, which needs the MCXW727 device pack (pyocd's generic target gets WAIT on every board, healthy ones too).</li>
+        <li><b>Meanwhile:</b> <code>ble_watchdog.sh</code> resets a hung board in about 10 s and restarts its n3iwue, and <code>ble_ip_link.py</code> now keeps each tun across reconnects, so IPsec survives a radio dropout.</li>
+      </ol>
+    </div>
+  </section>
+
+</div>
+
+<script>
+"use strict";
+const $ = id => document.getElementById(id);
+const NS = "http://www.w3.org/2000/svg";
+function el(tag, attrs = {}, parent) { const e = document.createElementNS(NS, tag); for (const k in attrs) e.setAttribute(k, attrs[k]); if (parent) parent.appendChild(e); return e; }
+
+const OX = 150, VW = OX + 1840, VH = 880, W = 140, H = 72;
+const COL = { A: 30, B: 200, C: 370, D: 540, E: 710, F: 1005, G: 1170, H: 1335, I: 1500, J: 1665 };
+const ROW = { 1: 48, 2: 152, 3: 276, 4: 400, 5: 534, 6: 652 };
+const KC = { embb: "var(--embb)", urllc: "var(--urllc)", n3: "var(--n3)", mix: "var(--ink-2)" };
+const VEND = { f5gc: "free5GC", oai: "OpenAirInterface", host: "Host software", nxp: "NXP", intel: "Intel" };
+
+// lanes: [top, bottom, name, sub lines, colour token]
+const LANES = [
+  [0, 250, "free5GC", ["v4.3.0", "core NFs, N3IWF", "and n3iwue"], "--f5gc"],
+  [250, 372, "OpenAirInterface", ["gNB VNF + PNF", "nrUE, ext-dn"], "--oai"],
+  [372, 498, "Host · Linux", ["nrlink Python,", "BlueZ, Docker"], "--host"],
+  [498, 630, "NXP", ["FRDM-MCXW72 boards", "nrlink v4 · hci_bb v8"], "--nxp"],
+  [630, 742, "Intel", ["8265 Bluetooth 4.2", "core PC adapter"], "--intel"],
+  [742, 880, "Over the air", ["2.4 GHz ISM band", "nrlink fixed 2402 MHz", "BLE hops 2404–2478"], "--ink-3"],
+];
+
+const NODES = {
+  nfs:   { c: "A", r: 1, v: "f5gc", t: "SBI NFs", s: "NRF AUSF UDM UDR", s2: "PCF NSSF NEF CHF", d: "The rest of the free5GC control plane, talking HTTP/2 service-based interfaces. AUSF and UDM run 5G-AKA and EAP-AKA' for every UE; UDR keeps the subscriber data in MongoDB." },
+  amf:   { c: "B", r: 1, v: "f5gc", t: "AMF", s: "free5GC v4.3.0", s2: "N1 / N2 · NAS", d: "Registration and mobility. It sees the two nrUEs through the gNB and the two n3iwues through the N3IWF, as one RAN node each, over NGAP. A UE's NAS security context lives here; two n3iwue sessions racing for the same IMSI corrupted it once (MAC verification failed) until a clean restart." },
+  smf:   { c: "C", r: 1, v: "f5gc", t: "SMF", s: "free5GC", s2: "pool 12.1.1.0/24", d: "PDU sessions for slice SST 1 / SD 010203, DNN internet. It picks the address from 12.1.1.0/24 and programs the UPF over N4 (PFCP)." },
+  web:   { c: "D", r: 1, v: "f5gc", t: "WebUI", s: "free5GC + MongoDB", s2: "192.168.70.147", d: "Subscriber provisioning. f5gc_subscribers.py writes IMSIs 036–038 (nrUEs), 040 (docker n3iwue) and 041–042 (UE PC n3iwues) through it." },
+  upf:   { c: "A", r: 2, v: "f5gc", t: "UPF", s: "free5GC · gtp5g", s2: "N3 / N6 anchor", k: "mix", d: "User plane anchor on the gtp5g 0.10.2 kernel module. GTP-U tunnels come in from the gNB and from the N3IWF, and decapsulated packets go out to the data network." },
+  n3iwf: { c: "D", r: 2, v: "f5gc", t: "N3IWF", s: "free5GC", s2: "192.168.70.139", k: "n3", d: "Non-3GPP interworking function. It terminates IKEv2 with EAP-5G and the IPsec child SAs from each n3iwue, then relays NAS to the AMF and user traffic to the UPF over GTP-U. The n3iwue has no NAT traversal, so every path to it is routed without NAT." },
+  dn:    { c: "A", r: 3, v: "oai", t: "ext-dn", s: "OAI trf-gen", s2: "192.168.70.132", k: "mix", d: "The data network endpoint all four UEs ping. It uses OpenAirInterface's traffic-generator image on the Docker network shared with free5GC." },
+  vnf:   { c: "B", r: 3, v: "oai", t: "gNB VNF", s: "OAI nr-softmodem", s2: "MAC RLC PDCP RRC", k: "mix", d: "The upper gNB, in nFAPI VNF mode. It connects to the free5GC AMF over N2 and to the UPF over N3. Every slot its MAC scheduler decides which nrUE gets downlink and uplink resources." },
+  pnf:   { c: "C", r: 3, v: "oai", t: "gNB PNF", s: "OAI + nrlink L1", s2: "nFAPI P5 / P7", k: "mix", d: "The lower gNB, in nFAPI PNF mode. Instead of a real PHY, nrlink's L1 hands each slot's MIB, DCIs and transport blocks to gnb_bridge. It waits for the uplink, so one slot takes as long as its exchange over the air." },
+  gbr:   { c: "C", r: 4, v: "host", t: "gnb_bridge", s: "nrlink · Python", s2: "udp/5000 · TDMA", k: "mix", d: "Fragments each slot into air packets of up to 255 B and broadcasts them. Then it polls each UE board in turn for its uplink." },
+  blel:  { c: "D", r: 4, v: "host", t: "ble_ip_link", s: "--listen · BlueZ", s2: "PSM 0x0081 · ble+", k: "n3", d: "The Bluetooth LE access point. It advertises as connectable with privacy off and accepts L2CAP CoC connections on PSM 0x0081. For each UE it opens a tun ble<k> carrying one IP packet per SDU, then routes it toward the N3IWF. After each new connection it turns advertising back on with a raw HCI command, so the next UE can connect. Started with sudo: ble_ip_link.py --listen --hci 0." },
+  gbd:   { c: "C", r: 5, v: "nxp", t: "gNB board", s: "NXP · nrlink v4", s2: "3TJ2B15JGASV3", k: "mix", led: "gnb", ver: "nrlink v4", d: "MCXW727C with nrlink v4 firmware: a SLIP modem between USB (1 Mbaud) and the GFSK radio, 1 Mbit/s on 2402 MHz (channel 0x2A). Its RGB LED blinks every 0.4 s in the colour of each UE served in the last second, in turn: blue for eMBB (nrUE1), red for URLLC (nrUE2), so with both active it alternates blue and red (gnb_bridge.py, 6 Nov)." },
+  intel: { c: "D", r: 6, v: "intel", t: "hci0", s: "Intel 8265 BT 4.2", s2: "A0:C5:89:8D:1C:B9", k: "n3", d: "The core PC's own Bluetooth adapter, with a public address. It is the only radio that is not an NXP board, so it has its own lane. Its range to the UE PC's boards is fine: the boards hear it at about −26 dBm." },
+  n3ue1: { c: "G", r: 2, v: "f5gc", t: "n3iwue1", s: "free5GC · …041", s2: "12.1.1.66", k: "n3", d: "free5GC's non-3GPP UE in container nrlink-n3iwue1. It runs IKEv2 with EAP-5G to the N3IWF, then NAS over IPsec, and its PDU session comes up as GRE gretun-id-2-1 in VRF vrf-pdu-1. IKE SPI 0x6f741, control-plane SPI 0x41. Its config is writable because it stores its SQN there. IKE runs from 10.70.0.11 on ble1, which ble_ip_link moved into the container." },
+  n3ue2: { c: "H", r: 2, v: "f5gc", t: "n3iwue2", s: "free5GC · …042", s2: "12.1.1.63", k: "n3", d: "Container nrlink-n3iwue2, IMSI 208950000000042, IKE SPI 0x6f742, control-plane SPI 0x42. Otherwise identical to n3iwue1." },
+  nrue1: { c: "I", r: 3, v: "oai", t: "nrUE1 · eMBB", s: "OAI nr-uesoftmodem", s2: "12.1.1.27", k: "embb", d: "OpenAirInterface NR UE in nFAPI-style emulation. MAC, RLC, PDCP, RRC and NAS run unchanged, and its PDU session is oaitun_ue1." },
+  nrue2: { c: "J", r: 3, v: "oai", t: "nrUE2 · URLLC", s: "OAI nr-uesoftmodem", s2: "12.1.1.28", k: "urllc", d: "Second OpenAirInterface NR UE, on the URLLC role, PDU session oaitun_ue1 in its own container." },
+  ble1l: { c: "G", r: 4, v: "host", t: "ble_ip_link 1", s: "--connect · BlueZ", s2: "ble1 10.70.0.11", k: "n3", d: "It connects from the BLE1 board's adapter to the core's hci0 and sends hello NRLK+1. It then moves tun ble1 into the n3iwue1 container and routes 192.168.70.139 through it. The tun MTU is 1500, because the N3IWF's IKE_AUTH reply with its certificate does not fit in 1280." },
+  ble2l: { c: "H", r: 4, v: "host", t: "ble_ip_link 2", s: "--connect · BlueZ", s2: "ble2 10.70.0.12", k: "n3", d: "Same as link 1, for BLE2 and n3iwue2." },
+  ub1:   { c: "I", r: 4, v: "host", t: "ue_bridge 1", s: "nrlink · Python", s2: "udp/5001", k: "embb", d: "Hands downlink slots to nrUE1 and answers the gNB's polls with nrUE1's uplink." },
+  ub2:   { c: "J", r: 4, v: "host", t: "ue_bridge 2", s: "nrlink · Python", s2: "udp/5002", k: "urllc", d: "Hands downlink slots to nrUE2 and answers the gNB's polls with nrUE2's uplink." },
+  bb1:   { c: "G", r: 5, v: "nxp", t: "BLE1 board", s: "NXP · hci_bb v8", s2: "3VWLILYT2A1AK", k: "n3", led: "g", ver: "hci_bb v8", d: "FRDM-MCXW72 running NXP's hci_bb Bluetooth LE controller, rebuilt for 115200 baud; now v8 (v7 diagnostics and 8 KB stack, plus the RGB LED steady green). At 1 Mbaud it lost bytes in any command over about 11 bytes. btattach makes it Linux adapter hci0 on the UE PC, and ble_attach.sh sets its address to 02:4E:52:65:B3:A1. A board reset loses the address, so ble_attach.sh must run again." },
+  bb2:   { c: "H", r: 5, v: "nxp", t: "BLE2 board", s: "NXP · hci_bb v8", s2: "GLNAOWUSDREB4", k: "n3", led: "g", ver: "hci_bb v8", d: "Second hci_bb board, also on v8 (LED steady green): Linux adapter hci1 on the UE PC, address 02:4E:52:77:BF:5D." },
+  u1b:   { c: "I", r: 5, v: "nxp", t: "UE1 board", s: "NXP · nrlink v4", s2: "2HOKMMVEX1WMP", k: "embb", led: "b1", d: "FRDM-MCXW72 radio for nrUE1, nrlink v4. Its LED blinks blue once when it is served (eMBB code: blue × 1)." },
+  u2b:   { c: "J", r: 5, v: "nxp", t: "UE2 board", s: "NXP · nrlink v4", s2: "GBAMNH4BQ3CSB", k: "urllc", led: "r2", d: "FRDM-MCXW72 radio for nrUE2, nrlink v4. Its LED blinks red twice when it is served (URLLC code: red × 2)." },
+};
+for (const N of Object.values(NODES)) { N.x = COL[N.c]; N.y = ROW[N.r]; }
+const pt = (id, side, f = 0.5) => { const N = NODES[id]; return side === "t" ? [N.x + W * f, N.y] : side === "b" ? [N.x + W * f, N.y + H] : side === "l" ? [N.x, N.y + H * f] : [N.x + W, N.y + H * f]; };
+const vline = (a, b) => [pt(a, "b"), pt(b, "t")];
+
+// st: up (carrying traffic) · ready (attached, idle) · ctl (control plane) · pending (built, not used yet)
+const LINKS = [
+  { id: "sbi1", st: "ctl", pts: [pt("nfs", "r"), pt("amf", "l")], name: "SBI", cap: "HTTP/2", what: "Service-based interface between the AMF and the other free5GC functions." },
+  { id: "sbi2", st: "ctl", pts: [pt("amf", "r"), pt("smf", "l")], name: "N11", cap: "HTTP/2", what: "AMF to SMF: session create, update and release." },
+  { id: "n2", st: "ctl", pts: [[300, 120], [300, 276]], lbl: [306, 262, "start", "N2"], name: "N2", cap: "NGAP over SCTP", what: "Control plane from the gNB VNF to the free5GC AMF: NG setup, UE context, PDU session resources." },
+  { id: "n2b", st: "ctl", pts: [[320, 120], [320, 140], [610, 140], [610, 152]], lbl: [520, 135, "middle", "N2 · NGAP"], name: "N2", cap: "NGAP over SCTP", what: "The N3IWF is a second RAN node to the AMF. NAS from the n3iwues reaches the AMF through it." },
+  { id: "n3b", lat: [440, 192, "middle", "0.18 ms"], latd: "0.18 ms round trip (Docker bridge)",  st: "up", k: "n3", pts: [[540, 172], [170, 172]], lbl: [440, 166, "middle", "N3 · GTP-U"], name: "N3", cap: "GTP-U", what: "User plane from the N3IWF to the UPF: n3iwue traffic arrives at the N3IWF as GRE in IPsec and leaves it in GTP-U." },
+  { id: "n3", lat: [246, 248, "start", "0.16 ms"], latd: "0.16 ms round trip (Docker bridge)",  st: "up", k: "mix", pts: [[170, 204], [240, 204], [240, 276]], lbl: [246, 262, "start", "N3"], name: "N3", cap: "GTP-U", what: "User plane from the UPF to the gNB VNF, for both nrUEs." },
+  { id: "n6", lat: [108, 240, "start", "0.15 ms"], latd: "0.15 ms round trip (Docker bridge)",  st: "up", k: "mix", pts: vline("upf", "dn"), lbl: [108, 254, "start", "N6"], name: "N6", cap: "IP, Docker bridge", what: "Decapsulated UE traffic between the UPF and ext-dn." },
+  { id: "p7", lat: [355, 364, "middle", "0.14 ms"], latd: "0.14 ms round trip between the containers; the slot itself takes 10.6 ms (94 slots/s)",  st: "up", k: "mix", pts: [pt("vnf", "r"), pt("pnf", "l")], lbl: [355, 268, "middle", "nFAPI P7"], name: "nFAPI P7", cap: "UDP, per slot", what: "The split. DL_TTI, UL_TTI and TX_DATA go down to the PNF; CRC, RX_DATA, UCI and RACH come back up." },
+  { id: "pg", lat: [448, 368, "start", "10.6 ms / slot"], latd: "one lockstep exchange per slot: 10.6 ms on average (94 slots/s). DL slots take about 3.5 ms, UL slots about 28 ms (polls).",  st: "up", k: "mix", pts: vline("pnf", "gbr"), lbl: [448, 384, "start", "UDP lockstep"], name: "nrlink", cap: "UDP, lockstep per slot", what: "One DL_SLOT message down and one UL_RESULT back per slot. The PNF waits for the answer, which sets the slot rate." },
+  { id: "gu", lat: [448, 500, "start", "2.6 ms / 255 B"], latd: "2.6 ms per 255 B air packet at 1 Mbaud SLIP (computed)",  st: "up", k: "mix", pts: vline("gbr", "gbd"), lbl: [448, 518, "start", "USB 1 Mbaud"], name: "USB VCOM", cap: "1 Mbaud SLIP", what: "Serial link to the gNB board's LPUART through its on-board MCU-Link." },
+  { id: "nb", st: "up", k: "n3", pts: [[610, 224], [610, 400]], lbl: [618, 300, "start", "IP · ble+"], lbl2: "routed", name: "IP over Docker bridge", cap: "ble+ ↔ demo-oai", what: "Packets arriving on a ble<k> tunnel are routed to the N3IWF at .139 (core_routing.sh: ble+ ↔ demo-oai)." },
+  { id: "bi", st: "up", k: "n3", pts: vline("blel", "intel"), lbl: [618, 580, "start", "USB HCI"], name: "HCI", cap: "USB, BlueZ", what: "BlueZ drives the Intel adapter. The listener has turned on connectable LE advertising and waits on PSM 0x0081." },
+  { id: "t1", st: "up", k: "n3", pts: vline("n3ue1", "ble1l"), lbl: [1248, 300, "start", "tun ble1"], lbl2: "IKE · IPsec", name: "tun ble1", cap: "10.70.0.11", what: "ble_ip_link moved ble1 into the n3iwue1 container and routes the N3IWF through it, so IKEv2, IPsec and GRE all travel over Bluetooth. The container waits for that route before starting the n3iwue." },
+  { id: "t2", st: "up", k: "n3", pts: vline("n3ue2", "ble2l"), lbl: [1413, 300, "start", "tun ble2"], lbl2: "IKE · IPsec", name: "tun ble2", cap: "10.70.0.12", what: "The same for n3iwue2." },
+  { id: "h1", lat: [1248, 500, "start", "2 ms cmd · 87 ms/kB"], latd: "HCI command round trip 2.8 ms measured (about 2 ms after hcitool start-up); a 1000 B ACL packet needs 87 ms at 115200 baud",  st: "up", k: "n3", pts: vline("ble1l", "bb1"), lbl: [1248, 518, "start", "H4 115200"], name: "HCI H4", cap: "USB VCOM 115200, no flow control", what: "btattach -N -P h4 -S 115200. The MCU-Link VCOM has no RTS/CTS." },
+  { id: "h2", lat: [1413, 500, "start", "2 ms cmd · 87 ms/kB"], latd: "HCI command round trip 2.8 ms measured; a 1000 B ACL packet needs 87 ms at 115200 baud",  st: "up", k: "n3", pts: vline("ble2l", "bb2"), lbl: [1413, 518, "start", "H4 115200"], name: "HCI H4", cap: "USB VCOM 115200, no flow control", what: "Same as BLE1." },
+  { id: "e1", st: "up", k: "embb", pts: vline("nrue1", "ub1"), lbl: [1578, 384, "start", "UDP"], name: "UDP", cap: "veth", what: "Downlink slots to nrUE1, and its uplink for each TX slot back." },
+  { id: "e2", st: "up", k: "urllc", pts: vline("nrue2", "ub2"), lbl: [1743, 384, "start", "UDP"], name: "UDP", cap: "veth", what: "Downlink slots to nrUE2, and its uplink for each TX slot back." },
+  { id: "s1", lat: [1578, 500, "start", "2.6 ms / 255 B"], latd: "2.6 ms per 255 B air packet at 1 Mbaud SLIP (computed)",  st: "up", k: "embb", pts: vline("ub1", "u1b"), lbl: [1578, 518, "start", "USB 1 Mbaud"], name: "USB VCOM", cap: "1 Mbaud SLIP", what: "Serial link from the UE1 board to its bridge." },
+  { id: "s2", lat: [1743, 500, "start", "2.6 ms / 255 B"], latd: "2.6 ms per 255 B air packet at 1 Mbaud SLIP (computed)",  st: "up", k: "urllc", pts: vline("ub2", "u2b"), lbl: [1743, 518, "start", "USB 1 Mbaud"], name: "USB VCOM", cap: "1 Mbaud SLIP", what: "Serial link from the UE2 board to its bridge." },
+  { id: "ab1", lat: [928, 760, "middle", "RTT 86 ms (56 B) · 443 ms (1 kB)"], latd: "core ↔ 10.70.0.11: 86 ms average, 54 ms min with 56 B pings; 443 ms with 1000 B. Connection interval 45 ms, supervision timeout 420 ms, central = the NXP board",  st: "up", k: "n3", pts: [[650, 724], [650, 770], [1240, 770], [1240, 606]], lbl: [928, 774, "middle", "BLE1 · LE 1M · hops 37 ch 2404–2478 MHz · CoC 0x0081"], name: "Bluetooth LE", cap: "LE 1M PHY, L2CAP CoC", what: "BLE1 board to the core's hci0, about 90 ms round trip. Early drops came from bluetoothd on both PCs reading each other's encrypted GATT data: the pairing that followed failed, and the kernel then drops the link. bluetoothd is masked on the UE PC; the link needs only the kernel." },
+  { id: "ab2", lat: [928, 812, "middle", "RTT 75 ms (56 B) · 335 ms (1 kB)"], latd: "core ↔ 10.70.0.12: 75 ms average, 53 ms min with 56 B pings; 335 ms with 1000 B. Connection interval 45 ms",  st: "up", k: "n3", pts: [[610, 724], [610, 794], [1405, 794], [1405, 606]], lbl: [928, 798, "middle", "BLE2 · LE 1M · hops 2404–2478 MHz · adv 2402/2426/2480"], name: "Bluetooth LE", cap: "LE 1M PHY, L2CAP CoC", what: "BLE2 board to the core's hci0, the same way." },
+  { id: "ar1", lat: [928, 842, "middle", "DL one-way ≈ 111 ms · RTT 529 ms"], latd: "ext-dn → nrUE: 111 ms median one-way for a 73 B packet, 230 ms for a 2 kB LiDAR scan (factory run, level 1). Round trip ext-dn ↔ nrUE1 529 ms: the uplink needs a scheduling request and a grant, so it takes about 420 ms.",  st: "up", k: "embb", pts: [[460, 606], [460, 826], [1570, 826], [1570, 606]], lbl: [928, 830, "middle", "UE1 · nrlink GFSK 1 Mbit/s · 2402 MHz (ch 0x2A)"], name: "nrlink radio", cap: "GFSK 1 Mbit/s, one channel shared", what: "nrlink over GenFSK on one fixed channel, 2402 MHz (0x2A = 2360 + 42 MHz), 1 Mbit/s GFSK with a 24-bit CRC. OAI itself is configured for band n78, SSB ARFCN 641280 (3619.2 MHz), 106 PRB at 30 kHz; those values only label the emulated carrier. 2402 MHz is also Bluetooth advertising channel 37, so the access point's advertising shares it. The gNB board broadcasts each downlink slot and polls each UE board for uplink. This is the bottleneck: about 400 kbit/s usable, about 700 ms round trip." },
+  { id: "ar2", lat: [928, 866, "middle", "DL one-way ≈ 111 ms · RTT 531 ms"], latd: "same radio and slots as UE1: 111 ms median one-way down (robot updates), 531 ms round trip",  st: "up", k: "urllc", pts: [[420, 606], [420, 850], [1735, 850], [1735, 606]], lbl: [928, 854, "middle", "UE2 · same 2402 MHz channel, time-shared"], name: "nrlink radio", cap: "GFSK 1 Mbit/s, one channel shared", what: "The same channel as UE1, time-shared by the gNB's polling." },
+];
+
+let selected = { link: "ab1" };
+const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+function build() {
+  const svg = $("arch"); svg.textContent = ""; svg.setAttribute("viewBox", `0 0 ${VW} ${VH}`);
+  const X = x => x + OX, P = p => p.map(([x, y]) => `${X(x)} ${y}`).join(" L ");
+  // swimlanes
+  LANES.forEach(([y0, y1, name, sub, tok], i) => {
+    el("rect", { x: 0, y: y0, width: VW, height: y1 - y0, fill: `color-mix(in srgb, var(${tok}) ${i % 2 ? 6 : 9}%, var(--panel-2))` }, svg);
+    el("rect", { x: 0, y: y0, width: 5, height: y1 - y0, fill: `var(${tok})` }, svg);
+    if (i) el("line", { x1: 0, x2: VW, y1: y0, y2: y0, stroke: "var(--line)", "stroke-width": 1.2 }, svg);
+    el("text", { class: "lanehd", x: 18, y: y0 + 28, fill: `var(${tok})` }, svg).textContent = name;
+    sub.forEach((s, j) => { el("text", { class: "lanesub", x: 18, y: y0 + 46 + j * 14 }, svg).textContent = s; });
+  });
+  el("line", { x1: OX, x2: OX, y1: 0, y2: VH, stroke: "var(--line)" }, svg);
+  // PC frames
+  for (const [x0, x1, t, s] of [[14, 866, "CORE PC · claudepc", "192.168.10.223"], [990, 1822, "UE PC · claudepc2", "192.168.10.232"]]) {
+    el("rect", { class: "pcframe", x: X(x0), y: 8, width: x1 - x0, height: 734, rx: 10 }, svg);
+  }
+  el("text", { class: "pctitle", x: X(1005), y: 34 }, svg).textContent = "UE PC · claudepc2";
+  el("text", { class: "pcsub", x: X(1160), y: 34 }, svg).textContent = "192.168.10.232";
+  el("text", { class: "pctitle", x: X(856), y: 34, "text-anchor": "end" }, svg).textContent = "CORE PC · claudepc";
+  el("text", { class: "pcsub", x: X(856), y: 238, "text-anchor": "end" }, svg).textContent = "192.168.10.223";
+  // links
+  for (const L of LINKS) {
+    const g = el("g", { class: `link ${L.st}`, "data-id": L.id, tabindex: 0, role: "button", "aria-label": `${L.name} link` }, svg);
+    const d = "M" + P(L.pts);
+    el("path", { class: "hit", d }, g);
+    el("path", { class: "base", d, stroke: L.st === "ctl" ? "var(--ink-3)" : KC[L.k] }, g);
+    if (L.st === "up") el("path", { class: "flow", d }, g);
+    if (L.lat) { const [lx, ly, a, txt] = L.lat; el("text", { class: "lat", x: X(lx), y: ly, "text-anchor": a }, g).textContent = txt; }
+    if (L.lbl) {
+      const [lx, ly, a, txt] = L.lbl;
+      el("text", { class: "ltxt" + (L.st === "pending" && L.lbl2 ? "" : ""), x: X(lx), y: ly, "text-anchor": a }, g).textContent = txt;
+      if (L.lbl2) el("text", { class: "ltxt" + (L.st === "pending" ? " warn" : ""), x: X(lx), y: ly + 13, "text-anchor": a }, g).textContent = L.lbl2;
+    }
+    g.addEventListener("click", () => select({ link: L.id }));
+    g.addEventListener("keydown", e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); select({ link: L.id }); } });
+  }
+  // nodes
+  for (const [id, N] of Object.entries(NODES)) {
+    const g = el("g", { class: "node" + (N.pend ? " pending" : ""), "data-id": id, tabindex: 0, role: "button", "aria-label": `${N.t}, ${VEND[N.v]}` }, svg);
+    el("rect", { class: "box", x: X(N.x), y: N.y, width: W, height: H, rx: 6 }, g);
+    if (N.k && N.k !== "mix") el("rect", { x: X(N.x), y: N.y + 9, width: 3, height: H - 18, fill: KC[N.k] }, g);
+    const vt = { f5gc: "--f5gc", oai: "--oai", host: "--host", nxp: "--nxp", intel: "--intel" }[N.v];
+    el("circle", { cx: X(N.x) + W - 12, cy: N.y + 13, r: 4.5, fill: `var(${vt})` }, g);
+    el("text", { class: "n1", x: X(N.x) + 12, y: N.y + 24 }, g).textContent = N.t;
+    el("text", { class: "n2", x: X(N.x) + 12, y: N.y + 43 }, g).textContent = N.s;
+    el("text", { class: "n3", x: X(N.x) + 12, y: N.y + 59 }, g).textContent = N.s2;
+    if (N.led) el("circle", { class: "led led-" + N.led, cx: X(N.x) + W - 13, cy: N.y + H - 13, r: 6, fill: "var(--line)" }, g);
+    g.addEventListener("click", () => select({ node: id }));
+    g.addEventListener("keydown", e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); select({ node: id }); } });
+  }
+  select(selected);
+}
+const ST = { up: "carrying traffic", ctl: "control plane, up", pending: "built, not used yet" };
+function select(sel) {
+  selected = sel;
+  document.querySelectorAll("#arch .sel").forEach(e => e.classList.remove("sel"));
+  document.querySelector(`#arch [data-id="${sel.link || sel.node}"]`)?.classList.add("sel");
+  const box = $("detail");
+  if (sel.link) {
+    const L = LINKS.find(l => l.id === sel.link);
+    box.innerHTML = `<span class="label">Link</span><h3>${L.name}</h3><dl><dt>Carries</dt><dd>${L.cap}</dd><dt>State</dt><dd>${ST[L.st]}</dd>${L.latd ? `<dt>Latency</dt><dd>${L.latd}</dd>` : ""}</dl><p>${L.what}</p>`;
+  } else {
+    const N = NODES[sel.node], pc = N.x > 900 ? "UE PC, claudepc2" : "Core PC, claudepc";
+    box.innerHTML = `<span class="label">${VEND[N.v]}</span><h3>${N.t}</h3><dl><dt>Runs on</dt><dd>${pc}</dd><dt>Is</dt><dd>${N.s} · ${N.s2}</dd>${N.pend ? "<dt>State</dt><dd>not started yet</dd>" : ""}</dl><p>${N.d}</p>`;
+  }
+}
+build();
+
+// ---------------------------------------------------------------- latency bars and slot schemes
+const BARS = [
+  ["NR · 73 B down", "embb", [["core 0.2", 0.2, "--f5gc"], ["USB + air + USB ≈ 7", 7.3, "--nxp"], ["waiting for its DL slot ≈ 104", 103.5, "--embb"]], "111 ms"],
+  ["NR · round trip", "embb", [["down 111", 111, "--embb"], ["up ≈ 418: request, grant, UL slot", 418, "--urllc"]], "529 ms"],
+  ["BLE · 56 B down", "n3", [["core + N3IWF ≈ 4", 4, "--f5gc"], ["Bluetooth link ≈ 40 (half of 80 RTT)", 40, "--n3"]], "≈ 44 ms"],
+  ["BLE · 2 kB frame down", "n3", [["core 0.2", 0.2, "--f5gc"], ["2.1 kB at the 40 kbit/s pacing ≈ 420 (UART 180 ms overlaps)", 410, "--n3"]], "384–436 ms"],
+];
+function bars() {
+  const max = 540;
+  $("bars").innerHTML = BARS.map(([name, k, segs, tot]) => `<div class="bar"><span>${name}</span><div class="track">${segs.map(([t, v, c]) =>
+    `<span class="seg" style="--c:var(${c});flex:0 0 ${(100 * v / max).toFixed(2)}%" title="${t} ms">${v > 30 ? t + " ms" : ""}</span>`).join("")}</div><span class="tot">${tot}</span></div>`).join("") +
+    `<div class="bar"><span></span><span class="hint">small segments: ${BARS.flatMap(b => b[2].filter(s => s[1] <= 30).map(s => s[0] + " ms")).join(" · ")}</span><span></span></div>`;
+}
+function slots() {
+  const g = $("slotnr"); g.textContent = "";
+  const x0 = 70, W1 = 1000;
+  el("text", { class: "t", x: 0, y: 18 }, g).textContent = "Nominal NR: 10 slots × 0.5 ms = 5 ms";
+  const pat = "DDDDDDDSUU".split(""), real = pat.map(c => c === "D" ? 3.5 : 28), tot = real.reduce((a, b) => a + b, 0);
+  const col = c => c === "D" ? "var(--embb)" : c === "U" ? "var(--urllc)" : "var(--signal)";
+  pat.forEach((c, i) => { const w = 5 / 10 * W1 / tot; const x = x0 + i * w;
+    el("rect", { x, y: 28, width: w - 2, height: 22, rx: 3, fill: col(c) }, g); });
+  el("text", { x: x0 + 5 * W1 / tot + 6, y: 44 }, g).textContent = "← 5 ms, at the same scale as below";
+  el("text", { class: "t", x: 0, y: 84 }, g).textContent = `On nrlink, one period ≈ ${Math.round(tot)} ms (measured: 94 slots/s → 106 ms)`;
+  let x = x0;
+  pat.forEach((c, i) => { const w = real[i] * W1 / tot;
+    el("rect", { x, y: 96, width: w - 2, height: 34, rx: 3, fill: col(c) }, g);
+    el("text", { x: x + w / 2 - 1, y: 118, "text-anchor": "middle", fill: "#fff", style: "fill:#fff;font-weight:600" }, g).textContent = c;
+    if (c !== "D") {   // inside an UL slot: broadcast, poll UE1, poll UE2 (one times out)
+      const s = w / 28;
+      el("rect", { x, y: 136, width: 3.5 * s - 1, height: 16, fill: "var(--embb)", opacity: .8 }, g);
+      el("rect", { x: x + 3.5 * s, y: 136, width: 2.5 * s - 1, height: 16, fill: "var(--ok)" }, g);
+      el("rect", { x: x + 6 * s, y: 136, width: 22 * s - 3, height: 16, fill: "none", stroke: "var(--urllc)", "stroke-dasharray": "4 3" }, g);
+    }
+    x += w; });
+  const ux = 600;
+  el("text", { x: ux, y: 170 }, g).textContent = "each S/U slot: ";
+  [["var(--embb)", "DL_SLOT broadcast"], ["var(--ok)", "poll + answer from one UE"], ["none", "the other poll waits out its 25 ms"]].forEach(([c, t], i) => {
+    const yy = 186 + i * 16; el("rect", { x: ux, y: yy - 10, width: 14, height: 10, fill: c, stroke: c === "none" ? "var(--urllc)" : "none", "stroke-dasharray": "3 2" }, g);
+    el("text", { x: ux + 20, y: yy }, g).textContent = t; });
+  el("text", { x: x0, y: 170 }, g).textContent = "D slot ≈ 3.5 ms: DL_SLOT to the gNB board over USB, one broadcast";
+  el("text", { x: x0, y: 186 }, g).textContent = "(7 of 10 slots, but only 23 % of the time)";
+  for (let t = 0; t <= 100; t += 20) { const xx = x0 + t * W1 / tot; el("line", { x1: xx, x2: xx, y1: 92, y2: 94, stroke: "var(--ink-3)" }, g); el("text", { x: xx, y: 244, "text-anchor": "middle" }, g).textContent = t + " ms"; el("line", { x1: xx, x2: xx, y1: 232, y2: 236, stroke: "var(--ink-3)" }, g); }
+  el("line", { x1: x0, x2: x0 + W1, y1: 232, y2: 232, stroke: "var(--line)" }, g);
+
+  const b = $("slotble"); b.textContent = ""; const bx = 90, BW = 990, span = 100, sx = t => bx + t * BW / span;
+  [["BLE1 link", 0, 30], ["BLE2 link", 20, 80]].forEach(([n, off, y]) => {
+    el("text", { class: "t", x: 0, y: y + 16 }, b).textContent = n;
+    el("line", { x1: bx, x2: bx + BW, y1: y + 12, y2: y + 12, stroke: "var(--line)" }, b);
+    for (let t = off; t < span; t += 45) {
+      for (let k = 0; k < 9; k++) {   // 9 exchanges: board TX then Intel TX
+        el("rect", { x: sx(t + k * 0.68), y, width: Math.max(1.5, 0.3 * BW / span), height: 11, fill: "var(--n3)" }, b);
+        el("rect", { x: sx(t + k * 0.68 + 0.45), y: y + 13, width: Math.max(1, 0.08 * BW / span), height: 11, fill: "var(--intel)" }, b);
+      }
+      if (t < 60) el("text", { x: sx(t) + 70, y: y + 21 }, b).textContent = `event · next data channel`;
+    }
+    if (n === "BLE1 link") { el("line", { x1: sx(0), x2: sx(45), y1: y - 8, y2: y - 8, stroke: "var(--ink-2)" }, b); el("text", { x: sx(22.5), y: y - 12, "text-anchor": "middle" }, b).textContent = "45 ms connection interval"; }
+  });
+  for (let t = 0; t <= span; t += 10) { el("text", { x: sx(t), y: 140, "text-anchor": "middle" }, b).textContent = t + " ms"; }
+  el("rect", { x: bx, y: 150, width: 12, height: 10, fill: "var(--n3)" }, b); el("text", { x: bx + 18, y: 159 }, b).textContent = "NXP board (central) sends, up to 27 B";
+  el("rect", { x: bx + 300, y: 150, width: 12, height: 10, fill: "var(--intel)" }, b); el("text", { x: bx + 318, y: 159 }, b).textContent = "Intel hci0 answers";
+  el("text", { x: bx + 470, y: 159 }, b).textContent = "about 9 exchanges per event at the 40 kbit/s pacing";
+}
+bars(); slots();
+</script>
+
+<script>
+"use strict";
+// ---------------------------------------------------------------- live overlay (served by the core PC)
+const LV = { health: {}, tele: {}, pings: {}, stats: null, dst: {}, led: { ue: 0, t: 0 }, t: 0 };
+const CORE_C = { nfs: ["f5gc-nrf", "f5gc-ausf", "f5gc-udm", "f5gc-udr", "f5gc-pcf", "f5gc-nssf", "f5gc-nef", "f5gc-chf"], amf: ["f5gc-amf"], smf: ["f5gc-smf"],
+  web: ["f5gc-webui", "f5gc-mongodb"], upf: ["f5gc-upf"], n3iwf: ["f5gc-n3iwf"], dn: ["oai-ext-dn"], vnf: ["oai-vnf"], pnf: ["oai-pnf"] };
+const UE_C = { n3ue1: "nrlink-n3iwue1", n3ue2: "nrlink-n3iwue2", nrue1: "oai-nrue1", nrue2: "oai-nrue2" };
+const ADDR = { n3ue1: "cam1", n3ue2: "cam2", nrue1: "lidar", nrue2: "robots" };
+const PINGK = { n3ue1: "n3iwue1", n3ue2: "n3iwue2", nrue1: "nrue1", nrue2: "nrue2" };
+const fmt = (v, d = 0) => v == null ? "–" : Number(v).toFixed(d);
+const fms = v => v == null ? "–" : v >= 1000 ? (v / 1000).toFixed(1) + " s" : v.toFixed(0) + " ms";
+function fresh(pc) { const h = LV.health[pc]; return h && Date.now() / 1000 - h.t < 25 ? h : null; }
+function proc(pc, pat) { const h = fresh(pc); return h ? h.procs.some(p => p.includes(pat)) : null; }
+function cont(pc, names) { const h = fresh(pc); return h ? names.every(n => h.containers[n] === "running") : null; }
+function serial(pc, s) { const h = fresh(pc); return h ? h.serial.includes(s) : null; }
+function bleConn(addr) { const h = fresh("core"); return h ? h.le_conns.includes(addr) : null; }
+function nodeState(id) {     // [ok: true|false|null, live text or null, why]
+  if (CORE_C[id]) { const ok = cont("core", CORE_C[id]); const bad = ok === false ? CORE_C[id].filter(n => LV.health.core.containers[n] !== "running") : [];
+    return [ok, null, ok === false ? "not running: " + bad.join(", ") : "containers running"]; }
+  if (UE_C[id]) { const ok = cont("ue", [UE_C[id]]), ip = LV.dst[ADDR[id]], p = LV.pings[PINGK[id]];
+    return [ok === null ? null : ok && p !== null && p !== undefined, ip ? `${ip} · ping ${fms(p)}` : null,
+      ok === false ? UE_C[id] + " not running" : p == null ? "no ping answer from ext-dn" : `answers ext-dn pings, ${fms(p)} round trip`]; }
+  const m = {
+    gbr: () => { const ok = proc("core", "gnb_bridge.py"), t = LV.tele.gnb; return [ok, t ? `${fmt(t.slots_s, 1)} slots/s` : null, ok ? "running" : "gnb_bridge not running"]; },
+    blel: () => { const ok = proc("core", "ble_ip_link.py --listen"); return [ok, LV.tele.ble ? `DL ${fmt(B("ble1", "dl") + B("ble2", "dl"), 1)} · UL ${fmt(B("ble1", "ul") + B("ble2", "ul"), 1)} kb/s` : null, ok ? "listening" : "listener not running"]; },
+    gbd: () => { const ok = serial("core", "3TJ2B15JGASV3"); return [ok, null, ok ? "on USB" : "not on USB"]; },
+    intel: () => { const h = fresh("core"); const ok = h ? !!(h.hci.hci0 && h.hci.hci0.up) : null; return [ok, h ? `${h.le_conns.length} LE connection${h.le_conns.length === 1 ? "" : "s"}` : null, ok ? "UP RUNNING" : "hci0 down"]; },
+    ble1l: () => { const ok = proc("ue", "02:4E:52:65:B3:A1"); return [ok, null, ok ? "running" : "ble_ip_link for BLE1 not running"]; },
+    ble2l: () => { const ok = proc("ue", "02:4E:52:77:BF:5D"); return [ok, null, ok ? "running" : "ble_ip_link for BLE2 not running"]; },
+    ub1: () => { const ok = proc("ue", "ue_bridge.py 1"), t = LV.tele.ue1; return [ok, t ? `DL ${fmt(t.dl_kbps, 1)} · UL ${fmt(t.ul_kbps, 1)} kb/s` : null, ok ? "running" : "ue_bridge 1 not running"]; },
+    ub2: () => { const ok = proc("ue", "ue_bridge.py 2"), t = LV.tele.ue2; return [ok, t ? `DL ${fmt(t.dl_kbps, 1)} · UL ${fmt(t.ul_kbps, 1)} kb/s` : null, ok ? "running" : "ue_bridge 2 not running"]; },
+    bb1: () => { const s = serial("ue", "3VWLILYT2A1AK"), c = bleConn("02:4E:52:65:B3:A1"); return [s === null || c === null ? null : s && c, null, !s ? "not on USB" : c ? "on USB, connected to hci0" : "on USB, no LE connection"]; },
+    bb2: () => { const s = serial("ue", "GLNAOWUSDREB4"), c = bleConn("02:4E:52:77:BF:5D"); return [s === null || c === null ? null : s && c, null, !s ? "not on USB" : c ? "on USB, connected to hci0" : "on USB, no LE connection"]; },
+    u1b: () => { const ok = serial("ue", "2HOKMMVEX1WMP"), t = LV.tele.ue1; return [ok, t && t.rssi != null ? `RSSI ${t.rssi} dBm` : null, ok ? "on USB" : "not on USB"]; },
+    u2b: () => { const ok = serial("ue", "GBAMNH4BQ3CSB"), t = LV.tele.ue2; return [ok, t && t.rssi != null ? `RSSI ${t.rssi} dBm` : null, ok ? "on USB" : "not on USB"]; },
+  }[id];
+  return m ? m() : [null, null, ""];
+}
+const S = k => LV.stats && LV.stats[k] ? LV.stats[k].p50 : null;
+const B = (i, d) => { const b = LV.tele.ble && LV.tele.ble[i]; return b ? b[d + "_kbps"] : 0; };
+const BT = i => B(i, "dl") + B(i, "ul");
+function linkLive(id) {    // [text, kbit/s for the animation speed]
+  const g = LV.tele.gnb, u = n => g && g.ue && g.ue[n], P = LV.pings;
+  switch (id) {
+    case "pg": return g ? [`${fmt(g.slots_s, 1)} slots/s · ${g.timeouts}/${g.polls} polls timed out`, g.dl_kbps + g.ul_kbps] : null;
+    case "gu": return g ? [`${g.air_pps} air pkt/s`, g.dl_kbps + g.ul_kbps] : null;
+    case "n3": return g ? [`NR DL ${fmt(g.dl_kbps, 1)} · UL ${fmt(g.ul_kbps, 1)} kb/s`, g.dl_kbps + g.ul_kbps] : null;
+    case "p7": return g ? [`${fmt(g.slots_s, 0)} slots/s`, g.dl_kbps + g.ul_kbps] : null;
+    case "s1": { const t = LV.tele.ue1; return t ? [`↓${fmt(t.dl_kbps, 1)} ↑${fmt(t.ul_kbps, 1)} kb/s`, t.dl_kbps + t.ul_kbps] : null; }
+    case "s2": { const t = LV.tele.ue2; return t ? [`↓${fmt(t.dl_kbps, 1)} ↑${fmt(t.ul_kbps, 1)} kb/s`, t.dl_kbps + t.ul_kbps] : null; }
+    case "ar1": return [`ping ${fms(P.nrue1)} · LiDAR up ${fms(S("lidar"))}${u("1") ? ` · UL ${fmt(u("1").ul_kbps, 1)} kb/s` : ""}`, u("1") ? u("1").ul_kbps + u("1").dl_kbps : 0];
+    case "ar2": return [`ping ${fms(P.nrue2)} · reports up ${fms(S("reports"))} · cmds down ${fms(S("commands"))}`, u("2") ? u("2").ul_kbps + u("2").dl_kbps : 0];
+    case "ab1": return [`DL ${fmt(B("ble1", "dl"), 1)} · UL ${fmt(B("ble1", "ul"), 1)} kb/s · RTT ${fms(P.ble1)} · video ${fms(S("cam1"))}`, BT("ble1")];
+    case "ab2": return [`DL ${fmt(B("ble2", "dl"), 1)} · UL ${fmt(B("ble2", "ul"), 1)} kb/s · RTT ${fms(P.ble2)} · video ${fms(S("cam2"))}`, BT("ble2")];
+    case "t1": return LV.tele.ble ? [`↓${fmt(B("ble1", "dl"), 1)} ↑${fmt(B("ble1", "ul"), 1)}`, BT("ble1")] : null;
+    case "h1": return LV.tele.ble ? [`↓${fmt(B("ble1", "dl"), 1)} ↑${fmt(B("ble1", "ul"), 1)} kb/s`, BT("ble1")] : null;
+    case "t2": return LV.tele.ble ? [`↓${fmt(B("ble2", "dl"), 1)} ↑${fmt(B("ble2", "ul"), 1)}`, BT("ble2")] : null;
+    case "h2": return LV.tele.ble ? [`↓${fmt(B("ble2", "dl"), 1)} ↑${fmt(B("ble2", "ul"), 1)} kb/s`, BT("ble2")] : null;
+    case "bi": case "nb": return LV.tele.ble ? [`BLE DL ${fmt(B("ble1", "dl") + B("ble2", "dl"), 1)} · UL ${fmt(B("ble1", "ul") + B("ble2", "ul"), 1)} kb/s`, BT("ble1") + BT("ble2")] : null;
+    case "n3b": return [`ext-dn → n3iwue ping ${fms(P.n3iwue1)} / ${fms(P.n3iwue2)}`, 16];
+    case "n6": return g ? [`${fmt(g.dl_kbps + g.ul_kbps, 1)} kb/s NR + video`, g.dl_kbps + g.ul_kbps] : null;
+  }
+  return null;
+}
+const ENDS = {}; // link -> nodes it touches, by geometry
+for (const L of LINKS) { const ns = new Set();
+  for (const [x, y] of [L.pts[0], L.pts[L.pts.length - 1]]) for (const [id, N] of Object.entries(NODES)) if (x >= N.x - 2 && x <= N.x + W + 2 && y >= N.y - 2 && y <= N.y + H + 2) ns.add(id);
+  ENDS[L.id] = [...ns]; }
+ENDS.ab1 = ["intel", "bb1"]; ENDS.ab2 = ["intel", "bb2"]; ENDS.ar1 = ["gbd", "u1b"]; ENDS.ar2 = ["gbd", "u2b"];
+function render() {
+  const svg = $("arch"), X = x => x + OX, ns = {};
+  for (const [id, N] of Object.entries(NODES)) {
+    const g = svg.querySelector(`.node[data-id="${id}"]`); if (!g) continue;
+    const [ok, txt] = nodeState(id); ns[id] = ok;
+    g.classList.toggle("down", ok === false);
+    let d = g.querySelector(".stdot"); if (!d) d = el("circle", { class: "stdot", cx: X(N.x) + W - 26, cy: N.y + 13, r: 4.5 }, g);
+    d.setAttribute("fill", ok === null ? "var(--ink-3)" : ok ? "var(--ok)" : "var(--bad)");
+    if (txt != null) g.querySelector(".n3").textContent = txt; else g.querySelector(".n3").textContent = N.s2;
+  }
+  for (const L of LINKS) {
+    const g = svg.querySelector(`.link[data-id="${L.id}"]`); if (!g) continue;
+    const down = ENDS[L.id].some(n => ns[n] === false);
+    g.classList.toggle("down", down);
+    const lv = linkLive(L.id);
+    let t = g.querySelector(".lat");
+    if (lv && !t && L.lbl) { t = el("text", { class: "lat", x: X(L.lbl[0]), y: L.lbl[1] + 28, "text-anchor": L.lbl[2] }, g); }
+    if (lv && t) { t.textContent = lv[0]; t.classList.add("live"); const f = g.querySelector(".flow"); if (f) f.style.animationDuration = (2.4 / Math.min(6, 1 + (lv[1] || 0) / 10)).toFixed(2) + "s"; }
+  }
+  const P = LV.pings, ups = ["nrue1", "nrue2", "n3iwue1", "n3iwue2"].filter(k => P[k] != null).length;
+  const k = (id, v, bad) => { $(id).textContent = v; $(id).classList.toggle("bad", !!bad); };
+  k("kpi-ue", `${ups} / 4`, ups < 4); const g = LV.tele.gnb;
+  k("kpi-slots", g ? fmt(g.slots_s, 0) : "–", g && g.slots_s < 30); k("kpi-ul", g ? fmt(g.ul_kbps, 1) : "–", g && g.ul_kbps > 40);
+  const h = fresh("core"); k("kpi-ble", h ? `${h.le_conns.length} / 2` : "–", h && h.le_conns.length < 2);
+  k("kpi-bledl", LV.tele.ble ? fmt(B("ble1", "dl") + B("ble2", "dl"), 1) : "–");
+  const age = LV.t ? (Date.now() - LV.t) / 1000 : null, live = age != null && age < 12;
+  $("livedot").style.background = live ? "var(--ok)" : "var(--bad)";
+  const downs = Object.entries(ns).filter(([, v]) => v === false).map(([id]) => NODES[id].t);
+  $("livetxt").textContent = !live ? "no data from the core PC" : downs.length ? `live · down: ${downs.join(", ")}` : "live · everything up";
+  if (selected.node || selected.link) liveDetail();
+}
+function liveDetail() {
+  const box = $("detail"); box.querySelector(".livedl")?.remove();
+  let rows = "";
+  if (selected.node) { const [ok, txt, why] = nodeState(selected.node); rows = `<dt>Now</dt><dd>${ok === null ? "no report yet" : (ok ? "up · " : "DOWN · ") + why}${txt ? " · " + txt : ""}</dd>`; }
+  else { const lv = linkLive(selected.link); const down = ENDS[selected.link].filter(n => nodeState(n)[0] === false);
+    rows = `<dt>Now</dt><dd>${down.length ? "DOWN: " + down.map(n => NODES[n].t).join(", ") : "up"}${lv ? " · " + lv[0] : ""}</dd>`; }
+  const dl = document.createElement("dl"); dl.className = "livedl"; dl.innerHTML = rows; box.querySelector("h3").after(dl);
+}
+const _select = select; select = s => { _select(s); liveDetail(); };
+// LEDs: the gNB board blinks the colour gnb_bridge reports (one blink per 0.4 s), UE boards blink when served, BLE boards green while connected
+const LEDS = {}; document.querySelectorAll("#arch .led").forEach(c => { c.classList.add("live"); LEDS[c.closest(".node").dataset.id] = c; });
+let phase = 0;
+setInterval(() => {
+  phase = (phase + 1) % 10;   // 100 ms steps
+  const col = { 1: "var(--embb)", 2: "var(--urllc)" }, g = LV.tele.gnb, now = Date.now() / 1000;
+  const gl = LEDS.gbd; if (gl) gl.setAttribute("fill", LV.led.ue && now - LV.led.t < 2 && (phase % 4) < 2 ? col[LV.led.ue] : "var(--line)");
+  const served = n => g && g.ue && g.ue[n] && (g.ue[n].dl_slots + g.ue[n].ul_slots) > 0;
+  if (LEDS.u1b) LEDS.u1b.setAttribute("fill", served("1") && phase < 1 ? col[1] : "var(--line)");
+  if (LEDS.u2b) LEDS.u2b.setAttribute("fill", served("2") && (phase === 0 || phase === 2) ? col[2] : "var(--line)");
+  for (const [id, a] of [["bb1", "02:4E:52:65:B3:A1"], ["bb2", "02:4E:52:77:BF:5D"]]) if (LEDS[id]) LEDS[id].setAttribute("fill", serial("ue", NODES[id].s2) ? "var(--n3)" : "var(--line)");
+}, 100);
+function connect() {
+  const es = new EventSource("/arch/events");
+  es.onmessage = m => {
+    const e = JSON.parse(m.data); LV.t = Date.now();
+    if (e.k === "hello") { Object.assign(LV.health, e.health); Object.assign(LV.tele, e.tele); LV.pings = e.pings || {}; LV.stats = e.stats; LV.dst = e.dst || {}; }
+    else if (e.k === "health") LV.health[e.pc] = e;
+    else if (e.k === "tele") LV.tele[e.id === "gnb" ? "gnb" : "ue" + e.id] = e;
+    else if (e.k === "led") LV.led = { ue: e.ue, t: Date.now() / 1000 };
+    else if (e.k === "pings") LV.pings = e;
+    else if (e.k === "status") { LV.stats = e.stats; LV.dst = e.dst; }
+    else return;
+  };
+  es.onerror = () => { $("livedot").style.background = "var(--bad)"; $("livetxt").textContent = "reconnecting to the core PC…"; };
+}
+connect(); setInterval(render, 1000);
+</script>
+</body></html>
