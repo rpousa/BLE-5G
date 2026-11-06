@@ -7,6 +7,7 @@
    (LiDAR + robots) beside the two camera feeds, then the delay timeline and the level table.
    Colour = which radio carries it, matching the board LEDs: blue eMBB (nrUE1), red URLLC (nrUE2), green Bluetooth. */
 :root {
+  --cmd: #c9a000; --signal: #b86e00; --ok: #0f7a55; --f5gc: #0d857c; --oai: #3d5a99; --nxp: #b86e00; --intel: #0068b5; --host: #6b7684;
   --bg: #eef1f4; --panel: #ffffff; --panel-2: #f5f7f9; --line: #d3d9e0;
   --ink: #17202b; --ink-2: #4b5866; --ink-3: #7a8693;
   --embb: #1f63d6; --urllc: #d0342c; --ble: #1d8a3c; --ble2: #0f7f86; --warn: #b86e00; --bad: #b3261e;
@@ -16,10 +17,12 @@
   --r: 6px;
 }
 @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --cmd: #f2d04a; --signal: #f0a830; --ok: #3dbb72; --f5gc: #2fc0b3; --oai: #7e9be0; --nxp: #f0a830; --intel: #4ea3e6; --host: #8f9aa6;
   --bg: #0e141b; --panel: #151d26; --panel-2: #1b2530; --line: #2a3644; --ink: #e6ebf0; --ink-2: #a9b4bf; --ink-3: #74808c;
   --embb: #5b93f5; --urllc: #f0605a; --ble: #45c06a; --ble2: #3cc3c9; --warn: #f0a830; --bad: #f2786f;
   --floor: #1c2631; --machine: #44515f; --tape: #a98a20; --zone: #45c06a; color-scheme: dark } }
 :root[data-theme="dark"] {
+  --cmd: #f2d04a; --signal: #f0a830; --ok: #3dbb72; --f5gc: #2fc0b3; --oai: #7e9be0; --nxp: #f0a830; --intel: #4ea3e6; --host: #8f9aa6;
   --bg: #0e141b; --panel: #151d26; --panel-2: #1b2530; --line: #2a3644; --ink: #e6ebf0; --ink-2: #a9b4bf; --ink-3: #74808c;
   --embb: #5b93f5; --urllc: #f0605a; --ble: #45c06a; --ble2: #3cc3c9; --warn: #f0a830; --bad: #f2786f;
   --floor: #1c2631; --machine: #44515f; --tape: #a98a20; --zone: #45c06a; color-scheme: dark }
@@ -100,6 +103,42 @@ ul.log b { color: var(--ink-3); font-weight: 500; margin-right: 8px; }
 .dir { font-family: var(--mono); font-size: .7rem; font-weight: 600; padding: 1px 6px; border-radius: 4px; border: 1px solid var(--line); color: var(--ink-2); margin-left: 6px; }
 .mode { font-family: var(--mono); font-size: .74rem; }
 .lv small { display: block; }
+.stp-ctl { display: flex; flex-wrap: wrap; gap: 10px 18px; align-items: center; }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.chips button { font: 600 .82rem var(--display); padding: 6px 12px; border-radius: 999px; border: 1px solid var(--line); background: var(--panel); color: var(--ink-2); cursor: pointer; display: inline-flex; gap: 7px; align-items: center; }
+.chips button[aria-pressed="true"] { background: var(--ink); color: var(--panel); border-color: var(--ink); }
+.chips button i { width: 9px; height: 9px; border-radius: 50%; background: var(--c); display: inline-block; }
+.chips button:focus-visible, .pipe .st:focus-visible, .stp-ctl .act:focus-visible { outline: 2px solid var(--signal); outline-offset: 2px; }
+.stp-ctl .act { font: 600 .82rem var(--display); padding: 6px 14px; border-radius: 6px; border: 1px solid var(--ink); background: var(--panel); color: var(--ink); cursor: pointer; }
+.stp-ctl .act.primary { background: var(--ink); color: var(--panel); }
+.pipe { display: flex; gap: 0; overflow-x: auto; padding: 10px 2px 14px; scroll-snap-type: x proximity; }
+.pipe .st { position: relative; flex: 0 0 168px; scroll-snap-align: start; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 10px 11px 11px; cursor: pointer; display: grid; gap: 5px; align-content: start; text-align: left; font: inherit; color: inherit; margin-right: 22px; transition: border-color .15s, box-shadow .15s; }
+.pipe .st:last-child { margin-right: 0; }
+.pipe .st::after { content: ""; position: absolute; right: -19px; top: 34px; border: 7px solid transparent; border-left: 10px solid var(--ink-3); }
+.pipe .st:last-child::after { display: none; }
+.pipe .st.sel { border-color: var(--ink); box-shadow: 0 0 0 1px var(--ink); }
+.pipe .st.hot { border-color: var(--signal); box-shadow: 0 0 0 3px color-mix(in srgb, var(--signal) 35%, transparent); }
+.pipe .st .num { font: 600 .7rem var(--mono); color: var(--ink-3); display: flex; justify-content: space-between; gap: 6px; }
+.pipe .st .num em { font-style: normal; padding: 0 5px; border-radius: 3px; background: var(--panel-2); border: 1px solid var(--line); }
+.pipe .st b { font: 600 .95rem var(--display); line-height: 1.15; }
+.pipe .st .sub2 { font: 400 .72rem var(--mono); color: var(--ink-2); line-height: 1.3; }
+.pipe .st .stripe { position: absolute; left: 0; top: 10px; bottom: 10px; width: 3px; background: var(--c); border-radius: 0 2px 2px 0; }
+.meter { height: 6px; border-radius: 3px; background: var(--panel-2); border: 1px solid var(--line); overflow: hidden; }
+.meter span { display: block; height: 100%; background: var(--ok); }
+.meter span.warn { background: var(--warn); } .meter span.bad { background: var(--bad); }
+.pipe .st .ld { font: 500 .72rem var(--mono); color: var(--ink-2); }
+.pipe .st .ld.bad { color: var(--bad); font-weight: 600; }
+.pipe .st .lat { font: 500 .72rem var(--mono); color: var(--ink-3); }
+.pipe .st .bn { font: 700 .66rem var(--mono); color: var(--bad); letter-spacing: .04em; }
+.stp-out { display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr); gap: 16px; }
+@media (max-width: 760px) { .stp-out { grid-template-columns: 1fr; } }
+.stp-out .box { border: 1px solid var(--line); border-radius: 8px; padding: 12px 14px; background: var(--panel-2); display: grid; gap: 6px; align-content: start; }
+.stp-out .box h3 { margin: 0; font: 600 1.05rem var(--display); }
+.stp-out .box p { margin: 0; color: var(--ink-2); font-size: .9rem; line-height: 1.45; }
+.stp-out dl { margin: 0; display: grid; grid-template-columns: auto 1fr; gap: 4px 12px; font-size: .86rem; }
+.stp-out dt { color: var(--ink-3); } .stp-out dd { margin: 0; font-family: var(--mono); font-size: .8rem; }
+.track { position: relative; height: 10px; margin: 2px 0 2px; }
+.track .dot { position: absolute; top: 0; width: 10px; height: 10px; border-radius: 50%; background: var(--signal); transform: translateX(-5px); opacity: 0; }
 </style></head><body>
 <div class="wrap">
   <header class="top">
@@ -113,7 +152,7 @@ ul.log b { color: var(--ink-3); font-weight: 500; margin-right: 8px; }
 
   <section class="card">
     <div class="player">
-      <div class="lv" id="levels" role="group" aria-label="Load level"></div>
+      <div class="lv" id="levels" role="group" aria-label="Trial"></div>
       <div class="row" id="lvinfo" style="flex:1 1 260px"></div>
     </div>
     <div class="bd" style="border-top:1px solid var(--line)"><div class="tiles" id="tiles"></div></div>
@@ -150,6 +189,23 @@ ul.log b { color: var(--ink-3); font-weight: 500; margin-right: 8px; }
     </div>
   </section>
 
+  <section class="card" id="steps">
+    <div class="hd"><h2>Step by step: who handles each packet</h2><span class="meta">pick a trial and a flow · click a step · Play sends one packet through at the measured speed</span></div>
+    <div class="bd" style="display:grid;gap:12px">
+      <div class="stp-ctl">
+        <div class="chips" id="stpLv" role="group" aria-label="Trial to look at"></div>
+        <div class="chips" id="stpFl" role="group" aria-label="Flow"></div>
+        <button type="button" class="act primary" id="stpPlay">▶ Play one packet</button>
+        <button type="button" class="act" id="stpRun" hidden>Run this level now</button>
+      </div>
+      <div class="pipe" id="stpPipe" role="list"></div>
+      <div class="stp-out">
+        <div class="box" id="stpDetail" aria-live="polite"></div>
+        <div class="box" id="stpSum" aria-live="polite"></div>
+      </div>
+    </div>
+  </section>
+
   <section class="card">
     <div class="hd"><h2>Events</h2><span class="meta">AGV stops and near misses, programs, UE addresses, BLE watchdog</span></div>
     <div class="bd"><ul class="log" id="log"></ul></div>
@@ -162,12 +218,13 @@ const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).
 const FLOWS = [
   { id: "lidar", name: "LiDAR scans", ue: "nrUE1", dir: "UL", c: "--embb", shape: "circle" },
   { id: "reports", name: "AGV reports", ue: "nrUE2", dir: "UL", c: "--urllc", shape: "tri" },
-  { id: "commands", name: "Stop/go commands", ue: "nrUE2", dir: "DL", c: "--urllc", shape: "tridown" },
+  { id: "commands", name: "Stop/go commands", ue: "nrUE2", dir: "DL", c: "--cmd", shape: "tridown" },
   { id: "cam1", name: "CAM1 → op1", ue: "n3iwue1", dir: "DL", c: "--ble", shape: "square" },
   { id: "cam2", name: "CAM2 → op2", ue: "n3iwue2", dir: "DL", c: "--ble2", shape: "diamond" },
 ];
 const MODE = ["moving", "at station", "STOP (edge)", "FAIL-SAFE", "queuing"];
 let F = null, skew = 0, level = "L1", stats = {}, statusT = 0;
+const LN = L => "Trial " + String(L).slice(1);   // L1 -> Trial 1 (the server keeps L1..L3 as keys)
 const nowS = () => Date.now() / 1000 + skew;
 const recent = Object.fromEntries(FLOWS.map(f => [f.id, []])); let react = [];
 let truth = null, view = null, scan = null, scanMeta = null, obst = [];
@@ -267,10 +324,10 @@ function renderTiles() {
   t.push(`<div class="tile" style="--c:var(--bad)"><span class="label">Closest AGV to an operator</span><span class="v ${cl && cl.min_m < 1 ? "bad" : ""}">${cl ? cl.min_m.toFixed(1) + " m" : "–"}</span><small>${cl ? `AGV${cl.agv} and ${cl.op}, ` : ""}last 60 s</small></div>`);
   $("tiles").innerHTML = t.join("");
 }
-function kbps(L) { return { ul: (L.lidar_hz * 2100 + L.rep_hz * 120) * 8 / 1000, ble: L.cam_fps * 2100 * 8 / 1000 }; }
+function kbps(L) { return { ul: KB.lidar(L) + KB.reports(L), ble: KB.cam(L) }; }   // same sizes as the step-by-step section
 function renderLevels() {
   $("levels").innerHTML = Object.entries(F.levels).map(([n, L]) => { const k = kbps(L);
-    return `<button type="button" data-l="${n}" aria-pressed="${n === level}">${n}<small>NR up ≈${k.ul.toFixed(0)} · BLE ${k.ble.toFixed(0)}×2 kbit/s</small></button>`; }).join("");
+    return `<button type="button" data-l="${n}" aria-pressed="${n === level}">${LN(n)}<small>NR up ≈${k.ul.toFixed(0)} · BLE ${k.ble.toFixed(0)}×2 kbit/s</small></button>`; }).join("");
   document.querySelectorAll("#levels button").forEach(b => b.addEventListener("click", async () => {
     const r = await fetch("/level", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ level: b.dataset.l }) });
     if (r.ok) { level = b.dataset.l; renderLevels(); }
@@ -305,7 +362,7 @@ function drawChart() {
   g.globalAlpha = 1;
   for (const f of FLOWS) { g.fillStyle = css(f.c);
     for (const [t, d] of recent[f.id]) { if (t < now - SPAN) continue;
-      g.globalAlpha = f.id === "commands" ? .55 : .75; mark(g, f.shape, cx(t), d == null ? PAD.t - 12 : cy(d), 2.4); g.fill(); }
+      g.globalAlpha = .75; mark(g, f.shape, cx(t), d == null ? PAD.t - 12 : cy(d), 2.4); g.fill(); }
     g.globalAlpha = 1; }
   $("chartlegend").innerHTML = FLOWS.map(f => `<span><svg width="12" height="12" viewBox="-6 -6 12 12" aria-hidden="true" style="vertical-align:-1px;margin-right:6px">${SVGS[f.shape].replace("/>", ` fill="var(${f.c})"/>`)}</svg>${f.name} (${f.dir})</span>`).join("") +
     `<span><svg width="12" height="12" viewBox="-6 -6 12 12" aria-hidden="true" style="vertical-align:-1px;margin-right:6px"><circle r="4" fill="none" stroke="var(--ink-2)"/></svg>reaction (round trip)</span>`;
@@ -321,10 +378,11 @@ function connect() {
   es.onmessage = async m => {
     const e = JSON.parse(m.data);
     if (e.k === "hello") { skew = e.now - Date.now() / 1000; F = e.meta; level = e.level; sizeFloor(); renderLevels(); $("log").textContent = ""; e.log.forEach(addLog);
-      for (const f of FLOWS) recent[f.id] = e.recent[f.id] || []; react = e.react || []; if (e.truth) truth = e.truth; drawFloor(); drawChart(); }
+      for (const f of FLOWS) recent[f.id] = e.recent[f.id] || []; react = e.react || []; if (e.truth) truth = e.truth; drawFloor(); drawChart(); sLv = level; renderSteps(); }
     else if (e.k === "status") { skew = e.now - Date.now() / 1000; stats = e.stats; statusT = Date.now();
       if (e.level !== level) { level = e.level; renderLevels(); }
       for (const f of FLOWS) recent[f.id].push(...(e.pts[f.id] || [])); react.push(...e.react); renderTiles();
+      byLevel = e.by_level || {}; levelAge = e.level_age || 0;
       const ok = e.agent_age != null && e.agent_age < 15;
       $("conn").className = "pill " + (ok ? "on" : "off");
       $("conntxt").textContent = ok ? `live · clocks in sync ±${(e.rtt_ms / 2).toFixed(2)} ms` : `UE PC agent silent${e.agent_age != null ? " for " + e.agent_age.toFixed(0) + " s" : ""}`; }
@@ -333,6 +391,7 @@ function connect() {
     else if (e.k === "scan") { if (!scanMeta || e.n > scanMeta.n || e.n < scanMeta.n - 1000) { const [p, o] = await decodeScan(e.b64); scan = p; obst = o; scanMeta = e; } }
     else if (e.k === "cam") { if (!lastCam[e.cam] || e.cap >= lastCam[e.cam].cap) { lastCam[e.cam] = e; $(e.cam + "img").src = "data:image/jpeg;base64," + e.b64; $(e.cam + "img").hidden = false; $(e.cam + "none").hidden = true; } }
     else if (e.k === "log") addLog(e);
+    else if (e.k === "tele") tele[e.id === "gnb" ? "gnb" : e.id === "ble" ? "ble" : "ue" + e.id] = e;
   };
   es.onerror = () => { $("conn").className = "pill off"; $("conntxt").textContent = "reconnecting to the core PC…"; };
 }
@@ -344,6 +403,139 @@ function tick() {
   if (statusT && Date.now() - statusT > 5000) { $("conn").className = "pill off"; $("conntxt").textContent = "no updates from the core PC"; }
   requestAnimationFrame(tick);
 }
+
+// ---------------------------------------------------------------- step by step
+const PROJ = { f5gc: ["free5GC", "--f5gc"], oai: ["OpenAirInterface", "--oai"], host: ["nrlink / host", "--host"], nxp: ["NXP board", "--nxp"], intel: ["Intel adapter", "--intel"], air: ["over the air", "--ink-3"] };
+const WHERE = { ue: "UE PC", core: "core PC", air: "air" };
+// packet sizes on the wire (UDP/IP + 36 B header per fragment): LiDAR 2.1 kB in 3 fragments, report 118 B, command 65 B, video frame ≈2.1 kB + IPsec/GRE ≈2.5 kB
+const KB = { lidar: L => L.lidar_hz * 2400 * 8 / 1000, reports: L => L.rep_hz * 118 * 8 / 1000, commands: L => L.rep_hz * 65 * 8 / 1000, cam: L => L.cam_fps * 2500 * 8 / 1000 };
+// load models: [label, load(L, flow), capacity kbit/s or null, note]
+const LOADS = {
+  nrul: ["NR uplink, shared by nrUE1 + nrUE2", L => KB.lidar(L) + KB.reports(L), 44, "clean to ≈44 kbit/s in the stress test; the two UEs share the 2 uplink slots per period"],
+  nrdl: ["NR downlink", L => KB.commands(L) + 4, 90, "clean to ≈90 kbit/s; the commands share it only with signalling"],
+  bleln: ["this Bluetooth link", L => KB.cam(L), 13, "the downlink test was clean to ≈8–13 kbit/s of video per link with 2 kB frames, lossy at 16.5; ble_ip_link paces at 40"],
+  uart: ["HCI UART 115200 baud", L => KB.cam(L), 92, "115200 baud, 8N1 = 92 kbit/s; 87 ms per kB"],
+  usbnr: ["USB SLIP 1 Mbaud", L => KB.lidar(L) + KB.reports(L) + KB.commands(L), 800, "shared by both UEs' traffic"],
+};
+const STEPS = {
+  lidar: [
+    ["LiDAR sensor", "fdl2-lidar sidecar, in nrUE1's network", "ue", "host", "Ray-casts 16 beams × 180 azimuths against the real scene (AGVs, operators, forklift), packs ranges in cm, deflates to ≈2.1 kB and sends 3 UDP fragments to the edge, 192.168.70.132:6101.", 20],
+    ["nrUE1", "OAI nr-uesoftmodem · oaitun_ue1", "ue", "oai", "PDCP and RLC queue the fragments. The UE sends a scheduling request and waits for the gNB to grant PUSCH. With 2 uplink slots per 5 ms period, shared with nrUE2, this is where uplink packets wait.", 300, "nrul"],
+    ["ue_bridge 1", "nrlink Python · udp/5001", "ue", "host", "When the gNB board polls this UE in a granted uplink slot, it answers with nrUE1's transport block.", 10, "usbnr"],
+    ["UE1 board → gNB board", "FRDM-MCXW72 nrlink v4 · GFSK 1 Mbit/s · 2402 MHz", "air", "nxp", "SLIP over USB at 1 Mbaud, then air chunks of up to 248 B, time-shared with UE2 (TDMA).", 10],
+    ["gnb_bridge", "nrlink Python · lockstep with the PNF", "core", "host", "Reassembles the uplink chunks and hands them to the PNF with the slot. An uplink slot takes ≈28 ms because it polls each UE with a 25 ms timeout.", 28],
+    ["gNB PNF → VNF", "OAI nFAPI P7", "core", "oai", "PUSCH data goes from the PNF to the VNF. MAC, RLC and PDCP rebuild the IP packet, and GTP-U carries it on N3 to the UPF.", 1],
+    ["UPF", "free5GC · gtp5g", "core", "f5gc", "Strips GTP-U and forwards on N6 to the data network.", 0.2],
+    ["Edge controller", "fdl2-edge in ext-dn", "core", "oai", "Joins the 3 fragments and decodes the scan. Returns 0.9–2.5 m high that are not on the static map are people; their positions feed the next stop/go decisions.", 30],
+  ],
+  reports: [
+    ["AGV computers", "fdl2-robots sidecar, in nrUE2's network", "ue", "host", "Four AGVs drive the loop with on-board physics. Every report carries x, y, heading, speed and mode for all four (118 B), sent to the edge, 192.168.70.132:6102.", 1],
+    ["nrUE2", "OAI nr-uesoftmodem · oaitun_ue1", "ue", "oai", "Same uplink as nrUE1: scheduling request, grant, then PUSCH in a shared uplink slot. Small reports wait behind LiDAR fragments for slots.", 300, "nrul"],
+    ["ue_bridge 2", "nrlink Python · udp/5002", "ue", "host", "Answers the gNB board's poll with nrUE2's transport block.", 10, "usbnr"],
+    ["UE2 board → gNB board", "FRDM-MCXW72 nrlink v4 · 2402 MHz", "air", "nxp", "Same channel as UE1, time-shared.", 5],
+    ["gnb_bridge", "nrlink Python", "core", "host", "Hands the uplink to the PNF in the slot's UL indication.", 28],
+    ["gNB PNF → VNF", "OAI nFAPI P7", "core", "oai", "MAC, RLC and PDCP rebuild the packet; GTP-U on N3.", 1],
+    ["UPF", "free5GC · gtp5g", "core", "f5gc", "GTP-U off, out on N6.", 0.2],
+    ["Edge controller", "fdl2-edge in ext-dn", "core", "oai", "For every AGV in the report: is there a person within 4.5 m ahead and 1.2 m to the side, in the last scan? It answers each report at once with stop or go for every AGV.", 1],
+  ],
+  commands: [
+    ["Edge controller", "fdl2-edge in ext-dn", "core", "oai", "Sends the stop/go answer (65 B) to nrUE2's address, port 6202, as soon as a report arrives.", 1],
+    ["UPF", "free5GC · gtp5g", "core", "f5gc", "Matches the UE address, wraps the packet in GTP-U on N3 to the gNB.", 0.2],
+    ["gNB VNF → PNF", "OAI MAC scheduler · nFAPI P7", "core", "oai", "The MAC schedules the packet in one of the 7 downlink slots per period and sends DCI + transport block down to the PNF.", 1, "nrdl"],
+    ["gnb_bridge", "nrlink Python", "core", "host", "Fragments the slot into air packets and broadcasts them. A downlink slot takes ≈3.5 ms.", 4],
+    ["gNB board → UE2 board", "FRDM-MCXW72 · GFSK 1 Mbit/s · 2402 MHz", "air", "nxp", "One broadcast that both UE boards hear; each keeps its own RNTI's data.", 3],
+    ["ue_bridge 2", "nrlink Python", "ue", "host", "Hands the slot to nrUE2.", 5],
+    ["nrUE2", "OAI nr-uesoftmodem", "ue", "oai", "Decodes the PDSCH; RLC and PDCP deliver the IP packet to oaitun_ue1. Downlink waits for a downlink slot, ≈100 ms when idle.", 95],
+    ["AGV computers", "fdl2-robots", "ue", "host", "Each AGV applies its command at once. Stop: brake at 2 m/s². No command for 1 s: fail-safe stop.", 1],
+  ],
+  cam: [
+    ["Ceiling camera", "camsrc on the core PC (Pillow)", "core", "host", "Draws the camera's half of the floor with the AGVs where they really are and the operators in hi-vis, as a 160×96 JPEG of ≈2.1 kB, and hands it to the edge.", 15],
+    ["Edge video relay", "fdl2-edge in ext-dn", "core", "oai", "Sends the frame as 3 UDP fragments to the operator's handheld (n3iwue1's address, port 6103).", 1],
+    ["UPF", "free5GC · gtp5g", "core", "f5gc", "GTP-U on N3, this time to the N3IWF instead of the gNB.", 0.2],
+    ["N3IWF", "free5GC · 192.168.70.139", "core", "f5gc", "Removes GTP-U, then puts each packet in GRE inside the IPsec ESP child SA of n3iwue1 (≈+60 B per packet), toward 10.70.0.11.", 2],
+    ["ble_ip_link (listener)", "core PC · tun ble1", "core", "host", "Takes ESP packets off tun ble1 and writes them into the L2CAP CoC channel (PSM 0x0081), paced to 40 kbit/s.", 5, "bleln"],
+    ["hci0 → BLE1 board", "Intel 8265 · LE 1M · 45 ms connection events", "air", "intel", "Sends 27 B link-layer packets in each 45 ms connection event, hopping 2404–2478 MHz. A 2.5 kB frame needs several events: this is the slow hop.", 120, "bleln"],
+    ["BLE1 board", "FRDM-MCXW72 · hci_bb v8", "ue", "nxp", "NXP's controller hands the ACL data to the UE PC over the H4 UART at 115200 baud, 87 ms per kB.", 90, "uart"],
+    ["ble_ip_link 1", "UE PC · tun ble1 in n3iwue1", "ue", "host", "Rebuilds the packets from L2CAP and writes them into tun ble1 inside the n3iwue1 container.", 3],
+    ["n3iwue1", "free5GC n3iwue · gretun-id-2-1", "ue", "f5gc", "Decrypts the ESP, strips GRE, and delivers the UDP fragments on its PDU session interface.", 2],
+    ["op1's handheld", "fdl-live-rx-cam1", "ue", "host", "Joins the 3 fragments and shows the frame. CAM2 takes the same path over BLE2 to n3iwue2 and op2.", 1],
+  ],
+};
+const SFLOWS = [["lidar", "LiDAR scan ↑", "--embb"], ["reports", "AGV report ↑", "--urllc"], ["commands", "Stop/go ↓", "--cmd"], ["cam", "Camera frame ↓", "--ble"]];
+let sLv = "L1", sFl = "lidar", sSel = 0, byLevel = {}, levelAge = 0, tele = {};
+function measured(L, fl) {
+  const key = fl === "cam" ? "cam1" : fl;
+  if (L === level && levelAge > 90 && stats[key]) return { s: stats, live: true };
+  const b = byLevel[L]; return b ? { s: b.stats, t: b.t, live: false, b } : null;
+}
+function stepLoad(st, L) { const m = st[6] && LOADS[st[6]]; if (!m) return null; const ld = m[1](F.levels[L]); return { name: m[0], ld, cap: m[2], u: ld / m[2], note: m[3] }; }
+function renderSteps() {
+  if (!F) return;
+  $("stpLv").innerHTML = Object.keys(F.levels).map(L => `<button type="button" data-l="${L}" aria-pressed="${L === sLv}">${LN(L)}${L === level ? " · running" : ""}</button>`).join("");
+  $("stpFl").innerHTML = SFLOWS.map(([id, n, c]) => `<button type="button" data-f="${id}" aria-pressed="${id === sFl}" style="--c:var(${c})"><i></i>${n}</button>`).join("");
+  $("stpRun").hidden = sLv === level; $("stpRun").textContent = `Run ${LN(sLv)} now`;
+  const steps = STEPS[sFl], loads = steps.map(st => stepLoad(st, sLv));
+  let bn = -1, bu = 0; loads.forEach((l, i) => { if (l && l.u > bu) { bu = l.u; bn = i; } });
+  $("stpPipe").innerHTML = steps.map((st, i) => { const l = loads[i], pr = PROJ[st[3]];
+    const cls = l ? (l.u >= 1 ? "bad" : l.u >= .7 ? "warn" : "") : "";
+    return `<button type="button" class="st${i === sSel ? " sel" : ""}" data-i="${i}" role="listitem" style="--c:var(${pr[1]})" aria-label="Step ${i + 1}: ${st[0]}">
+      <span class="stripe"></span><span class="num"><span>${i + 1}</span><em>${WHERE[st[2]]}</em></span><b>${st[0]}</b><span class="sub2">${st[1]}</span>
+      ${l ? `<span class="meter" title="${l.name}"><span class="${cls}" style="width:${Math.min(100, l.u * 100).toFixed(0)}%"></span></span><span class="ld ${l.u >= 1 ? "bad" : ""}">${l.ld.toFixed(1)} / ${l.cap} kbit/s · ${(l.u * 100).toFixed(0)}%</span>` : ""}
+      <span class="lat">idle ≈ ${st[5] < 1 ? st[5].toFixed(1) : st[5].toFixed(0)} ms</span>${i === bn && bu >= .7 ? `<span class="bn">BOTTLENECK</span>` : ""}</button>`; }).join("");
+  document.querySelectorAll("#stpLv button").forEach(b => b.onclick = () => { sLv = b.dataset.l; renderSteps(); });
+  document.querySelectorAll("#stpFl button").forEach(b => b.onclick = () => { sFl = b.dataset.f; sSel = 0; renderSteps(); });
+  document.querySelectorAll("#stpPipe .st").forEach(b => b.onclick = () => { sSel = +b.dataset.i; renderSteps(); });
+  renderStepDetail(steps, loads); renderStepSum(steps, loads, bn, bu);
+}
+function renderStepDetail(steps, loads) {
+  const st = steps[sSel] || steps[0], l = loads[sSel], L = F.levels[sLv];
+  let live = "";
+  if (sLv === level) {
+    if (st[6] === "nrul" && tele.gnb) live = `<dt>Now</dt><dd>NR uplink ${tele.gnb.ul_kbps.toFixed(1)} kbit/s · ${tele.gnb.slots_s.toFixed(0)} slots/s</dd>`;
+    if (st[6] === "nrdl" && tele.gnb) live = `<dt>Now</dt><dd>NR downlink ${tele.gnb.dl_kbps.toFixed(1)} kbit/s</dd>`;
+    if ((st[6] === "bleln" || st[6] === "uart") && tele.ble && tele.ble.ble1) live = `<dt>Now</dt><dd>BLE1 ↓${tele.ble.ble1.dl_kbps.toFixed(1)} ↑${tele.ble.ble1.ul_kbps.toFixed(1)} kbit/s</dd>`;
+    if (st[0] === "gnb_bridge" && tele.gnb) live = `<dt>Now</dt><dd>${tele.gnb.slots_s.toFixed(1)} slots/s · ${tele.gnb.timeouts}/${tele.gnb.polls} polls timed out</dd>`;
+  }
+  $("stpDetail").innerHTML = `<span class="label">Step ${sSel + 1} of ${steps.length} · ${PROJ[st[3]][0]} · ${WHERE[st[2]]}</span><h3>${st[0]}</h3><p>${st[4]}</p>
+    <dl><dt>Runs as</dt><dd>${st[1]}</dd><dt>Idle latency</dt><dd>≈ ${st[5] < 1 ? st[5].toFixed(1) : st[5].toFixed(0)} ms (one way, small packet)</dd>
+    ${l ? `<dt>Load in ${LN(sLv)}</dt><dd>${l.ld.toFixed(1)} kbit/s on ${l.name}, ${(l.u * 100).toFixed(0)}% of ≈${l.cap}</dd><dt>Capacity</dt><dd>${l.note}</dd>` : ""}${live}</dl>`;
+}
+function renderStepSum(steps, loads, bn, bu) {
+  const L = F.levels[sLv], m = measured(sLv, sFl), key = sFl === "cam" ? "cam1" : sFl, idle = steps.reduce((a, s) => a + s[5], 0);
+  const rate = { lidar: `${L.lidar_hz} scan/s · ${KB.lidar(L).toFixed(1)} kbit/s`, reports: `${L.rep_hz} reports/s · ${KB.reports(L).toFixed(1)} kbit/s`, commands: `${L.rep_hz} commands/s · ${KB.commands(L).toFixed(1)} kbit/s`, cam: `${L.cam_fps} frame/s per camera · ${KB.cam(L).toFixed(1)} kbit/s` }[sFl];
+  let res = `<p>${LN(sLv)} has not been measured yet. Run it for 90 s to fill this in.</p>`;
+  if (m && m.s[key]) { const v = m.s[key], q = v.p50 != null ? v.p50 - idle : null;
+    res = `<dl><dt>Measured</dt><dd>${m.live ? "now, live" : "at " + new Date(m.t * 1000).toLocaleTimeString([], { hour12: false }) + (m.b && m.b.ran_s ? `, after ${Math.round(m.b.ran_s / 60)} min on ${LN(sLv)}` : "")}</dd>
+      <dt>Median · p90</dt><dd>${v.n60 === 0 ? `<b style="color:var(--bad)">over 60 s</b>: nothing sent in the last minute had arrived yet` : `${fmtMs(v.p50)} · ${fmtMs(v.p90)}`}</dd><dt>Delivered</dt><dd>${v.delivered_pct == null ? (v.n60 === 0 ? "nothing yet" : "–") : v.delivered_pct + "%"}</dd>
+      <dt>Queueing</dt><dd>${q == null ? (v.n60 === 0 ? `more than a minute${bn >= 0 ? `, at step ${bn + 1}, ${steps[bn][0]}` : ""}` : "–") : q > 0 ? `≈ ${fmtMs(q)} above the idle sum${bn >= 0 && bu >= .7 ? `, mostly at step ${bn + 1}, ${steps[bn][0]}` : ""}` : "none to speak of"}</dd>
+      ${sFl === "reports" || sFl === "commands" ? `<dt>Reaction</dt><dd>${fmtMs(m.s.reaction && m.s.reaction.p50)} median, report sent → command back</dd><dt>Closest call</dt><dd>${m.s.clearance ? m.s.clearance.min_m.toFixed(1) + " m (AGV" + m.s.clearance.agv + ", " + m.s.clearance.op + ")" : "–"}</dd>` : ""}</dl>`; }
+  const verdict = bu >= 1 ? `<p style="color:var(--bad)"><b>Overloaded:</b> step ${bn + 1} needs ${(bu * 100).toFixed(0)}% of its capacity, so the queue grows for as long as ${LN(sLv)} runs.</p>` : bu >= .7 ? `<p><b>Close to the limit</b> at step ${bn + 1} (${(bu * 100).toFixed(0)}%): bursts queue.</p>` : `<p>Every step stays under 70% of its capacity.</p>`;
+  $("stpSum").innerHTML = `<span class="label">${LN(sLv)} · ${SFLOWS.find(f => f[0] === sFl)[1]}</span><h3>${rate}</h3>${verdict}<dl><dt>Idle sum</dt><dd>≈ ${fmtMs(idle)} over ${steps.length} steps</dd></dl>${res}`;
+}
+let playing = null;
+function play() {
+  if (playing) { clearTimeout(playing.t); playing = null; }
+  const steps = STEPS[sFl], loads = steps.map(st => stepLoad(st, sLv)), m = measured(sLv, sFl), key = sFl === "cam" ? "cam1" : sFl;
+  const idle = steps.reduce((a, s) => a + s[5], 0), total = m && m.s[key] && m.s[key].p50 ? m.s[key].p50 : idle;
+  let bn = -1, bu = 0; loads.forEach((l, i) => { if (l && l.u > bu) { bu = l.u; bn = i; } });
+  if (bn < 0) bn = steps.reduce((b, s, i) => s[5] > steps[b][5] ? i : b, 0);
+  const dw = steps.map((s, i) => s[5] + (i === bn ? Math.max(0, total - idle) : 0));
+  const scale = Math.max(1, total / 6000), mx = Math.max(...dw);
+  let i = 0;
+  const btn = $("stpPlay"); btn.textContent = scale > 1.01 ? `■ playing at ×${scale.toFixed(0)}` : "■ playing in real time";
+  const hop = () => {
+    document.querySelectorAll("#stpPipe .st").forEach((b, k) => b.classList.toggle("hot", k === i));
+    const card = document.querySelector(`#stpPipe .st[data-i="${i}"]`); card && card.scrollIntoView({ block: "nearest", inline: "nearest", behavior: "smooth" });
+    sSel = i; renderStepDetail(steps, loads);
+    document.querySelectorAll("#stpPipe .st").forEach((b, k) => b.classList.toggle("sel", k === i));
+    const d = Math.max(220, dw[i] / scale);
+    playing = { t: setTimeout(() => { i++; if (i < steps.length) hop(); else { document.querySelectorAll("#stpPipe .st").forEach(b => b.classList.remove("hot")); btn.textContent = `▶ Play one packet · took ${fmtMs(total)}`; playing = null; } }, d) };
+  };
+  hop();
+}
+$("stpPlay").onclick = play;
+$("stpRun").onclick = async () => { const r = await fetch("/level", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ level: sLv }) }); if (r.ok) { level = sLv; renderLevels(); renderSteps(); } };
+setInterval(() => { if (F && !playing) renderSteps(); }, 3000);
 setInterval(() => { if (F) drawChart(); }, 500);
 window.addEventListener("resize", () => { if (F) sizeFloor(); });
 renderTiles(); connect(); requestAnimationFrame(tick);
