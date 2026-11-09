@@ -181,7 +181,7 @@ svg .led.live { animation: none !important; transition: fill .05s; }
           <span><i style="background:linear-gradient(90deg,var(--embb) 50%,var(--urllc) 50%)"></i>gNB board: blinks blue (eMBB) and red (URLLC) in turn</span>
           <span><i style="background:var(--embb)"></i>UE1 board: blue, 1 blink</span>
           <span><i style="background:var(--urllc)"></i>UE2 board: red, 2 blinks</span>
-          <span><i style="background:var(--n3)"></i>BLE1, BLE2: green while the board can take bytes; it flickers as the HCI RTS line (hci_bb v11)</span>
+          <span><i style="background:var(--n3)"></i>BLE1, BLE2: green while the board can take bytes; it flickers as the HCI RTS line (hci_bb v15)</span>
         </div>
       </div>
       <div class="detail" id="detail" aria-live="polite"></div>
@@ -208,7 +208,7 @@ svg .led.live { animation: none !important; transition: fill .05s; }
         <span class="label">Next, in order</span>
         <ol class="next">
           <li><b>Make it one command.</b> These links were started by hand. <code>./nrlink.sh up --role ue --transport ble</code> does the same steps, but it needs root without a terminal on the UE PC: a sudoers rule like the core's, or run it from the user's terminal.</li>
-          <li><b>Bluetooth boards on flow control (9 Nov).</b> Each BLE board's HCI now runs on its LPUART0 through a Raspberry Pi Pico on the UE PC, at 1 Mbaud with RTS (hci_bb v11). BLE1 passes every burst test and carries n3iwue1. BLE2's RTS jumper is on a wrong pin, so its link stays down until that wire moves to J1-5 (<a href="https://claude.ai/artifact/KeuutgDBSWgMLrcWweP12F" target="_blank" rel="noopener">wiring page</a>). After that: a long uplink run, to see whether the old PC→board hang is gone.</li>
+          <li><b>Bluetooth boards fixed (9 Nov).</b> Each BLE board's HCI runs on its LPUART0 through a Raspberry Pi Pico on the UE PC, at 1 Mbaud with RTS (<a href="https://claude.ai/artifact/KeuutgDBSWgMLrcWweP12F" target="_blank" rel="noopener">wiring page</a>). The old PC→board hang was a bus fault in the radio-core interrupt handler; hci_bb v15 fixes it, and both boards run it. BLE1 then carried 17 minutes of 30–70 kbit/s uplink without a hang. Still to do: rerun the full stress test, and find why n3iwue1's tunnel sometimes stops passing traffic under load while the board keeps working.</li>
           <li><b>Poll timeouts on the NR radio.</b> Half of gnb_bridge's polls wait out their 25 ms. That is about 0.7 s of every second, and it sets the slot rate (see <i>Slot schemes</i>).</li>
           <li><b>Later.</b> Split-role support for the dashboard, and NTP on both PCs (their clocks differ by about 8 h 50 min).</li>
         </ol>
@@ -229,7 +229,7 @@ svg .led.live { animation: none !important; transition: fill .05s; }
         <span class="label">Firmware on the NXP boards</span>
         <dl class="addr">
           <dt>nrlink v4</dt><dd>gNB 3TJ2B15JGASV3, UE1 2HOKMMVEX1WMP and UE2 GBAMNH4BQ3CSB: SLIP modem between USB (1 Mbaud) and the GenFSK radio, 1 Mbit/s on channel 0x2A = 2402 MHz</dd>
-          <dt>hci_bb v11</dt><dd>BLE1 3VWLILYT2A1AK and BLE2 GLNAOWUSDREB4: the NXP Bluetooth LE controller over HCI H4 on LPUART0 at 1 Mbaud with RTS on J1-5, bridged to USB on the UE PC by one Raspberry Pi Pico per board (MicroPython). It keeps the 4 KB receive ring, the resyncing H4 parser and the 0xF7 / 0xFDB2 diagnostics. ROM ISP by vendor command 0xFDB1, or by typing <code>isp</code> on the MCU-Link VCOM, so no SW3 is needed. The address is set from the serial with 0xFC22.</dd>
+          <dt>hci_bb v15</dt><dd>BLE1 3VWLILYT2A1AK and BLE2 GLNAOWUSDREB4: the NXP Bluetooth LE controller (radio core kept awake, 2 s hardware watchdog) over HCI H4 on LPUART0 at 1 Mbaud with RTS on J1-5, bridged to USB on the UE PC by one Raspberry Pi Pico per board (MicroPython). It keeps the 4 KB receive ring, the resyncing H4 parser and the 0xF7 / 0xFDB2 diagnostics. ROM ISP by vendor command 0xFDB1, or by typing <code>isp</code> on the MCU-Link VCOM, so no SW3 is needed. The address is set from the serial with 0xFC22.</dd>
         </dl>
       </div>
     </article>
@@ -316,19 +316,19 @@ svg .led.live { animation: none !important; transition: fill .05s; }
         <li><b>Bluetooth path.</b> Each link is shaped to 40 kbit/s on air. After IPsec and GRE overhead, 20–30 kbit/s of UDP gets through cleanly. TCP stays poor: one lost segment at these round trips stalls it for seconds.</li>
         <li><b>Why the n3iwues dropped out.</b> The hci_bb boards talk to the PC over a 115200-baud UART with no flow control. Under load a board stops answering HCI (<code>command tx timeout</code>) while its radio link stays up, and nothing gets through. The n3iwue's IKE then gives up and the container exits. This happened 2 times in the final 10-minute run, and 4 times earlier in the day.</li>
         <li><b>What changed on the link.</b> <code>ble_ip_link.py</code> now paces traffic to 40 kbit/s itself. Small packets (pings, ACKs, IKE) go before bulk data, and the bulk queue keeps at most 1 s. That cut the Bluetooth RTT under load from 2–5 s to 0.4–1.1 s. <code>ble_watchdog.sh</code> resets a hung board and restarts its n3iwue; <code>stress.py</code> waits for the session and lists each recovery in its results.</li>
-        <li><b>The real fix, done 9 Nov.</b> Each BLE board's HCI now runs on LPUART0 through a Raspberry Pi Pico at 1 Mbaud with RTS (hci_bb v11). These numbers are from before it; a rerun is still to do.</li>
+        <li><b>The real fix, done 9 Nov.</b> Each BLE board's HCI now runs on LPUART0 through a Raspberry Pi Pico at 1 Mbaud with RTS, and hci_bb v15 removes the hang itself (see the firmware section below). These numbers are from before it; a full rerun is still to do. A single-board uplink run on v15 (BLE1, 17 min, 30–70 kbit/s) had no hang and saturated at about 32 kbit/s.</li>
       </ol>
       <span class="hint">Raw results: <code>~/oai/nrlink/logs/stress/run_nrue.json</code> (nrUEs alone) and <code>run_n3_all.json</code> (n3iwues alone, all four together) on the core PC.</span>
     </div>
   </section>
   <section class="card" aria-label="Bluetooth board firmware">
-    <div class="hd"><h2>Bluetooth board firmware: the hang hunt</h2><span class="meta">5–6 Nov 2026 · every flash backed up first (UE PC ~/nxp/backups) · images and patches in ~/nxp/images</span></div>
+    <div class="hd"><h2>Bluetooth board firmware: the hang hunt</h2><span class="meta">5–9 Nov 2026 · solved in v15 · every flash backed up first (UE PC ~/nxp/backups) · images and patches in ~/nxp/images</span></div>
     <div class="bd">
       <div class="kpis">
         <div class="kpi"><span class="label">PC → board, 30–50 kbit/s</span><span class="v warn">hangs, 3 of 3 on v3</span></div>
         <div class="kpi"><span class="label">Board → PC, up to 66 kbit/s</span><span class="v">never hung</span></div>
         <div class="kpi"><span class="label">Both ways</span><span class="v warn">hangs at 15–25 kbit/s</span></div>
-        <div class="kpi"><span class="label">Root cause</span><span class="v warn">not found yet</span></div>
+        <div class="kpi"><span class="label">Root cause</span><span class="v">found 9 Nov, fixed in v15</span></div>
       </div>
       <p class="hint" style="max-width:100ch">When a board hangs, its main CPU goes completely silent: no HCI events, not even answers to vendor commands it handles itself (0xFDB0). The radio core keeps the LE link up, so the core still sees the connection. One link hangs as often as two.</p>
     </div>
@@ -346,17 +346,21 @@ svg .led.live { animation: none !important; transition: fill .05s; }
           <tr><td class="mono">v8</td><td><b>BLE1, BLE2</b></td><td>v7 plus the RGB LED steady green, so the Bluetooth boards stand out from the blue/red nrlink boards</td><td>flashed 6 Nov; same hang behaviour expected</td></tr>
           <tr><td class="mono">v9</td><td>–</td><td>HCI moved to LPUART0 at 1 Mbaud with RTS/CTS, through a Raspberry Pi Pico per board; VCOM <code>isp</code> command</td><td>silent: no SysTick to poll the VCOM, and an unwired CTS blocked sending; recovered with SW3</td></tr>
           <tr><td class="mono">v10</td><td>–</td><td>CTS off, RTS on; VCOM <code>isp</code> polled from the main loop (verified within 0.1 s of a reset)</td><td>every HCI command over about 12 B lost: RTS never reached the pin</td></tr>
-          <tr><td class="mono">v11</td><td><b>BLE1, BLE2</b></td><td>puts PTA19 back to LPUART0_RTS_b after <code>PLATFORM_InitLcl()</code>, which had switched it to a radio debug output</td><td>flashed 9 Nov. BLE1: 1000 of 1000 commands, a 300-command burst with no loss. BLE2 waits for its RTS wire</td></tr>
+          <tr><td class="mono">v11</td><td>–</td><td>puts PTA19 back to LPUART0_RTS_b after <code>PLATFORM_InitLcl()</code>, which had switched it to a radio debug output</td><td>flashed 9 Nov. BLE1: 1000 of 1000 commands, a 300-command burst with no loss. BLE2 waits for its RTS wire</td></tr>
+          <tr><td class="mono">v12</td><td>–</td><td>release build (-Os) instead of NXP's -O0 debug build; every other interrupt one level below the 1 ms tick, so a stuck handler can be reported</td><td>BLE1: clean at 20–30 kbit/s, saturates at about 32; hung at 60 kbit/s after 37 s, still with no report</td></tr>
+          <tr><td class="mono">v13</td><td>–</td><td>breadcrumbs in RAM that survive a reset (every interrupt mask change with its caller, tick and loop counters, reset reason), read back with command 0xFDB3; WDOG0 hardware watchdog, 2 s</td><td>the watchdog brought BLE1 back by itself; the breadcrumbs showed the 1 ms tick and the main loop stopping together with interrupts on</td></tr>
+          <tr><td class="mono">v14</td><td>–</td><td>each tick records the address it interrupted; NMI and the BusFault, MemManage and UsageFault handlers (the SDK's silent endless loops) record the fault and reset</td><td>caught it: a BusFault in <code>RF_IMU0_IRQHandler</code>, reading a radio-domain register (CFSR 0x8200)</td></tr>
+          <tr><td class="mono">v15</td><td><b>BLE1, BLE2</b></td><td>keeps the radio core's power domain awake for good (<code>PLATFORM_RemoteActiveReq()</code> once at start, never released)</td><td>flashed 9 Nov. BLE1: 17 min of 30–70 kbit/s uplink, no hang, no watchdog reset; worst HCI reply 39 ms</td></tr>
         </tbody>
       </table>
     </div>
     <div class="bd" style="border-top:1px solid var(--line)">
-      <span class="label">Ruled out, and what is left</span>
+      <span class="label">What it was</span>
       <ol class="next">
-        <li><b>Ruled out by test:</b> the UART overrun flag (the NXP driver clears it), the 128 B receive ring, failed asserts and faults, a stalled main loop, unread UART input, interrupts masked in the main loop, and stack overflow.</li>
-        <li><b>Most likely now:</b> an interrupt handler that never returns, at the same top priority as the tick, so nothing can preempt it to report. The candidates are the UART and the radio-core message (RPMsg) handlers.</li>
-        <li><b>Next, cheapest first:</b> a release build (all of this is NXP's -O0 debug build, and an optimised build changes timing a lot); a diagnostic build that puts every other interrupt below the tick; then a debugger session, which needs the MCXW727 device pack (pyocd's generic target gets WAIT on every board, healthy ones too).</li>
-        <li><b>Meanwhile:</b> <code>ble_watchdog.sh</code> resets a hung board in about 10 s and restarts its n3iwue, and <code>ble_ip_link.py</code> now keeps each tun across reconnects, so IPsec survives a radio dropout.</li>
+        <li><b>The fault:</b> when the radio core (NBU) sends the host a message, <code>RF_IMU0_IRQHandler</code> reads an IMU register in the radio's power domain. The SDK's wake-up call, <code>mcmgr_imu_remote_active_req()</code>, does nothing in interrupt context, so when the radio core went to sleep between raising the interrupt and the handler running, the read was a bus fault. Host-side load widens that gap, which is why only PC→board traffic triggered it.</li>
+        <li><b>Why it looked like a freeze:</b> the SDK's default BusFault handler is a silent endless loop that outranks the tick: no report, tick and main loop stopped, RTS stuck high, no answer on HCI or the VCOM.</li>
+        <li><b>The fix (v15):</b> the main loop asks once at start for the radio domain to stay awake and never releases it. The cost is a little power, which does not matter for USB-powered boards.</li>
+        <li><b>Safety nets kept:</b> the 2 s hardware watchdog, fault handlers that record and reset, and the breadcrumbs, so anything new recovers by itself and leaves its cause behind. <code>ble_watchdog.sh</code> on the UE PC still re-attaches a board after a reset and restarts its n3iwue.</li>
       </ol>
     </div>
   </section>
@@ -380,7 +384,7 @@ const LANES = [
   [0, 250, "free5GC", ["v4.3.0", "core NFs, N3IWF", "and n3iwue"], "--f5gc"],
   [250, 372, "OpenAirInterface", ["gNB VNF + PNF", "nrUE, ext-dn"], "--oai"],
   [372, 498, "Host · Linux", ["nrlink Python,", "BlueZ, Docker"], "--host"],
-  [498, 630, "NXP", ["FRDM-MCXW72 boards", "nrlink v4 · hci_bb v11"], "--nxp"],
+  [498, 630, "NXP", ["FRDM-MCXW72 boards", "nrlink v4 · hci_bb v15"], "--nxp"],
   [630, 742, "Intel", ["8265 Bluetooth 4.2", "core PC adapter"], "--intel"],
   [742, 880, "Over the air", ["2.4 GHz ISM band", "nrlink fixed 2402 MHz", "BLE hops 2404–2478"], "--ink-3"],
 ];
@@ -407,8 +411,8 @@ const NODES = {
   ble2l: { c: "H", r: 4, v: "host", t: "ble_ip_link 2", s: "--connect · BlueZ", s2: "ble2 10.70.0.12", k: "n3", d: "Same as link 1, for BLE2 and n3iwue2." },
   ub1:   { c: "I", r: 4, v: "host", t: "ue_bridge 1", s: "nrlink · Python", s2: "udp/5001", k: "embb", d: "Hands downlink slots to nrUE1 and answers the gNB's polls with nrUE1's uplink." },
   ub2:   { c: "J", r: 4, v: "host", t: "ue_bridge 2", s: "nrlink · Python", s2: "udp/5002", k: "urllc", d: "Hands downlink slots to nrUE2 and answers the gNB's polls with nrUE2's uplink." },
-  bb1:   { c: "G", r: 5, v: "nxp", t: "BLE1 board", s: "NXP · hci_bb v11", s2: "3VWLILYT2A1AK", k: "n3", led: "g", ver: "hci_bb v11", d: "FRDM-MCXW72 running NXP's hci_bb Bluetooth LE controller, v11 since 9 Nov: HCI on LPUART0 at 1 Mbaud with RTS, bridged to USB by Raspberry Pi Pico e661640843676727 on the UE PC. The green LED shares the RTS pin. btattach makes it Linux adapter hci0 on the UE PC, and ble_attach.sh sets its address to 02:4E:52:65:B3:A1. A board reset loses the address, so ble_attach.sh must run again." },
-  bb2:   { c: "H", r: 5, v: "nxp", t: "BLE2 board", s: "NXP · hci_bb v11", s2: "GLNAOWUSDREB4", k: "n3", led: "g", ver: "hci_bb v11", d: "Second hci_bb board, also on v11, through Pico e6616408439b6727 on the UE PC: Linux adapter hci1, address 02:4E:52:77:BF:5D. Its MCU-Link USB is on the core PC (power, flashing, isp). Since 9 Nov its RTS jumper sits on a wrong pin, so long HCI packets are lost and its Bluetooth link does not come up until the wire moves to J1-5." },
+  bb1:   { c: "G", r: 5, v: "nxp", t: "BLE1 board", s: "NXP · hci_bb v15", s2: "3VWLILYT2A1AK", k: "n3", led: "g", ver: "hci_bb v15", d: "FRDM-MCXW72 running NXP's hci_bb Bluetooth LE controller, v15 since 9 Nov (hang fixed, 2 s hardware watchdog): HCI on LPUART0 at 1 Mbaud with RTS, bridged to USB by Raspberry Pi Pico e661640843676727 on the UE PC. The green LED shares the RTS pin. btattach makes it Linux adapter hci0 on the UE PC, and ble_attach.sh sets its address to 02:4E:52:65:B3:A1. A board reset loses the address, so ble_attach.sh must run again." },
+  bb2:   { c: "H", r: 5, v: "nxp", t: "BLE2 board", s: "NXP · hci_bb v15", s2: "GLNAOWUSDREB4", k: "n3", led: "g", ver: "hci_bb v15", d: "Second hci_bb board, also on v15, through Pico e6616408439b6727 on the UE PC: Linux adapter hci1, address 02:4E:52:77:BF:5D. Its MCU-Link USB is on the core PC (power, flashing, isp), so a hardware reset of BLE2 has to come from the core PC." },
   u1b:   { c: "I", r: 5, v: "nxp", t: "UE1 board", s: "NXP · nrlink v4", s2: "2HOKMMVEX1WMP", k: "embb", led: "b1", d: "FRDM-MCXW72 radio for nrUE1, nrlink v4. Its LED blinks blue once when it is served (eMBB code: blue × 1)." },
   u2b:   { c: "J", r: 5, v: "nxp", t: "UE2 board", s: "NXP · nrlink v4", s2: "GBAMNH4BQ3CSB", k: "urllc", led: "r2", d: "FRDM-MCXW72 radio for nrUE2, nrlink v4. Its LED blinks red twice when it is served (URLLC code: red × 2)." },
 };
@@ -433,7 +437,7 @@ const LINKS = [
   { id: "t1", st: "up", k: "n3", pts: vline("n3ue1", "ble1l"), lbl: [1248, 300, "start", "tun ble1"], lbl2: "IKE · IPsec", name: "tun ble1", cap: "10.70.0.11", what: "ble_ip_link moved ble1 into the n3iwue1 container and routes the N3IWF through it, so IKEv2, IPsec and GRE all travel over Bluetooth. The container waits for that route before starting the n3iwue." },
   { id: "t2", st: "up", k: "n3", pts: vline("n3ue2", "ble2l"), lbl: [1413, 300, "start", "tun ble2"], lbl2: "IKE · IPsec", name: "tun ble2", cap: "10.70.0.12", what: "The same for n3iwue2." },
   { id: "h1", lat: [1248, 500, "start", "6 ms cmd · 10 ms/kB"], latd: "HCI command round trip 5.6 ms through the Pico (1000 commands, worst 14 ms); a 1000 B ACL packet needs about 10 ms at 1 Mbaud",  st: "up", k: "n3", pts: vline("ble1l", "bb1"), lbl: [1248, 518, "start", "H4 1 Mbaud · Pico"], name: "HCI H4", cap: "Pico USB ↔ LPUART0, 1 Mbaud, RTS", what: "btattach -N -P h4 -S 1000000 on the Pico's tty. The Pico bridges USB to the board's LPUART0 (J1-1, J1-2) and pauses when the board raises RTS on J1-5." },
-  { id: "h2", lat: [1413, 500, "start", "short cmds only"], latd: "short HCI commands answer; anything over about 12 B is lost until the RTS wire moves to J1-5",  st: "pending", k: "n3", pts: vline("ble2l", "bb2"), lbl: [1413, 518, "start", "H4 1 Mbaud · Pico"], name: "HCI H4", cap: "Pico USB ↔ LPUART0, 1 Mbaud, RTS not connected", what: "Same as BLE1, but the Pico's GP2 wire is not on J1-5, so the board can't pause it and long packets are lost." },
+  { id: "h2", lat: [1413, 500, "start", "same as BLE1"], latd: "HCI through the Pico with RTS on J1-5 since the wire moved on 9 Nov",  st: "up", k: "n3", pts: vline("ble2l", "bb2"), lbl: [1413, 518, "start", "H4 1 Mbaud · Pico"], name: "HCI H4", cap: "Pico USB ↔ LPUART0, 1 Mbaud, RTS", what: "Same as BLE1: btattach on Pico e6616408439b6727's tty; the board pauses the Pico with RTS on J1-5." },
   { id: "e1", st: "up", k: "embb", pts: vline("nrue1", "ub1"), lbl: [1578, 384, "start", "UDP"], name: "UDP", cap: "veth", what: "Downlink slots to nrUE1, and its uplink for each TX slot back." },
   { id: "e2", st: "up", k: "urllc", pts: vline("nrue2", "ub2"), lbl: [1743, 384, "start", "UDP"], name: "UDP", cap: "veth", what: "Downlink slots to nrUE2, and its uplink for each TX slot back." },
   { id: "s1", lat: [1578, 500, "start", "2.6 ms / 255 B"], latd: "2.6 ms per 255 B air packet at 1 Mbaud SLIP (computed)",  st: "up", k: "embb", pts: vline("ub1", "u1b"), lbl: [1578, 518, "start", "USB 1 Mbaud"], name: "USB VCOM", cap: "1 Mbaud SLIP", what: "Serial link from the UE1 board to its bridge." },

@@ -33,7 +33,7 @@ if [ -n "$IMAGE" ]; then
   sleep 3
   say "== after flashing: one software reset, then a hardware reset; breadcrumbs of the boot before the hardware reset"
   "$PY" -I "$NX/hwreset.py" "$SN" >/dev/null; sleep 4
-  timeout 20 "$PY" -I "$NX/pico/crumbs.py" "$P" "${SYMS:-$NX/images/hci_bb_isp_v14r.syms}" | tee -a "$LOG"
+  timeout 20 "$PY" -I "$NX/pico/crumbs.py" "$P" "${SYMS:-$NX/images/hci_bb_isp_v15r.syms}" | tee -a "$LOG"
 fi
 "$PY" -I "$NX/pico/mpy_run.py" "$P" "$NX/pico/save_main.py" 2>&1 | grep -a saved | tee -a "$LOG"
 "$PY" -I "$NX/pico/mpy_run.py" "$P" "$NX/pico/reset.py" >/dev/null 2>&1; sleep 4
@@ -44,7 +44,13 @@ H=$(hci_of); say "BLE1 = $H, n3iwue1 = ${A:-NO SESSION}"
 say "baseline: $(docker exec nrlink-n3iwue1 ping -c10 -W3 -I gretun-id-2-1 $DN 2>&1 | tail -2 | tr '\n' ' ')"
 
 HUNG=0
+tunnel_ok() { docker exec nrlink-n3iwue1 ping -c3 -W4 -I gretun-id-2-1 $DN >/dev/null 2>&1; }
 for R in $RATES; do
+  if ! tunnel_ok; then
+    say "  n3iwue1 tunnel dead before this step (BLE1 answers HCI: $(timeout 3 hcitool -i "$H" cmd 0x04 0x0001 >/dev/null 2>&1 && echo yes || echo no)); restarting n3iwue1"
+    start_ue1; [ -n "$A" ] || start_ue1
+    tunnel_ok || { say "  !! tunnel still dead: step $R kbit/s NOT RUN (no load on BLE1)"; continue; }
+  fi
   say "== UDP uplink $R kbit/s for $SECS s (500 B datagrams)"
   timeout $((SECS + 60)) docker run --rm --network container:nrlink-n3iwue1 --entrypoint timeout nrlink-run:local \
     $((SECS + 50)) iperf3 -c $DN -p 5223 -B "$A" --bind-dev gretun-id-2-1 -u -b ${R}k -l 500 -t $SECS -J \
@@ -92,7 +98,7 @@ fi
 if [ $HUNG = 1 ] || [ $HUNG = 3 ]; then
   "$PY" -I "$NX/pico/mpy_run.py" "$P" "$NX/pico/reset.py" >/dev/null 2>&1; sleep 4
   say "== breadcrumbs of the boot that hung"
-  timeout 20 "$PY" -I "$NX/pico/crumbs.py" "$P" "${SYMS:-$NX/images/hci_bb_isp_v14r.syms}" | tee -a "$LOG"
+  timeout 20 "$PY" -I "$NX/pico/crumbs.py" "$P" "${SYMS:-$NX/images/hci_bb_isp_v15r.syms}" | tee -a "$LOG"
 fi
 say "== restore: bridge restarted, BLE1 reset and attached, n3iwue1 restarted, watchdog on both"
 "$PY" -I "$NX/pico/mpy_run.py" "$P" "$NX/pico/reset.py" >/dev/null 2>&1; sleep 4

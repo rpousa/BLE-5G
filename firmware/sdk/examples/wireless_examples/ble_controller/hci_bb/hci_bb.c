@@ -1046,6 +1046,11 @@ void main_task(uint32_t param)
         if ((SysTick->CTRL & SysTick_CTRL_ENABLE_Msk) == 0U) { (void)SysTick_Config(SystemCoreClock / 1000U); }
         Hcibb_IrqPrioritiesBelowTick();       /* v12: the stall detector must preempt a stuck interrupt handler */
         Wdog_Start();                         /* v13: a hung board resets itself after 2 s */
+        /* v15: keep the radio (NBU) power domain awake for good. RF_IMU0_IRQHandler touches IMU registers in that
+         * domain, but mcmgr_imu_remote_active_req() does nothing in interrupt context; under load the NBU slept
+         * between raising the interrupt and the handler running -> precise BusFault (CFSR 0x8200) in the handler,
+         * then the SDK's silent BusFault loop = the hang. The request is reference counted and never released here. */
+        PLATFORM_RemoteActiveReq();
 
 #else
         if (gBleSuccess_c != DTM_Init((serial_handle_t) gSerMgrIf))

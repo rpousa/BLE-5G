@@ -1,0 +1,69 @@
+14:49:30 == setup: watchdog stopped; bridge v2 on BLE1's Pico; BLE1 reset and attached; n3iwue1 restarted
+14:49:31 == flashing /home/debian/nxp/images/hci_bb_isp_v14r.bin onto BLE1
+reply: b'ISP\r\n' after 0.05 s
+Response word 1 = 37240 (0x9178)
+verify OK
+Response status = 0 (0x0) Success.
+14:49:43 == after flashing: one software reset, then a hardware reset; breadcrumbs of the boot before the hardware reset
+this boot: reset by WARM+PIN; watchdog clock measured 41100 Hz
+previous boot #8: reset by WARM+SW; ticks 3198 ms, main loops 1263, tick at the last main loop 3198 -> loop stalled 0 ms before the reset
+last tick interrupted EnableGlobalIRQ+0x2e in thread (main loop)
+last 16 of 5881 interrupt mask changes, oldest first:
+  unmask         at EnableGlobalIRQ+0xc                          called from main+0x3c
+  MASK           at DisableGlobalIRQ+0xc                         called from SerialManager_Read+0x16
+  unmask         at EnableGlobalIRQ+0xc                          called from SerialManager_Read+0x8c
+  MASK           at DisableGlobalIRQ+0xc                         called from OSA_DisableIRQGlobal+0xc
+  unmask         at EnableGlobalIRQ+0xc                          called from main+0x3c
+  MASK           at DisableGlobalIRQ+0xc                         called from SerialManager_Read+0x16
+  unmask         at EnableGlobalIRQ+0xc                          called from SerialManager_Read+0x8c
+  MASK           at DisableGlobalIRQ+0xc                         called from OSA_DisableIRQGlobal+0xc
+  unmask         at EnableGlobalIRQ+0xc                          called from main+0x3c
+  MASK           at DisableGlobalIRQ+0xc                         called from SerialManager_Read+0x16
+  unmask         at EnableGlobalIRQ+0xc                          called from SerialManager_Read+0x8c
+  MASK           at DisableGlobalIRQ+0xc                         called from OSA_DisableIRQGlobal+0xc
+  unmask         at EnableGlobalIRQ+0xc                          called from main+0x3c
+  MASK           at DisableGlobalIRQ+0xc                         called from SerialManager_Read+0x16
+  unmask         at EnableGlobalIRQ+0xc                          called from SerialManager_Read+0x8c
+  MASK           at DisableGlobalIRQ+0xc                         called from OSA_DisableIRQGlobal+0xc
+=> interrupts were left MASKED by the last entry
+saved 2494
+ble1 3VWLILYT2A1AK hci0 02:4E:52:65:B3:A1
+14:53:02 no session at the first try (stale IKE?), restarting n3iwue1 once
+14:53:15 BLE1 = hci0, n3iwue1 = 12.1.1.157
+14:53:28 baseline: 10 packets transmitted, 10 received, 0% packet loss, time 9043ms rtt min/avg/max/mdev = 208.130/2633.485/3388.887/1023.246 ms, pipe 4 
+14:53:28 == UDP uplink 30 kbit/s for 60 s (500 B datagrams)
+14:55:00   iperf3 error: unable to receive results:  · HCI checks: 91, worst 37 ms, 0 over 500 ms
+14:55:00 == UDP uplink 50 kbit/s for 60 s (500 B datagrams)
+14:55:27 !! BLE1 answers with another address: it reset itself (watchdog): < HCI Command: ogf 0x04, ocf 0x0009, plen 0 > HCI Event: 0x0e plen 10 01 09 10 00 88 88 88 88 88 88 
+14:55:27 !! at 50 kbit/s
+14:55:27 == Pico bridge counters
+nrlink bridge stopped {'max_hold_ms': 0, 'held_ms': 0, 'up': 122999, 'holds': 0, 'uptime_s': 335, 'holds_over_1s': 0, 'down': 378078}
+MicroPython v1.24.1 on 2024-11-29; Raspberry Pi Pico with RP2040
+Type "help()" for more information.
+>>>
+14:55:35 == breadcrumbs of the boot that hung
+this boot: reset by WARM+SW; watchdog clock measured 41100 Hz
+previous boot #10: reset by WARM+PIN; ticks 329572 ms, main loops 370378, tick at the last main loop 329570 -> loop stalled 2 ms before the reset
+last tick interrupted SerialManager_RxCallback+0x0 in IRQ 44
+FAULT BusFault at RF_IMU0_IRQHandler+0xa (lr RF_IMU0_IRQHandler+0x6), CFSR 00008200 HFSR 00000000 -> reset
+last 16 of 4264834 interrupt mask changes, oldest first:
+  restore-masked at EnableGlobalIRQ+0xc                          called from HAL_UartReceiveNonBlocking+0x1c
+  unmask         at EnableGlobalIRQ+0xc                          called from Serial_UartCallback+0x28
+  MASK           at DisableGlobalIRQ+0xc                         called from LPUART_DisableInterrupts+0xa
+  unmask         at EnableGlobalIRQ+0xc                          called from LPUART_DisableInterrupts+0x1c
+  MASK           at DisableGlobalIRQ+0xc                         called from LPUART_DisableInterrupts+0x20
+  unmask         at EnableGlobalIRQ+0xc                          called from LPUART_DisableInterrupts+0x3c
+  MASK           at DisableGlobalIRQ+0xc                         called from LPUART_DisableInterrupts+0x44
+  unmask         at EnableGlobalIRQ+0xc                          called from HAL_UartInterruptHandle+0x112
+  MASK           at DisableGlobalIRQ+0xc                         called from SerialManager_RxCallback+0xa
+  MASK           at DisableGlobalIRQ+0xc                         called from LPUART_EnableInterrupts+0xa
+  restore-masked at EnableGlobalIRQ+0xc                          called from LPUART_EnableInterrupts+0x1a
+  MASK           at DisableGlobalIRQ+0xc                         called from LPUART_EnableInterrupts+0x1e
+  restore-masked at EnableGlobalIRQ+0xc                          called from LPUART_EnableInterrupts+0x38
+  MASK           at DisableGlobalIRQ+0xc                         called from LPUART_EnableInterrupts+0x40
+  restore-masked at EnableGlobalIRQ+0xc                          called from HAL_UartReceiveNonBlocking+0x1c
+  unmask         at EnableGlobalIRQ+0xc                          called from Serial_UartCallback+0x28
+14:55:37 == restore: bridge restarted, BLE1 reset and attached, n3iwue1 restarted, watchdog on both
+ble1 3VWLILYT2A1AK hci0 02:4E:52:65:B3:A1
+14:55:54 n3iwue1 = 12.1.1.158
+14:55:55 done

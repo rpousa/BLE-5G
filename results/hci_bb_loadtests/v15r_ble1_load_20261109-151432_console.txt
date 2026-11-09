@@ -1,0 +1,26 @@
+15:14:32 == setup: watchdog stopped; bridge v2 on BLE1's Pico; BLE1 reset and attached; n3iwue1 restarted
+saved 2494
+15:15:07 BLE1 = hci0, n3iwue1 = 12.1.1.162
+15:15:19 baseline: 10 packets transmitted, 0 received, 100% packet loss, time 9194ms  
+15:15:25   n3iwue1 tunnel dead before this step (BLE1 answers HCI: yes); restarting n3iwue1
+15:15:35 == UDP uplink 30 kbit/s for 120 s (500 B datagrams)
+15:18:08   iperf3 error: unable to receive results:  · HCI checks: 151, worst 30 ms, 0 over 500 ms
+15:18:14 == UDP uplink 40 kbit/s for 120 s (500 B datagrams)
+15:21:04   iperf3 output unreadable · HCI checks: 167, worst 39 ms, 0 over 500 ms
+15:21:10   n3iwue1 tunnel dead before this step (BLE1 answers HCI: yes); restarting n3iwue1
+15:27:16   !! tunnel still dead: step 50 kbit/s NOT RUN (no load on BLE1)
+15:27:16   n3iwue1 tunnel dead before this step (BLE1 answers HCI: yes); restarting n3iwue1
+15:27:24 == UDP uplink 60 kbit/s for 120 s (500 B datagrams)
+15:29:30   received 31.9 kbit/s, loss 45.5 %, jitter 31.3 ms · HCI checks: 123, worst 33 ms, 0 over 500 ms
+15:29:32 == UDP uplink 70 kbit/s for 120 s (500 B datagrams)
+15:31:38   received 32.2 kbit/s, loss 52.9 %, jitter 35.7 ms · HCI checks: 123, worst 32 ms, 0 over 500 ms
+15:31:38 == Pico bridge counters
+nrlink bridge stopped {'max_hold_ms': 0, 'held_ms': 0, 'up': 2667850, 'holds': 0, 'uptime_s': 1021, 'holds_over_1s': 0, 'down': 2834829}
+MicroPython v1.24.1 on 2024-11-29; Raspberry Pi Pico with RP2040
+Type "help()" for more information.
+>>>
+15:31:41 == restore: bridge restarted, BLE1 reset and attached, n3iwue1 restarted, watchdog on both
+15:32:11 n3iwue1 = 12.1.1.165
+15:32:12 done
+
+[exited with code 0]

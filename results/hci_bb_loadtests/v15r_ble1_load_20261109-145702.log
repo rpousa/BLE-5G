@@ -1,0 +1,52 @@
+14:57:02 == setup: watchdog stopped; bridge v2 on BLE1's Pico; BLE1 reset and attached; n3iwue1 restarted
+14:57:03 == flashing /home/debian/nxp/images/hci_bb_isp_v15r.bin onto BLE1
+reply: b'ISP\r\n' after 0.05 s
+Response word 1 = 37248 (0x9180)
+verify OK
+Response status = 0 (0x0) Success.
+14:57:14 == after flashing: one software reset, then a hardware reset; breadcrumbs of the boot before the hardware reset
+this boot: reset by WARM+PIN; watchdog clock measured 41100 Hz
+previous boot #13: reset by WARM+SW; ticks 3204 ms, main loops 1270, tick at the last main loop 3204 -> loop stalled 0 ms before the reset
+last tick interrupted EnableGlobalIRQ+0x2e in thread (main loop)
+last 16 of 5863 interrupt mask changes, oldest first:
+  unmask         at EnableGlobalIRQ+0xc                          called from main+0x3c
+  MASK           at DisableGlobalIRQ+0xc                         called from SerialManager_Read+0x16
+  unmask         at EnableGlobalIRQ+0xc                          called from SerialManager_Read+0x8c
+  MASK           at DisableGlobalIRQ+0xc                         called from OSA_DisableIRQGlobal+0xc
+  unmask         at EnableGlobalIRQ+0xc                          called from main+0x3c
+  MASK           at DisableGlobalIRQ+0xc                         called from SerialManager_Read+0x16
+  unmask         at EnableGlobalIRQ+0xc                          called from SerialManager_Read+0x8c
+  MASK           at DisableGlobalIRQ+0xc                         called from OSA_DisableIRQGlobal+0xc
+  unmask         at EnableGlobalIRQ+0xc                          called from main+0x3c
+  MASK           at DisableGlobalIRQ+0xc                         called from SerialManager_Read+0x16
+  unmask         at EnableGlobalIRQ+0xc                          called from SerialManager_Read+0x8c
+  MASK           at DisableGlobalIRQ+0xc                         called from OSA_DisableIRQGlobal+0xc
+  unmask         at EnableGlobalIRQ+0xc                          called from main+0x3c
+  MASK           at DisableGlobalIRQ+0xc                         called from SerialManager_Read+0x16
+  unmask         at EnableGlobalIRQ+0xc                          called from SerialManager_Read+0x8c
+  MASK           at DisableGlobalIRQ+0xc                         called from OSA_DisableIRQGlobal+0xc
+=> interrupts were left MASKED by the last entry
+saved 2494
+ble1 3VWLILYT2A1AK hci0 02:4E:52:65:B3:A1
+15:00:34 no session at the first try (stale IKE?), restarting n3iwue1 once
+15:00:50 BLE1 = hci0, n3iwue1 = 12.1.1.159
+15:01:02 baseline: 10 packets transmitted, 10 received, 0% packet loss, time 9065ms rtt min/avg/max/mdev = 232.171/2655.749/3318.604/881.231 ms, pipe 4 
+15:01:02 == UDP uplink 30 kbit/s for 120 s (500 B datagrams)
+15:03:53   iperf3 output unreadable · HCI checks: 168, worst 39 ms, 0 over 500 ms
+15:03:53 == UDP uplink 40 kbit/s for 120 s (500 B datagrams)
+15:06:08   iperf3 error: unable to connect to server - server may have stopped running or use a different port, firewall issue, etc.: Connection timed out · HCI checks: 133, worst 10 ms, 0 over 500 ms
+15:06:08 == UDP uplink 50 kbit/s for 120 s (500 B datagrams)
+15:08:23   iperf3 error: unable to connect to server - server may have stopped running or use a different port, firewall issue, etc.: Connection timed out · HCI checks: 133, worst 18 ms, 0 over 500 ms
+15:08:23 == UDP uplink 60 kbit/s for 120 s (500 B datagrams)
+15:10:38   iperf3 error: unable to connect to server - server may have stopped running or use a different port, firewall issue, etc.: Connection timed out · HCI checks: 133, worst 12 ms, 0 over 500 ms
+15:10:38 == UDP uplink 70 kbit/s for 120 s (500 B datagrams)
+15:12:53   iperf3 error: unable to connect to server - server may have stopped running or use a different port, firewall issue, etc.: Connection timed out · HCI checks: 133, worst 6 ms, 0 over 500 ms
+15:12:53 == Pico bridge counters
+nrlink bridge stopped {'max_hold_ms': 0, 'held_ms': 0, 'up': 277338, 'holds': 0, 'uptime_s': 929, 'holds_over_1s': 0, 'down': 480966}
+MicroPython v1.24.1 on 2024-11-29; Raspberry Pi Pico with RP2040
+Type "help()" for more information.
+>>>
+15:12:56 == restore: bridge restarted, BLE1 reset and attached, n3iwue1 restarted, watchdog on both
+ble1 3VWLILYT2A1AK hci0 02:4E:52:65:B3:A1
+15:13:13 n3iwue1 = 12.1.1.160
+15:13:14 done
