@@ -1,0 +1,379 @@
+<title>MCXW72 HCI Flow-Control Wiring</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600&family=Barlow+Semi+Condensed:wght@600;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: one engineering sheet — title block, drawing, then wiring schedule and change lists, like a rework instruction. */
+:root{
+  --bg:#eef1f0; --sheet:#fbfcfb; --ink:#17201d; --ink2:#4b5853; --rule:#c9d1ce;
+  --pcb:#1f5a44; --pcb2:#2b7358; --pad:#d9b45a; --silk:#f4f6f2;
+  --accent:#0d6b8a; --warn:#a15c00; --warnbg:#fff3df; --bad:#a3271f; --okc:#1d6b3a;
+  --w-tx:#e07b16; --w-rx:#d2b400; --w-rts:#2f9a3f; --w-cts:#7a4a24; --w-gnd:#1c1c1c; --w-vcc:#c62828;
+  --display:"Barlow Semi Condensed","Arial Narrow",Arial,sans-serif;
+  --body:"Barlow","Segoe UI",Arial,sans-serif;
+  --mono:"IBM Plex Mono",ui-monospace,Menlo,monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#121816; --sheet:#18201d; --ink:#e4ebe8; --ink2:#a3b0ab; --rule:#2e3a36;
+  --pcb:#16422f; --pcb2:#1f5a44; --pad:#c9a54d; --silk:#e8ece6;
+  --accent:#4fb3d6; --warn:#e7a54a; --warnbg:#2c2112; --bad:#ef7a70; --okc:#6fcf8f;
+  --w-tx:#f0913a; --w-rx:#e8cf2f; --w-rts:#56c266; --w-cts:#b07a4c; --w-gnd:#9aa5a1; --w-vcc:#ef5350; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#121816; --sheet:#18201d; --ink:#e4ebe8; --ink2:#a3b0ab; --rule:#2e3a36;
+  --pcb:#16422f; --pcb2:#1f5a44; --pad:#c9a54d; --silk:#e8ece6;
+  --accent:#4fb3d6; --warn:#e7a54a; --warnbg:#2c2112; --bad:#ef7a70; --okc:#6fcf8f;
+  --w-tx:#f0913a; --w-rx:#e8cf2f; --w-rts:#56c266; --w-cts:#b07a4c; --w-gnd:#9aa5a1; --w-vcc:#ef5350; color-scheme:dark}
+body{background:var(--bg);color:var(--ink);font:16px/1.55 var(--body)}
+.wrap{max-width:1040px;margin:0 auto;padding-block:28px 60px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));display:grid;gap:28px}
+h1,h2,h3{font-family:var(--display);text-wrap:balance;margin:0;letter-spacing:.01em}
+h1{font-size:clamp(28px,4.4vw,40px);line-height:1.1}
+h2{font-size:24px}
+h3{font-size:18px}
+p{margin:0;max-width:68ch}
+code,.mono{font-family:var(--mono);font-size:.9em}
+.eyebrow{font:600 12px/1 var(--body);letter-spacing:.12em;text-transform:uppercase;color:var(--ink2)}
+.tb{display:grid;grid-template-columns:1fr auto;gap:20px;align-items:end;border-bottom:2px solid var(--ink);padding-bottom:16px}
+.tb dl{display:grid;grid-template-columns:auto auto;gap:2px 14px;margin:0;font-size:13px}
+.tb dt{color:var(--ink2)} .tb dd{margin:0;font-family:var(--mono);font-size:12.5px}
+@media (max-width:700px){.tb{grid-template-columns:1fr}}
+.lede{display:grid;gap:10px}
+.status{display:inline-flex;gap:8px;align-items:center;font:600 13px var(--body);color:var(--warn);background:var(--warnbg);border:1px solid var(--warn);border-radius:3px;padding:3px 9px;width:fit-content}
+section{display:grid;gap:14px}
+.sheet{background:var(--sheet);border:1px solid var(--rule);border-radius:4px;padding:16px}
+.draw{overflow-x:auto}
+.draw svg{display:block;min-width:720px;width:100%;height:auto}
+svg text{font-family:var(--mono)}
+.legend{display:flex;flex-wrap:wrap;gap:8px 18px;font-size:13px;color:var(--ink2)}
+.legend span{display:inline-flex;gap:6px;align-items:center}
+.legend i{width:22px;height:4px;border-radius:2px;display:inline-block}
+.tablewrap{overflow-x:auto}
+table{border-collapse:collapse;width:100%;font-size:14px;font-variant-numeric:tabular-nums}
+th,td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--rule);vertical-align:top}
+th{font:600 12px var(--body);letter-spacing:.08em;text-transform:uppercase;color:var(--ink2)}
+td .sw{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:6px;vertical-align:-1px}
+.grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px}
+.grid2>*{min-width:0}
+.item{display:grid;gap:6px;padding:14px 16px;border:1px solid var(--rule);border-radius:4px;background:var(--sheet)}
+.item.warn{border-left:4px solid var(--warn)}
+.item.bad{border-left:4px solid var(--bad)}
+.item.ok{border-left:4px solid var(--okc)}
+.tag{font:600 11px var(--body);letter-spacing:.1em;text-transform:uppercase}
+.warn .tag{color:var(--warn)} .bad .tag{color:var(--bad)} .ok .tag{color:var(--okc)}
+pre{margin:0;background:var(--bg);border:1px solid var(--rule);border-radius:4px;padding:12px 14px;overflow-x:auto;font:13px/1.5 var(--mono);color:var(--ink)}
+pre .c{color:var(--ink2)}
+ol.steps{margin:0;padding-left:22px;display:grid;gap:8px;max-width:72ch}
+ul.plain{margin:0;padding-left:20px;display:grid;gap:6px;max-width:72ch}
+a{color:var(--accent)}
+.note{font-size:13px;color:var(--ink2)}
+</style>
+
+<div class="wrap">
+  <header class="tb">
+    <div class="lede">
+      <span class="eyebrow">Rework sheet · FRDM-MCXW72 BLE boards</span>
+      <h1>HCI UART with RTS/CTS on LPUART0</h1>
+      <p>The HCI link of both BLE boards has moved off the MCU-Link virtual COM port (LPUART1, no flow control) onto LPUART0 with hardware flow control. A Raspberry Pi Pico per board does the bridging. Both Picos plug into claudepc2, the UE PC, and connect to their board's Arduino headers with jumper wires. No board cuts or soldering were needed.</p>
+      <span class="status">Built 9 Nov 2026 · both boards wired correctly · load behaviour under test</span>
+    </div>
+    <dl>
+      <dt>Boards</dt><dd>BLE1 3VWLILYT2A1AK</dd>
+      <dt></dt><dd>BLE2 GLNAOWUSDREB4</dd>
+      <dt>Bridge</dt><dd>2 × Pico, MicroPython 1.24.1</dd>
+      <dt></dt><dd>e661640843676727 → BLE1</dd>
+      <dt></dt><dd>e6616408439b6727 → BLE2</dd>
+      <dt>Host</dt><dd>claudepc2 (hci_bb v8 → v11)</dd>
+      <dt>HCI</dt><dd>1 Mbaud, RTS from the board</dd>
+      <dt>I/O</dt><dd>3.3 V both sides</dd>
+      <dt>Sources</dt><dd>QSG Rev 0, SDK pin_mux.c</dd>
+    </dl>
+  </header>
+
+  <section>
+    <div>
+      <span class="eyebrow">Check list · 9 Nov</span>
+      <h2>Do any pins need changing?</h2>
+    </div>
+    <div class="grid2">
+      <div class="item ok"><span class="tag">BLE1 · no change</span><h3>All four needed wires are right</h3><p>TX, RX, GND and the board's RTS on J1-5 all work. During a burst, J1-5 rises at Pico GP2 (high in 35 of 83 samples), and 300 back-to-back 36-byte commands all got a reply.</p></div>
+      <div class="item ok"><span class="tag">BLE2 · fixed 9 Nov</span><h3>Pico pin 4 (GP2) is now on J1-5</h3><p>The GP2 wire had been on a pin that is always low. After it moved to J1-5, 36-byte HCI commands get a reply, BLE2's Bluetooth link to claudepc comes up and n3iwue2 has a PDU session.</p></div>
+      <div class="item warn"><span class="tag">Both · optional</span><h3>The J2-9 wire (Pico pin 5, GP3) is not used</h3><p>Firmware v11 turns the board's CTS input off, so the board sends whenever it wants, and the Pico's 8 KB receive buffer keeps up at 1 Mbaud. The wire can stay or come off. On BLE1 it reads as held low, so J2-9 is probably not PTA18 on this board revision.</p></div>
+      <div class="item ok"><span class="tag">Everything else · no change</span><h3>MCU-Link cables stay</h3><p>Leave both boards' USB-C (MCU-Link) cables where they are. BLE1's is on claudepc2, BLE2's on claudepc. They power the boards and carry flashing and the <code>isp</code> recovery command.</p></div>
+    </div>
+  </section>
+
+  <section>
+    <div>
+      <span class="eyebrow">Drawing 1</span>
+      <h2>How it connects</h2>
+    </div>
+    <div class="sheet draw">
+      <svg viewBox="0 0 900 400" role="img" aria-label="claudepc2 connected by USB to two Picos and to BLE1's MCU-Link; each Pico wired to its board; BLE2's MCU-Link on claudepc">
+        <rect x="20" y="40" width="190" height="250" rx="8" fill="var(--sheet)" stroke="var(--ink)" stroke-width="1.5"/>
+        <text x="115" y="66" font-size="13" text-anchor="middle" fill="var(--ink)">claudepc2 · UE PC</text>
+        <text x="115" y="84" font-size="10.5" text-anchor="middle" fill="var(--ink2)">btattach · n3iwue1/2</text>
+        <g font-size="10" fill="var(--ink2)">
+          <text x="34" y="116">ttyACM · Pico 1 (HCI BLE1)</text>
+          <text x="34" y="156">ttyACM · MCU-Link BLE1</text>
+          <text x="34" y="216">ttyACM · Pico 2 (HCI BLE2)</text>
+        </g>
+        <rect x="350" y="92" width="130" height="44" rx="5" fill="var(--pcb)" stroke="var(--pcb2)" stroke-width="2"/>
+        <text x="415" y="113" font-size="11.5" text-anchor="middle" fill="var(--silk)">Pico 1 · RP2040</text>
+        <text x="415" y="128" font-size="9.5" text-anchor="middle" fill="var(--silk)">…43676727</text>
+        <rect x="350" y="192" width="130" height="44" rx="5" fill="var(--pcb)" stroke="var(--pcb2)" stroke-width="2"/>
+        <text x="415" y="213" font-size="11.5" text-anchor="middle" fill="var(--silk)">Pico 2 · RP2040</text>
+        <text x="415" y="228" font-size="9.5" text-anchor="middle" fill="var(--silk)">…439b6727</text>
+        <rect x="640" y="70" width="240" height="90" rx="8" fill="var(--pcb)" stroke="var(--pcb2)" stroke-width="2"/>
+        <text x="760" y="104" font-size="12" text-anchor="middle" fill="var(--silk)">BLE1 3VWLILYT2A1AK</text>
+        <text x="760" y="122" font-size="10.5" text-anchor="middle" fill="var(--silk)">LPUART0 on J1 = HCI</text>
+        <text x="760" y="138" font-size="10.5" text-anchor="middle" fill="var(--silk)">LPUART1 on VCOM = isp</text>
+        <rect x="640" y="180" width="240" height="90" rx="8" fill="var(--pcb)" stroke="var(--pcb2)" stroke-width="2"/>
+        <text x="760" y="214" font-size="12" text-anchor="middle" fill="var(--silk)">BLE2 GLNAOWUSDREB4</text>
+        <text x="760" y="232" font-size="10.5" text-anchor="middle" fill="var(--silk)">LPUART0 on J1 = HCI</text>
+        <text x="760" y="248" font-size="10.5" text-anchor="middle" fill="var(--silk)">LPUART1 on VCOM = isp</text>
+        <rect x="640" y="316" width="240" height="64" rx="8" fill="var(--sheet)" stroke="var(--ink)" stroke-width="1.5"/>
+        <text x="760" y="340" font-size="13" text-anchor="middle" fill="var(--ink)">claudepc · core PC</text>
+        <text x="760" y="358" font-size="10.5" text-anchor="middle" fill="var(--ink2)">Intel hci0 = BLE access point</text>
+        <g fill="none" stroke-width="3">
+          <path d="M210 112 H350" stroke="var(--accent)"/>
+          <path d="M210 212 H350" stroke="var(--accent)"/>
+          <path d="M480 114 H560 V105 H640" stroke="var(--w-tx)" stroke-width="5"/>
+          <path d="M480 214 H560 V215 H640" stroke="var(--w-tx)" stroke-width="5"/>
+          <path d="M210 152 H600 V145 H640" stroke="var(--ink2)" stroke-dasharray="6 4"/>
+          <path d="M760 270 V316" stroke="var(--ink2)" stroke-dasharray="6 4"/>
+        </g>
+        <g font-size="10" fill="var(--ink2)">
+          <text x="230" y="104">USB (micro-USB)</text>
+          <text x="230" y="204">USB (micro-USB)</text>
+          <text x="492" y="98">4 jumpers</text>
+          <text x="492" y="282">4 jumpers</text>
+          <text x="380" y="166">USB-C: power, flashing, isp (unchanged)</text>
+          <text x="770" y="298">USB-C to claudepc</text>
+          <text x="40" y="320">Bluetooth LE from both boards</text>
+          <text x="40" y="336">goes over the air to claudepc's hci0</text>
+        </g>
+      </svg>
+    </div>
+    <p class="note">Four USB cables in total. The MCU-Link cables stay as they are, for power, flashing and the <code>isp</code> command; BLE2's happens to be on claudepc. The two Pico cables carry HCI, both on claudepc2.</p>
+  </section>
+
+  <section>
+    <div>
+      <span class="eyebrow">Drawing 2</span>
+      <h2>Wiring one Pico to one board</h2>
+    </div>
+    <div class="sheet draw">
+      <svg viewBox="0 0 900 470" role="img" aria-label="FRDM-MCXW72 headers J1 and J2 wired to Raspberry Pi Pico pins 1 to 5">
+        <rect x="20" y="20" width="460" height="430" rx="14" fill="var(--pcb)" stroke="var(--pcb2)" stroke-width="2"/>
+        <text x="40" y="46" font-size="13" fill="var(--silk)">FRDM-MCXW72 (top side)</text>
+        <rect x="190" y="12" width="70" height="22" rx="6" fill="var(--sheet)" stroke="var(--ink2)"/>
+        <text x="225" y="27" font-size="11" text-anchor="middle" fill="var(--ink)">USB-C</text>
+        <rect x="60" y="70" width="190" height="62" rx="4" fill="none" stroke="var(--silk)" stroke-dasharray="5 4"/>
+        <text x="72" y="92" font-size="12" fill="var(--silk)">MCU-Link LPC55S69</text>
+        <text x="72" y="108" font-size="11" fill="var(--silk)">(bottom side)</text>
+        <text x="72" y="124" font-size="11" fill="var(--silk)">VCOM = LPUART1, no RTS/CTS</text>
+        <line x1="225" y1="34" x2="225" y2="70" stroke="var(--silk)" stroke-width="1.5"/>
+        <rect x="90" y="200" width="150" height="110" rx="4" fill="#20262a" stroke="var(--silk)"/>
+        <text x="165" y="245" font-size="14" text-anchor="middle" fill="#f4f6f2">MCXW727C</text>
+        <text x="165" y="264" font-size="11" text-anchor="middle" fill="#cfd8d4">LPUART0 → HCI</text>
+        <text x="165" y="280" font-size="11" text-anchor="middle" fill="#cfd8d4">LPUART1 → log</text>
+        <line x1="165" y1="132" x2="165" y2="200" stroke="var(--silk)" stroke-width="1.5" stroke-dasharray="3 3"/>
+        <text x="172" y="172" font-size="10.5" fill="var(--silk)">PTC2/PTC3</text>
+        <circle cx="300" cy="372" r="13" fill="var(--sheet)" stroke="var(--w-rts)" stroke-width="2.5"/>
+        <text x="300" y="376" font-size="10" text-anchor="middle" fill="var(--ink)">RGB</text>
+        <path d="M313 372 H352 V355 H384" fill="none" stroke="var(--w-cts)" stroke-width="1.5" stroke-dasharray="4 3"/>
+        <text x="232" y="404" font-size="10.5" fill="var(--silk)">LED_G shares PTA19 (RTS)</text>
+        <text x="40" y="372" font-size="12" fill="var(--silk)">J4 (AN)</text>
+        <g font-size="10.5" fill="var(--silk)">
+          <rect x="40" y="382" width="14" height="14" fill="var(--pad)"/><text x="60" y="393">1 PTC2 VCOM RX</text>
+          <rect x="40" y="402" width="14" height="14" fill="var(--pad)"/><text x="60" y="413">2 PTC3 VCOM TX</text>
+          <text x="40" y="436">leave unconnected</text>
+        </g>
+        <text x="392" y="62" font-size="12" fill="var(--silk)">J2 (DH)</text>
+        <g font-size="10.5" fill="var(--silk)" text-anchor="end">
+          <rect x="420" y="66" width="14" height="14" fill="var(--pad)"/><text x="414" y="77">1 PTB5</text>
+          <rect x="420" y="84" width="14" height="14" fill="var(--pad)"/><text x="414" y="95">2 PTB4</text>
+          <rect x="420" y="102" width="14" height="14" fill="var(--pad)"/><text x="414" y="113">3 VREF</text>
+          <rect x="420" y="120" width="14" height="14" fill="var(--pad)" stroke="var(--w-gnd)" stroke-width="3"/><text x="414" y="131" font-weight="500">4 GND</text>
+          <rect x="420" y="138" width="14" height="14" fill="var(--pad)"/><text x="414" y="149">5 PTB2</text>
+          <rect x="420" y="156" width="14" height="14" fill="var(--pad)"/><text x="414" y="167">6 PTB1</text>
+          <rect x="420" y="174" width="14" height="14" fill="var(--pad)"/><text x="414" y="185">7 PTB3</text>
+          <rect x="420" y="192" width="14" height="14" fill="var(--pad)"/><text x="414" y="203">8 PTB0</text>
+          <rect x="420" y="210" width="14" height="14" fill="var(--pad)" stroke="var(--w-rts)" stroke-width="3"/><text x="414" y="221" font-weight="500">9 PTA18 CTS_b</text>
+          <rect x="420" y="228" width="14" height="14" fill="var(--pad)"/><text x="414" y="239">10 PTC0</text>
+        </g>
+        <text x="392" y="272" font-size="12" fill="var(--silk)">J1 (DL)</text>
+        <g font-size="10.5" fill="var(--silk)" text-anchor="end">
+          <rect x="420" y="276" width="14" height="14" fill="var(--pad)" stroke="var(--w-tx)" stroke-width="3"/><text x="414" y="287" font-weight="500">1 PTA16 RX</text>
+          <rect x="420" y="294" width="14" height="14" fill="var(--pad)" stroke="var(--w-rx)" stroke-width="3"/><text x="414" y="305" font-weight="500">2 PTA17 TX</text>
+          <rect x="420" y="312" width="14" height="14" fill="var(--pad)"/><text x="414" y="323">3 PTC4</text>
+          <rect x="420" y="330" width="14" height="14" fill="var(--pad)"/><text x="414" y="341">4 PTC5</text>
+          <rect x="420" y="348" width="14" height="14" fill="var(--pad)" stroke="var(--w-cts)" stroke-width="3"/><text x="414" y="359" font-weight="500">5 PTA19 RTS_b</text>
+          <rect x="420" y="366" width="14" height="14" fill="var(--pad)"/><text x="414" y="377">6 PTC1</text>
+          <rect x="420" y="384" width="14" height="14" fill="var(--pad)"/><text x="414" y="395">7 PTA20</text>
+          <rect x="420" y="402" width="14" height="14" fill="var(--pad)"/><text x="414" y="413">8 PTA21</text>
+        </g>
+        <!-- Pico -->
+        <rect x="700" y="130" width="170" height="300" rx="6" fill="var(--pcb)" stroke="var(--pcb2)" stroke-width="2"/>
+        <rect x="762" y="112" width="46" height="24" rx="5" fill="var(--sheet)" stroke="var(--ink2)"/>
+        <text x="785" y="128" font-size="10" text-anchor="middle" fill="var(--ink)">USB</text>
+        <text x="785" y="104" font-size="11" text-anchor="middle" fill="var(--ink2)">micro-USB → claudepc</text>
+        <rect x="760" y="320" width="56" height="56" rx="3" fill="#20262a"/>
+        <text x="788" y="352" font-size="10.5" text-anchor="middle" fill="#f4f6f2">RP2040</text>
+        <text x="785" y="414" font-size="12" text-anchor="middle" fill="var(--silk)">Raspberry Pi Pico H</text>
+        <g font-size="10.5" fill="var(--silk)">
+          <rect x="700" y="163" width="14" height="14" fill="var(--pad)" stroke="var(--w-tx)" stroke-width="3"/><text x="720" y="174">1 GP0 TX</text>
+          <rect x="700" y="188" width="14" height="14" fill="var(--pad)" stroke="var(--w-rx)" stroke-width="3"/><text x="720" y="199">2 GP1 RX</text>
+          <rect x="700" y="213" width="14" height="14" fill="var(--ink2)" stroke="var(--w-gnd)" stroke-width="3"/><text x="720" y="224">3 GND</text>
+          <rect x="700" y="238" width="14" height="14" fill="var(--pad)" stroke="var(--w-cts)" stroke-width="3"/><text x="720" y="249">4 GP2 CTS</text>
+          <rect x="700" y="263" width="14" height="14" fill="var(--pad)" stroke="var(--w-rts)" stroke-width="3"/><text x="720" y="274">5 GP3 RTS</text>
+          <rect x="700" y="288" width="14" height="14" fill="var(--pad)"/><text x="720" y="299">6 GP4</text>
+        </g>
+        <g fill="none" stroke-width="3.5" stroke-linecap="round">
+          <path d="M434 127 C 580 127, 560 220, 700 220" stroke="var(--w-gnd)"/>
+          <path d="M434 217 C 580 217, 570 270, 700 270" stroke="var(--w-rts)" stroke-dasharray="7 6" opacity=".6"/>
+          <path d="M434 283 C 580 283, 560 170, 700 170" stroke="var(--w-tx)"/>
+          <path d="M434 301 C 590 301, 570 195, 700 195" stroke="var(--w-rx)"/>
+          <path d="M434 355 C 600 355, 580 245, 700 245" stroke="var(--w-cts)"/>
+        </g>
+        <text x="700" y="448" font-size="10.5" fill="var(--ink2)">Pico pin 1 is the corner next to the USB connector.</text>
+      </svg>
+    </div>
+    <div class="legend">
+      <span><i style="background:var(--w-tx)"></i>Pico TX (pin 1) → J1-1</span>
+      <span><i style="background:var(--w-rx)"></i>Pico RX (pin 2) ← J1-2</span>
+      <span><i style="background:var(--w-gnd)"></i>GND (pin 3) — J2-4</span>
+      <span><i style="background:var(--w-cts)"></i>Pico CTS (pin 4) ← J1-5 · <b>the one to check on BLE2</b></span>
+      <span><i style="background:var(--w-rts);opacity:.6"></i>Pico RTS (pin 5) → J2-9 · optional, not used by v11</span>
+    </div>
+    <p class="note">The board's header pin order is drawn from the Quick Start Guide's pin tables, not from the physical silkscreen. J1 has been confirmed in use: J1-1, J1-2 and J1-5 work on BLE1. Both boards are wired the same way, each to its own Pico.</p>
+  </section>
+
+  <section>
+    <div>
+      <span class="eyebrow">Schedule 1</span>
+      <h2>Wiring, per BLE board</h2>
+    </div>
+    <div class="sheet tablewrap">
+      <table>
+        <thead><tr><th>Pico pin</th><th>Board header</th><th>MCU pin</th><th>Function (pin mux)</th><th>What it carries</th><th>BLE1</th><th>BLE2</th></tr></thead>
+        <tbody>
+          <tr><td><span class="sw" style="background:var(--w-tx)"></span>1 · GP0 UART0 TX</td><td class="mono">J1-1</td><td class="mono">PTA16 (pin 11)</td><td class="mono">LPUART0_RX, Alt6</td><td>host → board data</td><td>ok</td><td>ok</td></tr>
+          <tr><td><span class="sw" style="background:var(--w-rx)"></span>2 · GP1 UART0 RX</td><td class="mono">J1-2</td><td class="mono">PTA17 (pin 12)</td><td class="mono">LPUART0_TX, Alt6</td><td>board → host data</td><td>ok</td><td>ok</td></tr>
+          <tr><td><span class="sw" style="background:var(--w-gnd)"></span>3 · GND</td><td class="mono">J2-4</td><td>—</td><td>ground</td><td>common reference</td><td>ok</td><td>ok</td></tr>
+          <tr><td><span class="sw" style="background:var(--w-cts)"></span>4 · GP2 UART0 CTS</td><td class="mono">J1-5</td><td class="mono">PTA19 (pin 14)</td><td class="mono">LPUART0_RTS_b, Alt3</td><td>board pauses the Pico</td><td>ok, toggles</td><td>ok since the wire moved</td></tr>
+          <tr><td><span class="sw" style="background:var(--w-rts)"></span>5 · GP3 UART0 RTS</td><td class="mono">J2-9</td><td class="mono">PTA18 (pin 13)</td><td class="mono">LPUART0_CTS_b</td><td>optional: v11 ignores CTS</td><td>unused</td><td>unused</td></tr>
+          <tr><td>3V3 / VSYS / VBUS</td><td>not connected</td><td>—</td><td>—</td><td>each side powered from its own USB</td><td></td><td></td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <div>
+      <span class="eyebrow">Schedule 2</span>
+      <h2>Parts</h2>
+    </div>
+    <div class="sheet tablewrap">
+      <table>
+        <thead><tr><th>Part</th><th>Qty</th><th>Note</th></tr></thead>
+        <tbody>
+          <tr><td>Raspberry Pi Pico H (header pins pre-soldered)</td><td>2</td><td>A bare Pico works too, after you solder a header strip on.</td></tr>
+          <tr><td>Jumper wires, <strong>female-to-male</strong>, ≤ 20 cm</td><td>8 (+2)</td><td>Female end on the Pico's pins, male end into the board's J1/J2 sockets. The two J2-9 wires are optional.</td></tr>
+          <tr><td>USB cable, micro-USB to USB-A, data-capable</td><td>2</td><td>Some charging-only cables have no data lines.</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="note">FRDM boards normally ship with female Arduino-style sockets on J1–J4. Check yours. If they're male pins, use female-to-female jumpers.</p>
+  </section>
+
+  <section>
+    <div>
+      <span class="eyebrow">Changes</span>
+      <h2>What has to change on the board</h2>
+    </div>
+    <div class="grid2">
+      <div class="item ok"><span class="tag">No rework</span><h3>No cuts, jumpers or solder bridges</h3><p>RX, TX and RTS of LPUART0 are already routed to J1. Four jumper wires per board are enough.</p></div>
+      <div class="item warn"><span class="tag">Shared pin</span><h3>The green LED now shows RTS</h3><p>PTA19 drives both J1-5 and LED_G. The green LED is on while the board can take more bytes and flickers off when it asks the Pico to pause. hci_bb v11 no longer drives it as a status light.</p></div>
+      <div class="item ok"><span class="tag">Voltage</span><h3>3.3 V on both sides</h3><p>The board's headers run at VBOARD = 3.3 V, and the Pico's GPIO is 3.3 V. No level shifting is needed.</p></div>
+      <div class="item ok"><span class="tag">Checked</span><h3>What the schematic questions turned out to be</h3>
+        <ul class="plain">
+          <li>PTA16/PTA17 (<code>LIN_RX/LIN_TX</code> in the SDK) carry 1 Mbaud cleanly, so nothing on the board loads them.</li>
+          <li>J2-9 reads as held low on BLE1, so it is probably not PTA18 on this board revision. Since v11 does not use CTS, it no longer matters.</li>
+          <li>RTS edges through the LED_G resistor are clean at 1 Mbaud.</li>
+        </ul></div>
+    </div>
+  </section>
+
+  <section>
+    <div>
+      <span class="eyebrow">Changes</span>
+      <h2>Pico bridge firmware</h2>
+    </div>
+    <p>Each Pico runs MicroPython 1.24.1 and a 60-line <code>main.py</code> that passes bytes between its USB serial port and UART0: 1 Mbaud, GP0 TX, GP1 RX, GP2 CTS (hardware), 8 KB receive buffer. It starts by itself 2 s after power-up.</p>
+    <ul class="plain">
+      <li>The bridge ignores Ctrl-C. A fixed escape sequence stops it and drops to the REPL, which <code>pico/mpy_run.py</code> uses for tests; <code>machine.reset()</code> starts the bridge again.</li>
+      <li>Each Pico has a stable name, <code>/dev/serial/by-id/usb-MicroPython_Board_in_FS_mode_&lt;id&gt;-if00</code>, which the host scripts map to BLE1 and BLE2.</li>
+    </ul>
+  </section>
+
+  <section>
+    <div>
+      <span class="eyebrow">Changes</span>
+      <h2>Firmware: hci_bb v11 (flashed 9 Nov)</h2>
+    </div>
+    <p>HCI moved to LPUART0 at 1 Mbaud with the SDK's own switch, <code>gBoardUseUart0HwFlowControl</code>. The board's receive RTS is on and its transmit CTS is off. Image <code>~/nxp/images/hci_bb_isp_v11.bin</code>, sha256 <code>0b7ce4ba…</code>, on both boards. Both boards' earlier images are backed up in <code>~/nxp/backups</code>.</p>
+    <pre><span class="c">/* examples/_boards/frdmmcxw72/wireless_examples/ble_controller/hci_bb/app_preinclude.h */</span>
+#define BOARD_APP_UART_INSTANCE      0U        <span class="c">/* LPUART0: PTA16 RX, PTA17 TX, PTA19 RTS_b  */</span>
+#define gBoardUseUart0HwFlowControl  1
+#define BOARD_APP_UART_BAUDRATE      1000000U
+
+<span class="c">/* hci_bb.c, first run: after main() has called PLATFORM_InitLcl() */</span>
+BOARD_InitPinLPUART0_RTS();                    <span class="c">/* PTA19 back to LPUART0_RTS_b (Alt3)       */</span>
+MODIR = (MODIR &amp; ~(TXCTSE | RTSWATER)) | RXRTSE | RTSWATER(4);</pre>
+    <ul class="plain">
+      <li><strong>The bug that cost the most time:</strong> the shared <code>main.c</code> calls <code>PLATFORM_InitLcl()</code> after the board's pin setup. It switches PTA18–20 to the radio's debug outputs (RF_GPO, Alt6), which silently takes RTS off J1-5. Without RTS, every HCI command longer than about 12 bytes was lost at 1 Mbaud. v11 sets the pin back.</li>
+      <li><strong>Recovery without SW3:</strong> the VCOM (LPUART1, 115200) now only listens for <code>isp</code> and answers <code>ISP</code> before jumping to the ROM bootloader, within 0.1 s of a reset. <code>pico/vcom_isp.py</code> sends it, then <code>board.sh flash</code> works as before. HCI command 0xFDB1 still does the same.</li>
+      <li>The H4 resync timer now measures the gap from the last byte read, and the main loop drains the receive ring too. Diagnostic report 0xFDB2 carries the resync count; it stays at 0 under load.</li>
+    </ul>
+  </section>
+
+  <section>
+    <div>
+      <span class="eyebrow">Changes</span>
+      <h2>Host: claudepc2</h2>
+    </div>
+    <pre><span class="c"># before, over the MCU-Link VCOM, flow control off</span>
+btattach -N -P h4 -S 115200 -B /dev/serial/by-id/usb-NXP_..._MCU-LINK_..._3VWLILYT2A1AK-if02
+
+<span class="c"># now, over the Pico (ble_attach.sh picks the port with hci_probe.py --port)</span>
+btattach -N -P h4 -S 1000000 -B /dev/ttyACM4   <span class="c"># = usb-MicroPython_Board_in_FS_mode_e661640843676727-if00</span></pre>
+    <ul class="plain">
+      <li><code>~/nxp/hci_probe.py</code> maps board serials to Pico serials (<code>PICOS</code>) and tries the Pico first, then the VCOM. <code>--port</code> prints the tty. <code>ble_attach.sh</code> uses it. The old copies are kept as <code>*.v10bak</code>.</li>
+      <li><code>ble_watchdog.sh</code> is unchanged. It can't hardware-reset BLE2 from claudepc2, because BLE2's MCU-Link is on claudepc. It still re-attaches it.</li>
+    </ul>
+  </section>
+
+  <section>
+    <div>
+      <span class="eyebrow">Measured · 9 Nov</span>
+      <h2>What it fixed</h2>
+    </div>
+    <div class="grid2">
+      <div class="item ok"><span class="tag">BLE1</span><p>1000 HCI commands in a row: all answered, 5.6 ms average round trip (worst 14 ms). 300 back-to-back 36-byte commands, about 11 KB in one go: all 300 answered, no H4 resyncs. n3iwue1 registered over it (12.1.1.118) and pings to ext-dn pass.</p></div>
+      <div class="item ok"><span class="tag">BLE2, after the wire moved</span><p>Long commands answered, Bluetooth link up, n3iwue2 registered (12.1.1.122).</p></div>
+      <div class="item bad"><span class="tag">Still open</span><p>Under 1000-byte pings on both links, round trips grew to 3–15 s, and BLE1 stopped answering HCI once (kernel: command tx timeout); the watchdog reset it. Under investigation.</p></div>
+      <div class="item warn"><span class="tag">Won't change much</span><p>BLE throughput. The air link, not the UART, is the limit (about 13 kbit/s clean per link). The gain is reliability. Whether the old PC→board hang is gone still needs a long uplink load test.</p></div>
+    </div>
+  </section>
+
+  <section>
+    <span class="eyebrow">Sources</span>
+    <ul class="plain note">
+      <li><a href="https://www.nxp.com/docs/en/quick-reference-guide/FRDMMCXW72QSG.pdf">FRDM-MCXW72 Quick Start Guide, Rev 0</a>: J1–J6 and Pmod pin tables.</li>
+      <li>MCUXpresso SDK: <code>examples/_boards/frdmmcxw72/wireless_examples/pin_mux.c</code> (BOARD_InitPinLPUART0_RTS/CTS), <code>_common/project_segments/wireless/wireless_mcu/board.c</code> and <code>components/board_comp.c</code> (gBoardUseUart0HwFlowControl), <code>mcxw72evk/driver_examples/lpuart/hardware_flow_control</code>.</li>
+      <li>RP2040 datasheet: UART0 on GP0 TX, GP1 RX, GP2 CTS, GP3 RTS.</li>
+      <li>Middleware: <code>middleware/wireless/framework/platform/wireless_mcu/fwk_platform_lcl.c</code>, <code>PLATFORM_InitLcl()</code> (PTA18–20 to RF_GPO).</li>
+      <li><a href="https://www.nxp.com/design/design-center/development-boards-and-designs/FRDM-MCXW72">FRDM-MCXW72 board page</a>: user manual UM12222 and schematic SPF-91744 (both need an NXP account; not read).</li>
+    </ul>
+  </section>
+</div>
