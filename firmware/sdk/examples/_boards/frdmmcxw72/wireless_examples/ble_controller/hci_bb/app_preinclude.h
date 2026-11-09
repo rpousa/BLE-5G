@@ -97,7 +97,7 @@
 /* define the max tx power setting, allowed value 0, 7 or 10 */
 #define gAppMaxTxPowerDbm_c                    10U
 
-/* nrlink v9: HCI on LPUART0 with RTS/CTS, wired to a Raspberry Pi Pico (USB-UART bridge):
+/* nrlink v9/v10: HCI on LPUART0 with RTS (v10: TX CTS off, see hci_bb.c), wired to a Raspberry Pi Pico (USB-UART bridge):
  *   PTA16 RX = J1-1, PTA17 TX = J1-2, PTA18 CTS_b = J2-9, PTA19 RTS_b = J1-5 (also the green LED), GND = J2-4.
  * board.c muxes PTA18/PTA19 and board_comp.c enables RX RTS / TX CTS when gBoardUseUart0HwFlowControl is set.
  * Up to v8 HCI ran on the MCU-Link VCOM (LPUART1, no flow control) at 115200: 1 Mbaud lost bytes there.

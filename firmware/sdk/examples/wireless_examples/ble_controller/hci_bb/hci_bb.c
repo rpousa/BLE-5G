@@ -261,20 +261,23 @@ static void Hcibb_EnterIsp(void)
     for (;;) { }
 }
 
-/* nrlink v9: the VCOM at 115200, receive polled from the SysTick hook; only "isp" is understood (board.sh isp) */
+/* nrlink v9/v10: the VCOM at 115200, polled from the main loop (and a 1.5 s window at boot); only "isp" is
+ * understood (board.sh isp). Note: OSA_SysTickHook never runs in this build (FSL_OSA_BM_TIMER_NONE). */
 static volatile uint8_t mVcomReady;
 static void Vcom_Init(void)
 {
     lpuart_config_t cfg;
-    CLOCK_SetIpSrc(BOARD_DEBUG_UART_CLK, BOARD_DEBUG_UART_CLKSRC);
-    CLOCK_EnableClockLPMode(BOARD_DEBUG_UART_CLK, kCLOCK_IpClkControl_fun3);
+    /* v10: name LPUART1 explicitly. BOARD_DEBUG_UART_CLK comes from the common board.h, where the debug UART
+     * defaults to instance 0: v9 set up LPUART0's clock (the HCI UART) and left LPUART1 without one. */
+    CLOCK_SetIpSrc(kCLOCK_Lpuart1, (clock_ip_src_t)BOARD_UART_CLKSRC);
+    CLOCK_EnableClockLPMode(kCLOCK_Lpuart1, kCLOCK_IpClkControl_fun3);
     BOARD_InitPinLPUART1_RX();
     BOARD_InitPinLPUART1_TX();
     LPUART_GetDefaultConfig(&cfg);
     cfg.baudRate_Bps = 115200U;
     cfg.enableTx     = true;
     cfg.enableRx     = true;
-    if (LPUART_Init(VCOM_UART, &cfg, BOARD_DEBUG_UART_CLK_FREQ) == kStatus_Success) { mVcomReady = 1U; }
+    if (LPUART_Init(VCOM_UART, &cfg, CLOCK_GetIpFreq(kCLOCK_Lpuart1)) == kStatus_Success) { mVcomReady = 1U; }
 }
 
 static void Vcom_Poll(void)
@@ -849,12 +852,33 @@ static void HCI_AppControllerRxCallback(uint8_t packetType, uint8_t *data, uint1
 void main_task(uint32_t param)
 {
     Diag_CheckIrqMasked();
+    Vcom_Poll();   /* v10: also from the main loop (the SysTick hook alone did not answer "isp" in v9) */
     if (!platformInitialized)
     {
         platformInitialized = 1;
         Diag_PaintStack();
         Hcibb_LedGreen();
         Vcom_Init();
+        /* v10: recovery window. This build has no SysTick (FSL_OSA_BM_TIMER_NONE), so the main loop is the only place
+         * that polls the VCOM; if anything after this point ever blocks, a hardware reset followed by "isp" on the
+         * VCOM within 1.5 s still reaches the ROM ISP. */
+        for (uint32_t ms = 0U; ms < 1500U; ms++)
+        {
+            Vcom_Poll();
+            SDK_DelayAtLeastUs(1000U, SystemCoreClock);
+        }
+        /* v10: keep RX RTS (the board pauses the Pico: PTA19 = J1-5) but drop TX CTS. The Pico takes 1 Mbaud
+         * without pausing, and a CTS input that is not wired (or wired to the wrong pin) silences the board.
+         * Also set the RTS watermark here, with the transmitter and receiver off (MODIR is ignored while they run):
+         * the LPUART driver leaves RTSWATER at 0, so RTS only negated once the 8-byte FIFO was full, too late for the
+         * character already on the wire; bursts longer than ~11 bytes were lost (seen with the Pico: RTS never rose).
+         * RTSWATER 4: RTS negates with 4 characters in the FIFO, leaving 4 free. */
+        HCI_UART->CTRL  &= ~(LPUART_CTRL_TE_MASK | LPUART_CTRL_RE_MASK);
+        for (volatile uint32_t i = 0U;
+             ((HCI_UART->CTRL & (LPUART_CTRL_TE_MASK | LPUART_CTRL_RE_MASK)) != 0U) && (i < 2000000U); i++) { }
+        HCI_UART->MODIR = (HCI_UART->MODIR & ~(LPUART_MODIR_TXCTSE_MASK | LPUART_MODIR_RTSWATER_MASK)) |
+                          LPUART_MODIR_RXRTSE_MASK | LPUART_MODIR_RTSWATER(4U);
+        HCI_UART->CTRL  |= LPUART_CTRL_TE_MASK | LPUART_CTRL_RE_MASK;
 #if (defined(gBoardUse3MbOnUart0_d) && (gBoardUse3MbOnUart0_d > 0U)) || \
     (defined(gBoardUseUart0HwFlowControl) && (gBoardUseUart0HwFlowControl > 0))
         // Uart Flow Control Watermark - Temp workaround while waiting for LL-1854 and MCUX-77821
@@ -972,7 +996,7 @@ void main_task(uint32_t param)
             HCI_AppControllerRxCallback(0x04, event, 6U);
             /* let the command complete event leave the UART */
             for (volatile uint32_t i = 0U; i < 2000000U && nb_pkt_in_uart_tx_queue != 0U; i++) { }
-            while ((HCI_UART->STAT & LPUART_STAT_TC_MASK) == 0U) { }
+            for (volatile uint32_t i = 0U; ((HCI_UART->STAT & LPUART_STAT_TC_MASK) == 0U) && (i < 2000000U); i++) { }
             (void)bootArg; (void)runBootloader;
             Hcibb_EnterIsp();
         }
