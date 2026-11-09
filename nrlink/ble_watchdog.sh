@@ -27,7 +27,10 @@ hci_of() {   # hciN with that address (hciconfig: btmgmt hangs without a termina
     [ -e "$h" ] && timeout 5 hciconfig "${h##*/}" </dev/null 2>/dev/null | grep -qi "BD Address: $1" && { echo "${h##*/}"; return; }
   done
 }
-alive() { timeout 4 hcitool -i "$1" cmd 0x04 0x0001 2>/dev/null | grep -q '> HCI Event'; }
+# alive <hciN> <address>: the board answers Read BD_ADDR with its own address. hci_bb v13 resets itself (hardware
+# watchdog) when it hangs and then comes back with the default 88:88:88:88:88:88: that counts as down too.
+alive() { local r; r=$(echo "$2" | tr ':' '\n' | tac | tr '\n' ' ')
+  timeout 4 hcitool -i "$1" cmd 0x04 0x0009 2>/dev/null | tr -s ' \n' ' ' | grep -qi "01 09 10 00 ${r% }"; }
 link_pid() { pgrep -f "ble_ip_link.py --connect .* --index $1 " | head -1; }
 tunnel_ok() { docker exec "nrlink-n3iwue$1" ping -c1 -W4 -I gretun-id-2-1 "$DN" >/dev/null 2>&1; }
 session() { docker exec "nrlink-n3iwue$1" ip -4 -o addr show gretun-id-2-1 2>/dev/null | grep -o '12\.1\.1\.[0-9]*'; }
@@ -64,7 +67,7 @@ say "watchdog started (boards: $WATCH): BLE1 ${SN[1]} ${ADDR[1]}, BLE2 ${SN[2]} 
 while true; do
   for k in $WATCH; do
     h=$(hci_of "${ADDR[$k]}")
-    if [ $(( $(date +%s) - RESET[$k] )) -gt $BOARD_GRACE ] && { [ -z "$h" ] || ! alive "$h"; }; then
+    if [ $(( $(date +%s) - RESET[$k] )) -gt $BOARD_GRACE ] && { [ -z "$h" ] || ! alive "$h" "${ADDR[$k]}"; }; then
       FAILS[$k]=$(( FAILS[$k] + 1 ))      # two misses in a row (10 s): one command can be slow under load
       if [ "${FAILS[$k]}" -ge 2 ]; then
         say "BLE$k board ${SN[$k]}: ${h:-no adapter} does not answer HCI"

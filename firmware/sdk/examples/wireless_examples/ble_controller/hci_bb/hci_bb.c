@@ -61,6 +61,8 @@
 #define HCI_ISP_OPCODE                         0xFDB1U
 /* nrlink v5: vendor command 0xFDB2, no parameters: send one diagnostic report (kind 4) now */
 #define HCI_DIAG_OPCODE                        0xFDB2U
+/* nrlink v13: vendor command 0xFDB3, no parameters: report the previous boot's breadcrumbs (event 0xFF, tag 0xF8) */
+#define HCI_CRUMBS_OPCODE                      0xFDB3U
 #define ROM_API_TREE_ADDR                      0x14816800U
 #define ROM_ISP_BOOT_ARG                       0xEB100000U
 
@@ -232,6 +234,72 @@ void BOARD_AppAssertHook(const char *file, int line)
     mDiagKind = 1U;       /* __assert_func now loops; the tick hook reports it */
 }
 
+/* nrlink v13: breadcrumbs (fsl_common_arm.h writes the IRQ ring) and a hardware watchdog.
+ * Words: 0 magic, 1 boots, 2 CMC SRS of this boot, 3 ticks, 4 main loops, 5 tick at the last main loop,
+ * 6..9 HardFault pc/lr/CFSR/HFSR, 10 ring index, 16..47 ring of {pc|tag, caller}. The previous boot's copy is at +64. */
+#define HCIBB_CR_MAGIC  0x4E524331U
+#define HCIBB_CR_WORDS  48U
+#define HCIBB_PREV      (HCIBB_CRUMBS + 64)
+void SystemInitHook(void)   /* runs in SystemInit, before .data/.bss and before any DisableGlobalIRQ */
+{
+    volatile uint32_t *c = HCIBB_CRUMBS, *p = HCIBB_PREV;
+    for (uint32_t i = 0U; i < HCIBB_CR_WORDS; i++) { p[i] = c[i]; }
+    uint32_t boots = (c[0] == HCIBB_CR_MAGIC) ? (c[1] + 1U) : 1U;
+    for (uint32_t i = 0U; i < HCIBB_CR_WORDS; i++) { c[i] = 0U; }
+    c[1] = boots;
+    c[2] = CMC0->SRS;
+    c[0] = HCIBB_CR_MAGIC;
+}
+
+/* WDOG0 on its LPO clock; the rate is measured at start, the timeout is 2 s. The main loop refreshes it. */
+static uint32_t mWdogHz;
+static void Wdog_Config(uint32_t cs, uint32_t toval)
+{
+    uint32_t pm = __get_PRIMASK();
+    __disable_irq();
+    if ((WDOG0->CS & WDOG_CS_CMD32EN_MASK) != 0U) { WDOG0->CNT = 0xD928C520U; }
+    else { WDOG0->CNT = 0xC520U; WDOG0->CNT = 0xD928U; }
+    for (volatile uint32_t i = 0U; ((WDOG0->CS & WDOG_CS_ULK_MASK) == 0U) && (i < 100000U); i++) { }
+    WDOG0->TOVAL = toval;
+    WDOG0->CS    = cs;
+    __set_PRIMASK(pm);
+    for (volatile uint32_t i = 0U; ((WDOG0->CS & WDOG_CS_RCS_MASK) == 0U) && (i < 100000U); i++) { }
+}
+static void Wdog_Kick(void)
+{
+    if (mWdogHz != 0U) { WDOG0->CNT = 0xB480A602U; }
+}
+static void Wdog_Stop(void)
+{
+    Wdog_Config(WDOG_CS_CMD32EN_MASK | WDOG_CS_UPDATE_MASK | WDOG_CS_CLK(1), 0xFFFFU);
+    mWdogHz = 0U;
+}
+static void Wdog_Start(void)
+{
+    const uint32_t cs = WDOG_CS_CMD32EN_MASK | WDOG_CS_UPDATE_MASK | WDOG_CS_CLK(1) | WDOG_CS_EN_MASK;
+    Wdog_Config(cs, 0xFFFFU);
+    uint32_t c0 = WDOG0->CNT;
+    SDK_DelayAtLeastUs(20000U, SystemCoreClock);
+    uint32_t hz = (WDOG0->CNT - c0) * 50U;
+    if (hz < 100U) { Wdog_Stop(); return; }        /* clock not running: leave it off */
+    uint32_t to = 2U * hz, csf = cs;
+    if (to > 0xFFFFU) { csf |= WDOG_CS_PRES_MASK; to /= 256U; }
+    Wdog_Config(csf, to);
+    mWdogHz = hz;
+    Wdog_Kick();
+}
+
+static void Hcibb_ReportCrumbs(void)
+{
+    volatile uint32_t *p = HCIBB_PREV;
+    uint32_t hdr[2] = {HCIBB_CRUMBS[2], mWdogHz};
+    uint8_t n = (uint8_t)(2U + 8U + 4U * HCIBB_CR_WORDS);
+    Diag_PutByte(0x04U); Diag_PutByte(0xFFU); Diag_PutByte(n);
+    Diag_PutByte(0xF8U); Diag_PutByte(0x00U);
+    for (uint32_t k = 0U; k < 2U; k++) { for (uint32_t b = 0U; b < 4U; b++) { Diag_PutByte((uint8_t)(hdr[k] >> (8U * b))); } }
+    for (uint32_t k = 0U; k < HCIBB_CR_WORDS; k++) { uint32_t w = p[k]; for (uint32_t b = 0U; b < 4U; b++) { Diag_PutByte((uint8_t)(w >> (8U * b))); } }
+}
+
 /* nrlink v9: jump to the ROM ISP bootloader with a quiet core (same sequence as nrlink's enter_isp). Both UARTs are
  * reset so the ROM can autobaud on the VCOM (blhost). Used by HCI vendor command 0xFDB1 and the VCOM text "isp". */
 static void Hcibb_EnterIsp(void)
@@ -239,6 +307,7 @@ static void Hcibb_EnterIsp(void)
     static const uint32_t bootArg = ROM_ISP_BOOT_ARG;
     void (*runBootloader)(void *arg) = *(void (**)(void *))ROM_API_TREE_ADDR;
     LPUART_Type *const uarts[2] = {LPUART0, LPUART1};
+    Wdog_Stop();             /* v13: the ROM bootloader must not be reset by our watchdog while flashing */
     __disable_irq();
     SysTick->CTRL = 0U;
     for (uint32_t i = 0U; i < (sizeof(NVIC->ICER) / sizeof(NVIC->ICER[0])); i++)
@@ -309,6 +378,7 @@ static void Hcibb_IrqPrioritiesBelowTick(void);
 void OSA_SysTickHook(uint32_t *frame)
 {
     static uint32_t lastLoop, stillMs, rxWaitMs, ms;
+    HCIBB_CRUMBS[3]++;
     if ((++ms % 1000U) == 0U) { Hcibb_IrqPrioritiesBelowTick(); }
     Vcom_Poll();
     /* v5: input sitting in the RX FIFO (or an overrun) for 1 s means nobody services the UART */
@@ -356,6 +426,7 @@ static void Hcibb_IrqPrioritiesBelowTick(void)
 
 void HardFault_C(uint32_t *frame)
 {
+    HCIBB_CRUMBS[6] = frame[6]; HCIBB_CRUMBS[7] = frame[5]; HCIBB_CRUMBS[8] = SCB->CFSR; HCIBB_CRUMBS[9] = SCB->HFSR;
     for (;;)
     {
         Diag_Report(2U, frame[6], frame[5], frame[7], SCB->CFSR);
@@ -557,6 +628,7 @@ static void Hcit_SendMessageToController(void)
 #endif
              opcode == HCI_ISP_OPCODE ||
              opcode == HCI_DIAG_OPCODE ||
+             opcode == HCI_CRUMBS_OPCODE ||
              0))
         {
             if( maPendingHciCmd[0] == 0 )
@@ -875,6 +947,9 @@ static void HCI_AppControllerRxCallback(uint8_t packetType, uint8_t *data, uint1
 
 void main_task(uint32_t param)
 {
+    HCIBB_CRUMBS[4]++;
+    HCIBB_CRUMBS[5] = HCIBB_CRUMBS[3];
+    Wdog_Kick();
     Diag_CheckIrqMasked();
     Vcom_Poll();   /* v10: also from the main loop (the SysTick hook alone did not answer "isp" in v9) */
     /* v10: drain the HCI receive ring from the main loop too. At 1 Mbaud the rest of a packet arrives while the
@@ -946,6 +1021,7 @@ void main_task(uint32_t param)
         PLATFORM_RegisterErrorCallback(Diag_PlatformError);
         if ((SysTick->CTRL & SysTick_CTRL_ENABLE_Msk) == 0U) { (void)SysTick_Config(SystemCoreClock / 1000U); }
         Hcibb_IrqPrioritiesBelowTick();       /* v12: the stall detector must preempt a stuck interrupt handler */
+        Wdog_Start();                         /* v13: a hung board resets itself after 2 s */
 
 #else
         if (gBleSuccess_c != DTM_Init((serial_handle_t) gSerMgrIf))
@@ -1023,6 +1099,15 @@ void main_task(uint32_t param)
             /* v10: kind 4 carries the HCI UART state instead of the stack figures: pc = STAT, lr = MODIR,
              * xpsr = PORTA PCR19 (RTS pin mux), info = WATER (FIFO counts) */
             Diag_Report(4U, (uint32_t)mHcitResyncNow, (uint32_t)mHcitResyncLast, (uint32_t)TM_GetTimestamp(), HCI_UART->MODIR);
+            HCI_AppControllerRxCallback(0x04, event, 6U);
+        }
+        else
+        if(opcode == HCI_CRUMBS_OPCODE)
+        {
+            uint8_t event[6] = {0x0E, 0x04, 0x01, maPendingHciCmd[1], maPendingHciCmd[2], 0x00};
+            for (volatile uint32_t i = 0U; i < 2000000U && nb_pkt_in_uart_tx_queue != 0U; i++) { }
+            for (volatile uint32_t i = 0U; ((HCI_UART->STAT & LPUART_STAT_TC_MASK) == 0U) && (i < 2000000U); i++) { }
+            Hcibb_ReportCrumbs();
             HCI_AppControllerRxCallback(0x04, event, 6U);
         }
         else

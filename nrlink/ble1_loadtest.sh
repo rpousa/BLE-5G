@@ -30,7 +30,10 @@ if [ -n "$IMAGE" ]; then
   V=$(readlink -f /dev/serial/by-id/*${SN}*-if02)
   timeout 8 "$PY" -I "$NX/pico/vcom_isp.py" "$V" >> "$LOG" 2>&1 || { "$PY" -I "$NX/hwreset.py" "$SN" >/dev/null; sleep 0.05; timeout 8 "$PY" -I "$NX/pico/vcom_isp.py" "$V" >> "$LOG" 2>&1; }
   sleep 0.5; (cd "$NX" && HOME=/home/debian timeout 300 ./board.sh flash "$SN" "$IMAGE") 2>&1 | tail -3 | tee -a "$LOG"
-  sleep 2
+  sleep 3
+  say "== after flashing: one software reset, then a hardware reset; breadcrumbs of the boot before the hardware reset"
+  "$PY" -I "$NX/hwreset.py" "$SN" >/dev/null; sleep 4
+  timeout 20 "$PY" -I "$NX/pico/crumbs.py" "$P" "${SYMS:-$NX/images/hci_bb_isp_v13r.syms}" | tee -a "$LOG"
 fi
 "$PY" -I "$NX/pico/mpy_run.py" "$P" "$NX/pico/save_main.py" 2>&1 | grep -a saved | tee -a "$LOG"
 "$PY" -I "$NX/pico/mpy_run.py" "$P" "$NX/pico/reset.py" >/dev/null 2>&1; sleep 4
@@ -48,8 +51,10 @@ for R in $RATES; do
     > /tmp/ble1_iperf.json 2>&1 &
   IP=$!; fails=0; worst=0; n=0; slow=0
   while kill -0 $IP 2>/dev/null; do
-    s=$(date +%s%N); timeout 3 hcitool -i "$H" cmd 0x04 0x0001 >/dev/null 2>&1; rc=$?
+    s=$(date +%s%N); out=$(timeout 3 hcitool -i "$H" cmd 0x04 0x0009 2>/dev/null); rc=$?
     ms=$(( ($(date +%s%N) - s) / 1000000 )); n=$((n + 1))
+    if [ $rc -eq 0 ] && ! echo "$out" | tr -s ' \n' ' ' | grep -qi "01 09 10 00 A1 B3 65 52 4E 02"; then
+      say "!! BLE1 answers with another address: it reset itself (watchdog)"; HUNG=3; break; fi
     if [ $rc -ne 0 ] && [ -z "$(hci_of)" ]; then say "!! adapter for BLE1 is gone (not a board hang)"; HUNG=2; break; fi
     if [ $rc -ne 0 ]; then fails=$((fails + 1)); say "  HCI read-version failed (rc $rc, $ms ms), $fails in a row"
     else fails=0; [ $ms -gt $worst ] && worst=$ms; [ $ms -gt 500 ] && slow=$((slow + 1)); fi
@@ -57,6 +62,7 @@ for R in $RATES; do
     sleep 1
   done
   [ $HUNG = 2 ] && { kill $IP 2>/dev/null; break; }
+  [ $HUNG = 3 ] && { say "!! at $R kbit/s"; kill $IP 2>/dev/null; break; }
   [ $HUNG = 1 ] && { say "!! BLE1 stopped answering HCI at $R kbit/s"; kill $IP 2>/dev/null; docker ps -q --filter ancestor=nrlink-run:local --filter network=container:nrlink-n3iwue1 | xargs -r docker kill >/dev/null 2>&1; break; }
   wait $IP
   res=$("$PY" -I -c "
@@ -79,6 +85,12 @@ if [ $HUNG = 1 ]; then
   "$PY" -I "$NX/pico/mpy_run.py" "$P" "$NX/pico/hangprobe.py" 2>&1 | grep -aE "RTS|bytes|->" | tee -a "$LOG"
   V=$(readlink -f /dev/serial/by-id/*${SN}*-if02)
   say "VCOM isp probe (answers only if the main loop runs): $(timeout 6 "$PY" -I "$NX/pico/vcom_isp.py" "$V" 2>&1 | tail -1)"
+  say "board did not reset itself: hardware reset"; "$PY" -I "$NX/hwreset.py" "$SN" >/dev/null; sleep 3
+fi
+if [ $HUNG = 1 ] || [ $HUNG = 3 ]; then
+  "$PY" -I "$NX/pico/mpy_run.py" "$P" "$NX/pico/reset.py" >/dev/null 2>&1; sleep 4
+  say "== breadcrumbs of the boot that hung"
+  timeout 20 "$PY" -I "$NX/pico/crumbs.py" "$P" "${SYMS:-$NX/images/hci_bb_isp_v13r.syms}" | tee -a "$LOG"
 fi
 say "== restore: bridge restarted, BLE1 reset and attached, n3iwue1 restarted, watchdog on both"
 "$PY" -I "$NX/pico/mpy_run.py" "$P" "$NX/pico/reset.py" >/dev/null 2>&1; sleep 4

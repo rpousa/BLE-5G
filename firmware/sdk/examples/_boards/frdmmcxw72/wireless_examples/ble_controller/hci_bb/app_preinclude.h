@@ -103,6 +103,8 @@
  * Up to v8 HCI ran on the MCU-Link VCOM (LPUART1, no flow control) at 115200: 1 Mbaud lost bytes there.
  * LPUART1 (VCOM) now only answers the text command "isp" (115200) for remote reflashing. */
 #define BOARD_APP_UART_INSTANCE                0U
+/* nrlink v13: record every DisableGlobalIRQ/EnableGlobalIRQ in RAM that survives a reset (fsl_common_arm.h) */
+#define HCIBB_IRQ_CRUMBS 1
 #define gBoardUseUart0HwFlowControl            1
 #define BOARD_APP_UART_BAUDRATE                1000000U
 
