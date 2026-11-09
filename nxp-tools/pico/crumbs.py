@@ -29,7 +29,11 @@ print('this boot: reset by %s; watchdog clock measured %d Hz%s' % (srs(cur_srs),
 if w[0] != 0x4E524331: print('previous boot: no breadcrumbs (magic %08x): power-up or first v13 boot' % w[0]); sys.exit(0)
 print('previous boot #%d: reset by %s; ticks %d ms, main loops %d, tick at the last main loop %d -> loop stalled %d ms before the reset%s' % (
     w[1], srs(w[2]), w[3], w[4], w[5], w[3] - w[5], '' if w[3] else ' (tick never ran)'))
-if w[6] or w[8] or w[9]: print('HardFault: pc %s lr %s CFSR %08x HFSR %08x' % (sym(w[6]), sym(w[7]), w[8], w[9]))
+EXC = {2: 'NMI', 3: 'HardFault', 4: 'MemManage', 5: 'BusFault', 6: 'UsageFault', 7: 'SecureFault', 12: 'DebugMonitor', 14: 'PendSV', 15: 'SysTick'}
+def exc(n): return 'thread (main loop)' if n == 0 else EXC.get(n, 'IRQ %d' % (n - 16))
+if w[3]: print('last tick interrupted %s in %s' % (sym(w[11]), exc(w[12] & 0x1FF)))
+if w[13]: print('FAULT %s at %s (lr %s), CFSR %08x HFSR %08x -> reset' % (exc(w[13] & 0x1FF), sym(w[14]), sym(w[15]), w[8], w[9]))
+elif w[6] or w[8] or w[9]: print('HardFault: pc %s lr %s CFSR %08x HFSR %08x' % (sym(w[6]), sym(w[7]), w[8], w[9]))
 n = w[10]
 TAG = {1: 'MASK  ', 2: 'unmask', 3: 'restore-masked'}
 print('last %d of %d interrupt mask changes, oldest first:' % (min(n, 16), n))

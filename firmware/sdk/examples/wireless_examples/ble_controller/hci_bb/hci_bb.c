@@ -236,7 +236,8 @@ void BOARD_AppAssertHook(const char *file, int line)
 
 /* nrlink v13: breadcrumbs (fsl_common_arm.h writes the IRQ ring) and a hardware watchdog.
  * Words: 0 magic, 1 boots, 2 CMC SRS of this boot, 3 ticks, 4 main loops, 5 tick at the last main loop,
- * 6..9 HardFault pc/lr/CFSR/HFSR, 10 ring index, 16..47 ring of {pc|tag, caller}. The previous boot's copy is at +64. */
+ * 6..9 HardFault pc/lr/CFSR/HFSR, 10 ring index, 11/12 pc/xPSR the last tick interrupted (v14),
+ * 13..15 other fault: exception number, pc, lr (v14), 16..47 ring of {pc|tag, caller}. The previous boot's copy is at +64. */
 #define HCIBB_CR_MAGIC  0x4E524331U
 #define HCIBB_CR_WORDS  48U
 #define HCIBB_PREV      (HCIBB_CRUMBS + 64)
@@ -379,6 +380,8 @@ void OSA_SysTickHook(uint32_t *frame)
 {
     static uint32_t lastLoop, stillMs, rxWaitMs, ms;
     HCIBB_CRUMBS[3]++;
+    HCIBB_CRUMBS[11] = frame[6];
+    HCIBB_CRUMBS[12] = frame[7];
     if ((++ms % 1000U) == 0U) { Hcibb_IrqPrioritiesBelowTick(); }
     Vcom_Poll();
     /* v5: input sitting in the RX FIFO (or an overrun) for 1 s means nobody services the UART */
@@ -433,6 +436,27 @@ void HardFault_C(uint32_t *frame)
         for (volatile uint32_t i = 0U; i < 30000000U; i++) { }
     }
 }
+
+/* v14: NMI and the configurable faults (MemManage, BusFault, UsageFault, SecureFault, DebugMonitor) were the SDK's
+ * silent endless loops, which outrank SysTick. Record them in the breadcrumbs and reset at once. */
+void Hcibb_OtherFaultC(uint32_t *frame)
+{
+    HCIBB_CRUMBS[13] = __get_IPSR();
+    HCIBB_CRUMBS[14] = frame[6];
+    HCIBB_CRUMBS[15] = frame[5];
+    HCIBB_CRUMBS[8]  = SCB->CFSR;
+    HCIBB_CRUMBS[9]  = SCB->HFSR;
+    NVIC_SystemReset();
+}
+#define HCIBB_FAULT_ENTRY(name) \
+    void name(void) __attribute__((naked)); \
+    void name(void) { __asm volatile("tst lr, #4\n ite eq\n mrseq r0, msp\n mrsne r0, psp\n b Hcibb_OtherFaultC\n"); }
+HCIBB_FAULT_ENTRY(NMI_Handler)
+HCIBB_FAULT_ENTRY(MemManage_Handler)
+HCIBB_FAULT_ENTRY(BusFault_Handler)
+HCIBB_FAULT_ENTRY(UsageFault_Handler)
+HCIBB_FAULT_ENTRY(SecureFault_Handler)
+HCIBB_FAULT_ENTRY(DebugMon_Handler)
 
 void HardFault_Handler(void) __attribute__((naked));
 void HardFault_Handler(void)

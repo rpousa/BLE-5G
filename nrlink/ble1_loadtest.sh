@@ -33,7 +33,7 @@ if [ -n "$IMAGE" ]; then
   sleep 3
   say "== after flashing: one software reset, then a hardware reset; breadcrumbs of the boot before the hardware reset"
   "$PY" -I "$NX/hwreset.py" "$SN" >/dev/null; sleep 4
-  timeout 20 "$PY" -I "$NX/pico/crumbs.py" "$P" "${SYMS:-$NX/images/hci_bb_isp_v13r.syms}" | tee -a "$LOG"
+  timeout 20 "$PY" -I "$NX/pico/crumbs.py" "$P" "${SYMS:-$NX/images/hci_bb_isp_v14r.syms}" | tee -a "$LOG"
 fi
 "$PY" -I "$NX/pico/mpy_run.py" "$P" "$NX/pico/save_main.py" 2>&1 | grep -a saved | tee -a "$LOG"
 "$PY" -I "$NX/pico/mpy_run.py" "$P" "$NX/pico/reset.py" >/dev/null 2>&1; sleep 4
@@ -92,7 +92,7 @@ fi
 if [ $HUNG = 1 ] || [ $HUNG = 3 ]; then
   "$PY" -I "$NX/pico/mpy_run.py" "$P" "$NX/pico/reset.py" >/dev/null 2>&1; sleep 4
   say "== breadcrumbs of the boot that hung"
-  timeout 20 "$PY" -I "$NX/pico/crumbs.py" "$P" "${SYMS:-$NX/images/hci_bb_isp_v13r.syms}" | tee -a "$LOG"
+  timeout 20 "$PY" -I "$NX/pico/crumbs.py" "$P" "${SYMS:-$NX/images/hci_bb_isp_v14r.syms}" | tee -a "$LOG"
 fi
 say "== restore: bridge restarted, BLE1 reset and attached, n3iwue1 restarted, watchdog on both"
 "$PY" -I "$NX/pico/mpy_run.py" "$P" "$NX/pico/reset.py" >/dev/null 2>&1; sleep 4
