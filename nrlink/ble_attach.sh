@@ -5,6 +5,7 @@
 #                                 the Pico on the board side), else the MCU-Link VCOM; -N: no flow control on the tty),
 #                                 LE on, power on; prints "ble<k> <serial> hci<N> <address>"
 #   sudo ./ble_attach.sh --off    detach them again (stops the btattach processes)
+#   ONLY=2 ./ble_attach.sh        just that board (the watchdog uses it: probing a board that is attached disturbs it)
 # The adapters live as long as btattach runs. A board reset loses its address: run this again.
 # bluetoothd is masked (--runtime, until reboot or --off): its GATT client reads the core's encrypted attributes,
 # the failed pairing that follows makes the kernel drop the LE link. The links only need the kernel (L2CAP, mgmt).
@@ -33,7 +34,7 @@ hci_of() {   # hci_of <address>: the hciN with that address, if any
   done
 }
 
-for k in 1 2; do
+for k in ${ONLY:-1 2}; do
   sn=$("$PY" -c "import json; print(json.load(open('boards.json')).get('ble$k', ''))" 2>/dev/null)
   [ -n "$sn" ] || { echo "ble$k: no board in boards.json (run ./nrlink.sh boards)"; continue; }
   addr=$("$PY" -I "$PROBE" "$sn" --addr)

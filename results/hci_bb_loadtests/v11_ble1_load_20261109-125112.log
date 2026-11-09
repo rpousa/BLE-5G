@@ -1,0 +1,29 @@
+12:51:12 == setup: watchdog on BLE2 only; bridge v2 on BLE1's Pico; BLE1 reset and attached; n3iwue1 restarted
+saved 2494
+ble1 3VWLILYT2A1AK hci0 02:4E:52:65:B3:A1 (already attached)
+12:54:33 BLE1 = hci0, n3iwue1 = 12.1.1.126
+12:54:42 baseline: 10 packets transmitted, 10 received, 0% packet loss, time 9011ms rtt min/avg/max/mdev = 305.166/398.897/449.709/38.892 ms 
+12:54:42 == UDP uplink 20 kbit/s for 60 s (500 B datagrams)
+12:54:50   HCI read-version failed (rc 124, 3002 ms), 1 in a row
+12:54:54   HCI read-version failed (rc 124, 3003 ms), 2 in a row
+12:54:58   HCI read-version failed (rc 124, 3003 ms), 3 in a row
+12:54:58 !! BLE1 stopped answering HCI at 20 kbit/s
+12:54:58 == Pico bridge counters
+nrlink bridge stopped {'max_hold_ms': 0, 'held_ms': 0, 'up': 25240, 'holds': 0, 'uptime_s': 220, 'holds_over_1s': 0, 'down': 131407}
+MicroPython v1.24.1 on 2024-11-29; Raspberry Pi Pico with RP2040
+Type "help()" for more information.
+>>>
+12:55:01 == board state while hung (bridge stopped, probing from the Pico)
+[Mon Nov  9 12:47:07 2026] Bluetooth: hci0: command tx timeout
+[Mon Nov  9 12:55:56 2026] Bluetooth: hci0: command tx timeout
+[Mon Nov  9 12:56:00 2026] Bluetooth: hci0: command tx timeout
+[Mon Nov  9 12:56:04 2026] Bluetooth: hci0: command tx timeout
+RTS (GP2) high in 34423 of 34423 samples over 1 s (high = board says wait)
+bytes waiting from the board: 0
+read version -> NO REPLY
+diag 0xFDB2 -> NO REPLY
+12:55:07 VCOM isp probe (answers only if the main loop runs): reply: b'' after 2.52 s
+12:55:07 == restore: bridge restarted, BLE1 reset and attached, n3iwue1 restarted, watchdog on both
+ble1 3VWLILYT2A1AK hci0 02:4E:52:65:B3:A1
+13:00:20 n3iwue1 = NO SESSION
+13:00:21 done

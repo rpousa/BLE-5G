@@ -52,7 +52,7 @@ reset_board() {   # reset_board k: hardware reset of BLE<k>, attach again, resta
   sleep 1
   "$PY" -I /home/debian/nxp/hwreset.py "${SN[$k]}" >/dev/null
   sleep 2
-  timeout 120 ./ble_attach.sh </dev/null >/dev/null 2>&1
+  ONLY=$k timeout 120 ./ble_attach.sh </dev/null >/dev/null 2>&1
   RESET[$k]=$(date +%s); FAILS[$k]=0
   say "BLE$k board ${SN[$k]}: reset and attached as $(hci_of "${ADDR[$k]}")"
   restart_ue "$k"
