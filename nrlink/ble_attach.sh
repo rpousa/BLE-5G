@@ -1,7 +1,8 @@
 #!/bin/bash
 # UE PC, run as root: turn the hci_bb boards (boards.json ble1, ble2) into Linux Bluetooth adapters.
-#   sudo ./ble_attach.sh          per board: set its unique address (hci_probe.py --set-addr), btattach (H4, at the baud the
-#                                 board answers: 115200 for hci_bb_isp_v2, -N: the MCU-Link VCOM has no RTS/CTS),
+#   sudo ./ble_attach.sh          per board: set its unique address (hci_probe.py --set-addr), btattach (H4, on the port and
+#                                 baud the board answers: its Pico bridge at 1 Mbaud for hci_bb v11 (RTS/CTS is done by
+#                                 the Pico on the board side), else the MCU-Link VCOM; -N: no flow control on the tty),
 #                                 LE on, power on; prints "ble<k> <serial> hci<N> <address>"
 #   sudo ./ble_attach.sh --off    detach them again (stops the btattach processes)
 # The adapters live as long as btattach runs. A board reset loses its address: run this again.
@@ -35,12 +36,12 @@ hci_of() {   # hci_of <address>: the hciN with that address, if any
 for k in 1 2; do
   sn=$("$PY" -c "import json; print(json.load(open('boards.json')).get('ble$k', ''))" 2>/dev/null)
   [ -n "$sn" ] || { echo "ble$k: no board in boards.json (run ./nrlink.sh boards)"; continue; }
-  tty=$(readlink -f /dev/serial/by-id/*"$sn"*-if02 2>/dev/null) || { echo "ble$k: board $sn not connected"; continue; }
   addr=$("$PY" -I "$PROBE" "$sn" --addr)
   h=$(hci_of "$addr")
   if [ -n "$h" ]; then echo "ble$k $sn $h $addr (already attached)"; continue; fi
   "$PY" -I "$PROBE" "$sn" --set-addr >/dev/null || { echo "ble$k: $sn does not answer HCI (hci_bb firmware?)"; continue; }
   baud=$("$PY" -I "$PROBE" "$sn" --baud)
+  tty=$("$PY" -I "$PROBE" "$sn" --port)
   before=$(ls /sys/class/bluetooth | grep '^hci' | sort)
   nohup btattach -N -B "$tty" -P h4 -S "$baud" > "$RUN/btattach-ble$k.log" 2>&1 &
   echo $! > "$RUN/btattach-ble$k.pid"

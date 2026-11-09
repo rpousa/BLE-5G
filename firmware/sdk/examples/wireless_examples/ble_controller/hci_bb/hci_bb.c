@@ -175,6 +175,7 @@ static detectState_t            mPacketDetectStep;
 #define HCIT_RX_GAP_RESET_US            100000U
 static uint64_t                 mHcitLastRxUs;
 uint32_t                        gHcitResyncCount;   /* partial packets dropped (readable with a debugger) */
+static uint64_t                 mHcitResyncNow, mHcitResyncLast;   /* v10 diag: timestamps of the last resync */
 
 /* nrlink v4 diagnostics: when the application stops (assert, HardFault, or a main loop that makes no progress for
  * 2 s), send the host an HCI vendor event 0xFF, subevent 0xF7, every 2 s:
@@ -384,7 +385,7 @@ static void Diag_PaintStack(void)
     uint32_t *sp = (uint32_t *)__get_MSP();
     while (p < (sp - 64)) { *p++ = DIAG_STACK_PAINT; }
 }
-static uint32_t Diag_StackUsed(void)
+__attribute__((unused)) static uint32_t Diag_StackUsed(void)
 {
     uint32_t *p = __StackLimit;
     while ((p < __StackTop) && (*p == DIAG_STACK_PAINT)) { p++; }
@@ -573,8 +574,10 @@ void HCI_AppUartRxCallback(void *callbackParam,
         mHcitData.pPacket = NULL;
         mPacketDetectStep = mDetectMarker_c;
         gHcitResyncCount++;
+        mHcitResyncNow  = now;
+        mHcitResyncLast = mHcitLastRxUs;
+        mHcitLastRxUs   = now;
     }
-    mHcitLastRxUs = now;
 
     if( mPacketDetectStep != mPacketInProgress_c )
     {
@@ -590,6 +593,10 @@ void HCI_AppUartRxCallback(void *callbackParam,
     if(kStatus_SerialManager_Success != SerialManager_TryRead( (serial_read_handle_t)g_appUartReadHandle, buffer, length, &count))
     {
         return;
+    }
+    if (count != 0U)
+    {
+        mHcitLastRxUs = now;   /* v10: the gap is measured from the last byte read, not the last call */
     }
 
     while( count != 0U )
@@ -853,6 +860,14 @@ void main_task(uint32_t param)
 {
     Diag_CheckIrqMasked();
     Vcom_Poll();   /* v10: also from the main loop (the SysTick hook alone did not answer "isp" in v9) */
+    /* v10: drain the HCI receive ring from the main loop too. At 1 Mbaud the rest of a packet arrives while the
+     * serial manager's rx callback is still running, and that "data available" notification is lost: the tail sat
+     * in the ring until the next packet's bytes woke the parser 100+ ms later, and the gap check then dropped the
+     * packet (every command longer than ~12 bytes was lost). Safe: same bare-metal loop as the notifications. */
+    if (platformInitialized != 0U)
+    {
+        HCI_AppUartRxCallback(NULL, NULL, kStatus_SerialManager_Success);
+    }
     if (!platformInitialized)
     {
         platformInitialized = 1;
@@ -876,6 +891,9 @@ void main_task(uint32_t param)
         HCI_UART->CTRL  &= ~(LPUART_CTRL_TE_MASK | LPUART_CTRL_RE_MASK);
         for (volatile uint32_t i = 0U;
              ((HCI_UART->CTRL & (LPUART_CTRL_TE_MASK | LPUART_CTRL_RE_MASK)) != 0U) && (i < 2000000U); i++) { }
+        /* v10: main() calls PLATFORM_InitLcl() after BOARD_InitHardware(); it muxes PTA18..20 to RF_GPO (Alt6),
+         * which took LPUART0_RTS_b off J1-5, so RTS never reached the Pico. Put the UART function back. */
+        BOARD_InitPinLPUART0_RTS();
         HCI_UART->MODIR = (HCI_UART->MODIR & ~(LPUART_MODIR_TXCTSE_MASK | LPUART_MODIR_RTSWATER_MASK)) |
                           LPUART_MODIR_RXRTSE_MASK | LPUART_MODIR_RTSWATER(4U);
         HCI_UART->CTRL  |= LPUART_CTRL_TE_MASK | LPUART_CTRL_RE_MASK;
@@ -984,7 +1002,9 @@ void main_task(uint32_t param)
             /* the report bypasses the serial manager: let queued packets leave first */
             for (volatile uint32_t i = 0U; i < 2000000U && nb_pkt_in_uart_tx_queue != 0U; i++) { }
             for (volatile uint32_t i = 0U; ((HCI_UART->STAT & LPUART_STAT_TC_MASK) == 0U) && (i < 2000000U); i++) { }
-            Diag_Report(4U, Diag_StackUsed(), (uint32_t)((uint8_t *)__StackTop - (uint8_t *)__StackLimit), HCI_UART->CTRL, gDiagIrqHeals);
+            /* v10: kind 4 carries the HCI UART state instead of the stack figures: pc = STAT, lr = MODIR,
+             * xpsr = PORTA PCR19 (RTS pin mux), info = WATER (FIFO counts) */
+            Diag_Report(4U, (uint32_t)mHcitResyncNow, (uint32_t)mHcitResyncLast, (uint32_t)TM_GetTimestamp(), HCI_UART->MODIR);
             HCI_AppControllerRxCallback(0x04, event, 6U);
         }
         else

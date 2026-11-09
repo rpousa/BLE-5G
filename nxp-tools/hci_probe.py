@@ -8,6 +8,11 @@
                                      NXP vendor command 0xFC22; kept across HCI Reset, lost on power-up/reset
   hci_probe.py <serial> --addr   just print the nrlink address of that board
   hci_probe.py <serial> --baud   print the HCI UART baud rate the board answers at (115200 for v2, 1000000 for v1)
+  hci_probe.py <serial> --port   print the tty the board answers HCI on
+
+Since hci_bb v11 the HCI UART is LPUART0 (J1-1/J1-2, RTS on J1-5) behind a Raspberry Pi Pico bridge at 1 Mbaud with
+RTS/CTS (pico/main.py); PICOS maps each board to its Pico. Boards without a Pico (or older firmware) are still
+reached on the MCU-Link VCOM (-if02).
 """
 import struct
 import sys
@@ -16,6 +21,11 @@ import time
 import serial
 
 BAUDS = (115200, 1_000_000)   # hci_bb_isp_v2 runs at 115200; v1 (1 Mbaud, loses bytes) still detected
+PICOS = {                     # board serial -> USB serial of the Pico wired to its LPUART0
+    "3VWLILYT2A1AK": "e661640843676727",   # BLE1
+    "GLNAOWUSDREB4": "e6616408439b6727",   # BLE2
+}
+PICO_BAUD = 1_000_000         # the Pico's USB CDC ignores the rate; the UART side runs at 1 Mbaud with RTS/CTS
 
 
 def cmd(s, opcode, params=b"", timeout=2.0):
@@ -59,8 +69,19 @@ def nrlink_addr(sn):
 
 
 def open_hci(sn):
-    """(serial port, baud) of a board answering HCI Reset at one of BAUDS, else (None, None)."""
-    port = __import__("glob").glob(f"/dev/serial/by-id/*{sn}*-if02")[0]
+    """(serial port, baud) of a board answering HCI Reset (Pico bridge first, then the VCOM), else (None, None)."""
+    glob = __import__("glob").glob
+    pico = glob(f"/dev/serial/by-id/*MicroPython*{PICOS[sn]}*-if00") if sn in PICOS else []
+    if pico:
+        s = serial.Serial(pico[0], PICO_BAUD, timeout=0.05)
+        s.reset_input_buffer()
+        if reset(s, tries=4) == b"\x00":
+            return s, PICO_BAUD
+        s.close()
+    vcom = glob(f"/dev/serial/by-id/*{sn}*-if02")
+    if not vcom:
+        return None, None
+    port = vcom[0]
     for baud in BAUDS:
         s = serial.Serial(port, baud, timeout=0.05)
         s.reset_input_buffer()
@@ -81,6 +102,9 @@ def main():
         return 1
     if "--baud" in sys.argv:
         print(baud)
+        return 0
+    if "--port" in sys.argv:
+        print(__import__("os").path.realpath(s.port))
         return 0
     if "--isp" in sys.argv:
         r = cmd(s, 0xFDB1)

@@ -414,7 +414,7 @@ const LOADS = {
   nrul: ["NR uplink, shared by nrUE1 + nrUE2", L => KB.lidar(L) + KB.reports(L), 44, "clean to ≈44 kbit/s in the stress test; the two UEs share the 2 uplink slots per period"],
   nrdl: ["NR downlink", L => KB.commands(L) + 4, 90, "clean to ≈90 kbit/s; the commands share it only with signalling"],
   bleln: ["this Bluetooth link", L => KB.cam(L), 13, "the downlink test was clean to ≈8–13 kbit/s of video per link with 2 kB frames, lossy at 16.5; ble_ip_link paces at 40"],
-  uart: ["HCI UART 115200 baud", L => KB.cam(L), 92, "115200 baud, 8N1 = 92 kbit/s; 87 ms per kB"],
+  uart: ["HCI UART 1 Mbaud via the Pico", L => KB.cam(L), 800, "1 Mbaud 8N1 with RTS = 800 kbit/s; about 10 ms per kB (hci_bb v11 since 9 Nov; was 115200 without flow control)"],
   usbnr: ["USB SLIP 1 Mbaud", L => KB.lidar(L) + KB.reports(L) + KB.commands(L), 800, "shared by both UEs' traffic"],
 };
 const STEPS = {
@@ -455,7 +455,7 @@ const STEPS = {
     ["N3IWF", "free5GC · 192.168.70.139", "core", "f5gc", "Removes GTP-U, then puts each packet in GRE inside the IPsec ESP child SA of n3iwue1 (≈+60 B per packet), toward 10.70.0.11.", 2],
     ["ble_ip_link (listener)", "core PC · tun ble1", "core", "host", "Takes ESP packets off tun ble1 and writes them into the L2CAP CoC channel (PSM 0x0081), paced to 40 kbit/s.", 5, "bleln"],
     ["hci0 → BLE1 board", "Intel 8265 · LE 1M · 45 ms connection events", "air", "intel", "Sends 27 B link-layer packets in each 45 ms connection event, hopping 2404–2478 MHz. A 2.5 kB frame needs several events: this is the slow hop.", 120, "bleln"],
-    ["BLE1 board", "FRDM-MCXW72 · hci_bb v8", "ue", "nxp", "NXP's controller hands the ACL data to the UE PC over the H4 UART at 115200 baud, 87 ms per kB.", 90, "uart"],
+    ["BLE1 board → Pico", "FRDM-MCXW72 · hci_bb v11 · Raspberry Pi Pico", "ue", "nxp", "NXP's controller hands the ACL data over H4 on its LPUART0 at 1 Mbaud to a Raspberry Pi Pico, which passes it to the UE PC over USB: about 10 ms per kB. The board pauses the Pico with RTS on J1-5 when it is busy.", 12, "uart"],
     ["ble_ip_link 1", "UE PC · tun ble1 in n3iwue1", "ue", "host", "Rebuilds the packets from L2CAP and writes them into tun ble1 inside the n3iwue1 container.", 3],
     ["n3iwue1", "free5GC n3iwue · gretun-id-2-1", "ue", "f5gc", "Decrypts the ESP, strips GRE, and delivers the UDP fragments on its PDU session interface.", 2],
     ["op1's handheld", "fdl-live-rx-cam1", "ue", "host", "Joins the 3 fragments and shows the frame. CAM2 takes the same path over BLE2 to n3iwue2 and op2.", 1],
