@@ -53,8 +53,10 @@ for R in $RATES; do
   while kill -0 $IP 2>/dev/null; do
     s=$(date +%s%N); out=$(timeout 3 hcitool -i "$H" cmd 0x04 0x0009 2>/dev/null); rc=$?
     ms=$(( ($(date +%s%N) - s) / 1000000 )); n=$((n + 1))
-    if [ $rc -eq 0 ] && ! echo "$out" | tr -s ' \n' ' ' | grep -qi "01 09 10 00 A1 B3 65 52 4E 02"; then
-      say "!! BLE1 answers with another address: it reset itself (watchdog)"; HUNG=3; break; fi
+    o=$(echo "$out" | tr -s ' \n' ' ')
+    if [ $rc -eq 0 ] && echo "$o" | grep -qi "01 09 10 00" && ! echo "$o" | grep -qi "01 09 10 00 A1 B3 65 52 4E 02"; then
+      say "!! BLE1 answers with another address: it reset itself (watchdog): $o"; HUNG=3; break; fi
+    [ $rc -eq 0 ] && ! echo "$o" | grep -q '> HCI Event' && rc=98
     if [ $rc -ne 0 ] && [ -z "$(hci_of)" ]; then say "!! adapter for BLE1 is gone (not a board hang)"; HUNG=2; break; fi
     if [ $rc -ne 0 ]; then fails=$((fails + 1)); say "  HCI read-version failed (rc $rc, $ms ms), $fails in a row"
     else fails=0; [ $ms -gt $worst ] && worst=$ms; [ $ms -gt 500 ] && slow=$((slow + 1)); fi
