@@ -7,7 +7,7 @@
    (LiDAR + robots) beside the two camera feeds, then the delay timeline and the level table.
    Colour = which radio carries it, matching the board LEDs: blue eMBB (nrUE1), red URLLC (nrUE2), green Bluetooth. */
 :root {
-  --cmd: #c9a000; --signal: #b86e00; --ok: #0f7a55; --f5gc: #0d857c; --oai: #3d5a99; --nxp: #b86e00; --intel: #0068b5; --host: #6b7684;
+  --cmd: #c9a000; --signal: #b86e00; --ok: #0f7a55; --f5gc: #0d857c; --oai: #3d5a99; --nxp: #b86e00; --intel: #0068b5; --host: #6b7684; --pico: #c51a4a;
   --bg: #eef1f4; --panel: #ffffff; --panel-2: #f5f7f9; --line: #d3d9e0;
   --ink: #17202b; --ink-2: #4b5866; --ink-3: #7a8693;
   --embb: #1f63d6; --urllc: #d0342c; --ble: #1d8a3c; --ble2: #0f7f86; --warn: #b86e00; --bad: #b3261e;
@@ -17,12 +17,12 @@
   --r: 6px;
 }
 @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
-  --cmd: #f2d04a; --signal: #f0a830; --ok: #3dbb72; --f5gc: #2fc0b3; --oai: #7e9be0; --nxp: #f0a830; --intel: #4ea3e6; --host: #8f9aa6;
+  --cmd: #f2d04a; --signal: #f0a830; --ok: #3dbb72; --f5gc: #2fc0b3; --oai: #7e9be0; --nxp: #f0a830; --intel: #4ea3e6; --host: #8f9aa6; --pico: #f0607f;
   --bg: #0e141b; --panel: #151d26; --panel-2: #1b2530; --line: #2a3644; --ink: #e6ebf0; --ink-2: #a9b4bf; --ink-3: #74808c;
   --embb: #5b93f5; --urllc: #f0605a; --ble: #45c06a; --ble2: #3cc3c9; --warn: #f0a830; --bad: #f2786f;
   --floor: #1c2631; --machine: #44515f; --tape: #a98a20; --zone: #45c06a; color-scheme: dark } }
 :root[data-theme="dark"] {
-  --cmd: #f2d04a; --signal: #f0a830; --ok: #3dbb72; --f5gc: #2fc0b3; --oai: #7e9be0; --nxp: #f0a830; --intel: #4ea3e6; --host: #8f9aa6;
+  --cmd: #f2d04a; --signal: #f0a830; --ok: #3dbb72; --f5gc: #2fc0b3; --oai: #7e9be0; --nxp: #f0a830; --intel: #4ea3e6; --host: #8f9aa6; --pico: #f0607f;
   --bg: #0e141b; --panel: #151d26; --panel-2: #1b2530; --line: #2a3644; --ink: #e6ebf0; --ink-2: #a9b4bf; --ink-3: #74808c;
   --embb: #5b93f5; --urllc: #f0605a; --ble: #45c06a; --ble2: #3cc3c9; --warn: #f0a830; --bad: #f2786f;
   --floor: #1c2631; --machine: #44515f; --tape: #a98a20; --zone: #45c06a; color-scheme: dark }
@@ -405,7 +405,7 @@ function tick() {
 }
 
 // ---------------------------------------------------------------- step by step
-const PROJ = { f5gc: ["free5GC", "--f5gc"], oai: ["OpenAirInterface", "--oai"], host: ["nrlink / host", "--host"], nxp: ["NXP board", "--nxp"], intel: ["Intel adapter", "--intel"], air: ["over the air", "--ink-3"] };
+const PROJ = { f5gc: ["free5GC", "--f5gc"], oai: ["OpenAirInterface", "--oai"], host: ["nrlink / host", "--host"], nxp: ["NXP board", "--nxp"], pico: ["Raspberry Pi Pico", "--pico"], intel: ["Intel adapter", "--intel"], air: ["over the air", "--ink-3"] };
 const WHERE = { ue: "UE PC", core: "core PC", air: "air" };
 // packet sizes on the wire (UDP/IP + 36 B header per fragment): LiDAR 2.1 kB in 3 fragments, report 118 B, command 65 B, video frame ≈2.1 kB + IPsec/GRE ≈2.5 kB
 const KB = { lidar: L => L.lidar_hz * 2400 * 8 / 1000, reports: L => L.rep_hz * 118 * 8 / 1000, commands: L => L.rep_hz * 65 * 8 / 1000, cam: L => L.cam_fps * 2500 * 8 / 1000 };
@@ -413,7 +413,7 @@ const KB = { lidar: L => L.lidar_hz * 2400 * 8 / 1000, reports: L => L.rep_hz * 
 const LOADS = {
   nrul: ["NR uplink, shared by nrUE1 + nrUE2", L => KB.lidar(L) + KB.reports(L), 44, "clean to ≈44 kbit/s in the stress test; the two UEs share the 2 uplink slots per period"],
   nrdl: ["NR downlink", L => KB.commands(L) + 4, 90, "clean to ≈90 kbit/s; the commands share it only with signalling"],
-  bleln: ["this Bluetooth link", L => KB.cam(L), 13, "the downlink test was clean to ≈8–13 kbit/s of video per link with 2 kB frames, lossy at 16.5; ble_ip_link paces at 40"],
+  bleln: ["this Bluetooth link", L => KB.cam(L), 13, "video: clean to ≈8–13 kbit/s per link with 2 kB frames (6 Nov), because one lost fragment loses the frame; plain UDP: clean to 30 kbit/s, saturating at ≈32 (9 Nov same-source comparison; ble_ip_link paces at 40)"],
   uart: ["HCI UART 1 Mbaud via the Pico", L => KB.cam(L), 800, "1 Mbaud 8N1 with RTS = 800 kbit/s; about 10 ms per kB (hci_bb v15 since 9 Nov: RTS flow control, and the old board hang under uplink load is fixed)"],
   usbnr: ["USB SLIP 1 Mbaud", L => KB.lidar(L) + KB.reports(L) + KB.commands(L), 800, "shared by both UEs' traffic"],
 };
@@ -455,8 +455,10 @@ const STEPS = {
     ["N3IWF", "free5GC · 192.168.70.139", "core", "f5gc", "Removes GTP-U, then puts each packet in GRE inside the IPsec ESP child SA of n3iwue1 (≈+60 B per packet), toward 10.70.0.11.", 2],
     ["ble_ip_link (listener)", "core PC · tun ble1", "core", "host", "Takes ESP packets off tun ble1 and writes them into the L2CAP CoC channel (PSM 0x0081), paced to 40 kbit/s.", 5, "bleln"],
     ["hci0 → BLE1 board", "Intel 8265 · LE 1M · 45 ms connection events", "air", "intel", "Sends 27 B link-layer packets in each 45 ms connection event, hopping 2404–2478 MHz. A 2.5 kB frame needs several events: this is the slow hop.", 120, "bleln"],
-    ["BLE1 board → Pico", "FRDM-MCXW72 · hci_bb v15 · Raspberry Pi Pico", "ue", "nxp", "NXP's controller hands the ACL data over H4 on its LPUART0 at 1 Mbaud to a Raspberry Pi Pico, which passes it to the UE PC over USB: about 10 ms per kB. The board pauses the Pico with RTS on J1-5 when it is busy. A 2 s hardware watchdog resets the board if it ever stops, and ble_watchdog.sh then re-attaches it.", 12, "uart"],
-    ["ble_ip_link 1", "UE PC · tun ble1 in n3iwue1", "ue", "host", "Rebuilds the packets from L2CAP and writes them into tun ble1 inside the n3iwue1 container.", 3],
+    ["BLE1 board", "FRDM-MCXW72 · hci_bb v15 (NXP Bluetooth LE controller)", "ue", "nxp", "The board's radio core receives the link-layer packets and acknowledges them in the same connection event. The host core reassembles them into ACL data and sends HCI ACL packets out of LPUART0 (J1-2) at 1 Mbaud. A 2 s hardware watchdog resets the board if it ever stops, and ble_watchdog.sh then re-attaches it.", 3, "uart"],
+    ["Raspberry Pi Pico", "MicroPython bridge · UART0 ↔ USB CDC", "ue", "pico", "Reads the board's bytes on GP1 (UART0 RX) and forwards them to the UE PC over USB. In the other direction it sends HCI commands and ACL data to the board on GP0, and pauses whenever the board raises RTS on J1-5 (Pico GP2, CTS). It does not parse H4. One Pico per BLE board: e661640843676727 for BLE1, e6616408439b6727 for BLE2.", 10, "uart"],
+    ["Linux HCI + L2CAP", "UE PC kernel · btattach H4 · adapter hci0", "ue", "host", "btattach turns the Pico's tty into Bluetooth adapter hci0. The kernel's H4 driver parses the packets, and its L2CAP layer reassembles the CoC SDU (one IP packet) and returns credits to the core side.", 1],
+    ["ble_ip_link 1", "UE PC · tun ble1 in n3iwue1", "ue", "host", "Reads each SDU from its L2CAP socket and writes it into tun ble1 inside the n3iwue1 container.", 3],
     ["n3iwue1", "free5GC n3iwue · gretun-id-2-1", "ue", "f5gc", "Decrypts the ESP, strips GRE, and delivers the UDP fragments on its PDU session interface.", 2],
     ["op1's handheld", "fdl-live-rx-cam1", "ue", "host", "Joins the 3 fragments and shows the frame. CAM2 takes the same path over BLE2 to n3iwue2 and op2.", 1],
   ],

@@ -8,7 +8,7 @@
   --bg: #eef1f4; --panel: #ffffff; --panel-2: #f5f7f9; --line: #d3d9e0;
   --ink: #17202b; --ink-2: #4b5866; --ink-3: #7a8693;
   --signal: #b86e00; --embb: #1f63d6; --urllc: #d0342c; --n3: #1d8a3c; --ok: #0f7a55; --warn: #b86e00;
-  --f5gc: #0d857c; --oai: #3d5a99; --nxp: #b86e00; --intel: #0068b5; --host: #6b7684;
+  --f5gc: #0d857c; --oai: #3d5a99; --nxp: #b86e00; --intel: #0068b5; --host: #6b7684; --pico: #c51a4a;
   --display: "Barlow Semi Condensed", "Arial Narrow", "Roboto Condensed", system-ui, sans-serif;
   --mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
   --r: 6px;
@@ -17,13 +17,13 @@
   :root:not([data-theme="light"]) {
     --bg: #0e141b; --panel: #151d26; --panel-2: #1b2530; --line: #2a3644; --ink: #e6ebf0; --ink-2: #a9b4bf; --ink-3: #74808c;
     --signal: #f0a830; --embb: #5b93f5; --urllc: #f0605a; --n3: #45c06a; --ok: #3dbb72; --warn: #f0a830;
-    --f5gc: #2fc0b3; --oai: #7e9be0; --nxp: #f0a830; --intel: #4ea3e6; --host: #8f9aa6; color-scheme: dark;
+    --f5gc: #2fc0b3; --oai: #7e9be0; --nxp: #f0a830; --intel: #4ea3e6; --host: #8f9aa6; --pico: #f0607f; color-scheme: dark;
   }
 }
 :root[data-theme="dark"] {
   --bg: #0e141b; --panel: #151d26; --panel-2: #1b2530; --line: #2a3644; --ink: #e6ebf0; --ink-2: #a9b4bf; --ink-3: #74808c;
   --signal: #f0a830; --embb: #5b93f5; --urllc: #f0605a; --n3: #45c06a; --ok: #3dbb72; --warn: #f0a830;
-  --f5gc: #2fc0b3; --oai: #7e9be0; --nxp: #f0a830; --intel: #4ea3e6; --host: #8f9aa6; color-scheme: dark;
+  --f5gc: #2fc0b3; --oai: #7e9be0; --nxp: #f0a830; --intel: #4ea3e6; --host: #8f9aa6; --pico: #f0607f; color-scheme: dark;
 }
 * { box-sizing: border-box; }
 body { background: var(--bg); color: var(--ink); font-family: var(--display); font-size: 15px; line-height: 1.4; }
@@ -135,6 +135,17 @@ svg .lat { font-family: var(--mono); font-size: 10.5px; font-weight: 600; fill: 
 @media (max-width: 980px) { .grid2 { grid-template-columns: minmax(0, 1fr); } }
 @media (max-width: 760px) { .net .side { grid-template-columns: minmax(0, 1fr); } }
 @media (prefers-reduced-motion: reduce) { svg .link .flow { animation: none; } }
+
+.cmpgrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 12px 22px; padding: 14px 18px 4px; }
+.cmpsvg { width: 100%; height: auto; display: block; }
+.cmpsvg .grid { stroke: var(--line); stroke-width: 1; }
+.cmpsvg .ax { font: 10.5px var(--mono); fill: var(--ink-3); }
+.cmpsvg .ct { font: 600 12.5px var(--display); fill: var(--ink); }
+.cmpsvg .dl { font: 600 11px var(--display); fill: var(--ink-2); }
+.cmpsvg .diag { stroke: var(--ink-3); stroke-dasharray: 2 4; stroke-width: 1.2; }
+.cmpsvg .pt { cursor: default; }
+.cmpkey { display: flex; flex-wrap: wrap; gap: 6px 18px; padding: 0 18px 12px; font-size: 12.5px; color: var(--ink-2); }
+.cmpkey i { display: inline-block; width: 22px; height: 0; border-top: 2px solid; vertical-align: middle; margin-right: 6px; }
 </style>
 
 <div class="wrap">
@@ -308,6 +319,148 @@ svg .lat { font-family: var(--mono); font-size: 10.5px; font-weight: 600; fill: 
       <span class="hint">Raw results: <code>~/oai/nrlink/logs/stress/run_nrue.json</code> (nrUEs alone) and <code>run_n3_all.json</code> (n3iwues alone, all four together) on the core PC.</span>
     </div>
   </section>
+  <section class="card" aria-label="NR against Bluetooth LE" id="compare">
+    <div class="hd"><h2>How much each way: maximum load, and NR against Bluetooth LE</h2><span class="meta">9 Nov 2026 · nrlink v4 · hci_bb v15 · iperf3 3.16 and ping, ext-dn 192.168.70.132 ↔ one UE</span></div>
+    <div class="bd">
+      <p style="margin:0;max-width:100ch"><b>The factory at its maximum, Trial 3</b> (LiDAR 4 Hz, AGV reports 50 Hz, video 2 fps, sampled for 5 min once settled). It offers about 124 kbit/s of NR uplink (LiDAR 77 + reports 47). The uplink carries <b>44.8 kbit/s</b>, split evenly at 22.4 per nrUE, and the rest queues: no scan or report reached the edge within the 60 s window. The downlink commands are small (13 kbit/s) and all arrive, median 109 ms, p90 195 ms. Each Bluetooth link carries about <b>42.5 kbit/s</b> of camera traffic, but only 0–2 % of the 2.5 kB frames arrive whole, at about 3 s round trip. Pace or drop: a frame with one lost fragment is lost. Trial 3 also leaves a backlog in the nrUEs' RLC uplink queues that outlives the demo. <code>docker restart oai-nrue1 oai-nrue2</code> clears it.</p>
+      <p style="margin:10px 0 0;max-width:100ch"><b>A fair comparison.</b> One source and one sink for both radios: <code>compare_links.py</code> runs the same iperf3 server in ext-dn and the same tests from inside each UE, one UE at a time, with the live demo stopped. The other UEs stay registered but idle. UDP datagrams are 500 B, rates rise from 10 to 120 kbit/s for 15 s each, and the queues drain between steps. Then come 30 s of TCP each way with pings alongside. Both paths carry the same IP packets end to end. The difference is what rides on air: NR adds a few bytes of PDCP, RLC and MAC per packet. Bluetooth adds about 80 B of IPsec ESP, GRE and an outer IP header (about 15 % at 500 B), plus L2CAP and 27 B link-layer packets. Bluetooth was run twice: with <code>ble_ip_link</code>'s usual 40 kbit/s pacing, and with pacing off (<code>ble_rate_kbps</code> = 0).</p>
+    </div>
+    <div class="cmpgrid">
+      <div><svg viewBox="0 0 470 300" class="cmpsvg" role="img" aria-label="Uplink · UE → ext-dn: kbit/s delivered against kbit/s offered">
+<text x="46" y="15" class="ct">Uplink · UE → ext-dn</text>
+<line x1="46" x2="456" y1="264.0" y2="264.0" class="grid"/><text x="40" y="267.5" class="ax" text-anchor="end">0</text>
+<text x="46.0" y="279" class="ax" text-anchor="middle">0</text>
+<line x1="46" x2="456" y1="227.4" y2="227.4" class="grid"/><text x="40" y="230.9" class="ax" text-anchor="end">20</text>
+<text x="109.1" y="279" class="ax" text-anchor="middle">20</text>
+<line x1="46" x2="456" y1="190.8" y2="190.8" class="grid"/><text x="40" y="194.3" class="ax" text-anchor="end">40</text>
+<text x="172.2" y="279" class="ax" text-anchor="middle">40</text>
+<line x1="46" x2="456" y1="154.2" y2="154.2" class="grid"/><text x="40" y="157.7" class="ax" text-anchor="end">60</text>
+<text x="235.2" y="279" class="ax" text-anchor="middle">60</text>
+<line x1="46" x2="456" y1="117.5" y2="117.5" class="grid"/><text x="40" y="121.0" class="ax" text-anchor="end">80</text>
+<text x="298.3" y="279" class="ax" text-anchor="middle">80</text>
+<line x1="46" x2="456" y1="80.9" y2="80.9" class="grid"/><text x="40" y="84.4" class="ax" text-anchor="end">100</text>
+<text x="361.4" y="279" class="ax" text-anchor="middle">100</text>
+<line x1="46" x2="456" y1="44.3" y2="44.3" class="grid"/><text x="40" y="47.8" class="ax" text-anchor="end">120</text>
+<text x="424.5" y="279" class="ax" text-anchor="middle">120</text>
+<text x="251.0" y="296" class="ax" text-anchor="middle">offered, kbit/s (UDP, 500 B)</text>
+<line x1="46.0" y1="264.0" x2="456.0" y2="26.0" class="diag"/><text x="418.2" y="37.0" class="ax" text-anchor="end">all delivered</text>
+<polyline points="77.5,246.1 109.1,228.1 140.6,211.5 172.2,192.6 203.7,184.0 235.2,184.4 298.3,183.4 361.4,183.1 424.5,182.7" fill="none" stroke="var(--embb)" stroke-width="2" stroke-linejoin="round"/>
+<circle cx="77.5" cy="246.1" r="4.5" fill="var(--embb)" stroke="var(--embb)" stroke-width="2" class="pt"><title>nrUE1: offered 10 kbit/s, delivered 9.8 kbit/s, loss 0 %, jitter 267.0 ms</title></circle>
+<circle cx="109.1" cy="228.1" r="4.5" fill="var(--embb)" stroke="var(--embb)" stroke-width="2" class="pt"><title>nrUE1: offered 20 kbit/s, delivered 19.6 kbit/s, loss 0 %, jitter 133.9 ms</title></circle>
+<circle cx="140.6" cy="211.5" r="4.5" fill="var(--embb)" stroke="var(--embb)" stroke-width="2" class="pt"><title>nrUE1: offered 30 kbit/s, delivered 28.7 kbit/s, loss 0 %, jitter 107.6 ms</title></circle>
+<circle cx="172.2" cy="192.6" r="4.5" fill="var(--embb)" stroke="var(--embb)" stroke-width="2" class="pt"><title>nrUE1: offered 40 kbit/s, delivered 39.0 kbit/s, loss 0 %, jitter 46.2 ms</title></circle>
+<circle cx="203.7" cy="184.0" r="4.5" fill="var(--panel)" stroke="var(--embb)" stroke-width="2" class="pt"><title>nrUE1: offered 50 kbit/s, delivered 43.7 kbit/s, loss 0 %, jitter 40.2 ms</title></circle>
+<circle cx="235.2" cy="184.4" r="4.5" fill="var(--panel)" stroke="var(--embb)" stroke-width="2" class="pt"><title>nrUE1: offered 60 kbit/s, delivered 43.5 kbit/s, loss 0 %, jitter 42.6 ms</title></circle>
+<circle cx="298.3" cy="183.4" r="4.5" fill="var(--panel)" stroke="var(--embb)" stroke-width="2" class="pt"><title>nrUE1: offered 80 kbit/s, delivered 44.0 kbit/s, loss 0 %, jitter 58.2 ms</title></circle>
+<circle cx="361.4" cy="183.1" r="4.5" fill="var(--panel)" stroke="var(--embb)" stroke-width="2" class="pt"><title>nrUE1: offered 100 kbit/s, delivered 44.2 kbit/s, loss 0 %, jitter 61.3 ms</title></circle>
+<circle cx="424.5" cy="182.7" r="4.5" fill="var(--panel)" stroke="var(--embb)" stroke-width="2" class="pt"><title>nrUE1: offered 120 kbit/s, delivered 44.4 kbit/s, loss 0 %, jitter 66.5 ms</title></circle>
+<text x="298.3" y="171.4" class="dl" text-anchor="middle">NR · nrUE1</text>
+<polyline points="77.5,245.7 109.1,227.8 140.6,209.4 172.2,204.9 203.7,204.9 235.2,205.2 298.3,205.0 361.4,204.9 424.5,205.0" fill="none" stroke="var(--n3)" stroke-width="2" stroke-linejoin="round"/>
+<circle cx="77.5" cy="245.7" r="4.5" fill="var(--n3)" stroke="var(--n3)" stroke-width="2" class="pt"><title>n3iwue1: offered 10 kbit/s, delivered 10.0 kbit/s, loss 0 %, jitter 17.4 ms</title></circle>
+<circle cx="109.1" cy="227.8" r="4.5" fill="var(--n3)" stroke="var(--n3)" stroke-width="2" class="pt"><title>n3iwue1: offered 20 kbit/s, delivered 19.8 kbit/s, loss 0 %, jitter 29.9 ms</title></circle>
+<circle cx="140.6" cy="209.4" r="4.5" fill="var(--n3)" stroke="var(--n3)" stroke-width="2" class="pt"><title>n3iwue1: offered 30 kbit/s, delivered 29.8 kbit/s, loss 0 %, jitter 10.4 ms</title></circle>
+<circle cx="172.2" cy="204.9" r="4.5" fill="var(--panel)" stroke="var(--n3)" stroke-width="2" class="pt"><title>n3iwue1: offered 40 kbit/s, delivered 32.3 kbit/s, loss 10 %, jitter 42.5 ms</title></circle>
+<circle cx="203.7" cy="204.9" r="4.5" fill="var(--panel)" stroke="var(--n3)" stroke-width="2" class="pt"><title>n3iwue1: offered 50 kbit/s, delivered 32.3 kbit/s, loss 26.1 %, jitter 48.0 ms</title></circle>
+<circle cx="235.2" cy="205.2" r="4.5" fill="var(--panel)" stroke="var(--n3)" stroke-width="2" class="pt"><title>n3iwue1: offered 60 kbit/s, delivered 32.1 kbit/s, loss 36.9 %, jitter 38.4 ms</title></circle>
+<circle cx="298.3" cy="205.0" r="4.5" fill="var(--panel)" stroke="var(--n3)" stroke-width="2" class="pt"><title>n3iwue1: offered 80 kbit/s, delivered 32.2 kbit/s, loss 50.7 %, jitter 28.5 ms</title></circle>
+<circle cx="361.4" cy="204.9" r="4.5" fill="var(--panel)" stroke="var(--n3)" stroke-width="2" class="pt"><title>n3iwue1: offered 100 kbit/s, delivered 32.3 kbit/s, loss 58.7 %, jitter 25.3 ms</title></circle>
+<circle cx="424.5" cy="205.0" r="4.5" fill="var(--panel)" stroke="var(--n3)" stroke-width="2" class="pt"><title>n3iwue1: offered 120 kbit/s, delivered 32.2 kbit/s, loss 64 %, jitter 29.1 ms</title></circle>
+<text x="298.3" y="227.0" class="dl" text-anchor="middle">Bluetooth, paced and unpaced</text>
+<polyline points="77.5,245.7 109.1,227.8 140.6,209.6 172.2,203.2 203.7,203.4 235.2,204.5 298.3,204.0 361.4,220.4 424.5,200.5" fill="none" stroke="var(--n3)" stroke-width="2" stroke-linejoin="round" stroke-dasharray="6 4"/>
+<circle cx="77.5" cy="245.7" r="4.5" fill="var(--n3)" stroke="var(--n3)" stroke-width="2" class="pt"><title>n3iwue1*: offered 10 kbit/s, delivered 10.0 kbit/s, loss 0 %, jitter 18.8 ms</title></circle>
+<circle cx="109.1" cy="227.8" r="4.5" fill="var(--n3)" stroke="var(--n3)" stroke-width="2" class="pt"><title>n3iwue1*: offered 20 kbit/s, delivered 19.8 kbit/s, loss 0 %, jitter 28.7 ms</title></circle>
+<circle cx="140.6" cy="209.6" r="4.5" fill="var(--n3)" stroke="var(--n3)" stroke-width="2" class="pt"><title>n3iwue1*: offered 30 kbit/s, delivered 29.7 kbit/s, loss 0 %, jitter 25.1 ms</title></circle>
+<circle cx="172.2" cy="203.2" r="4.5" fill="var(--panel)" stroke="var(--n3)" stroke-width="2" class="pt"><title>n3iwue1*: offered 40 kbit/s, delivered 33.2 kbit/s, loss 0 %, jitter 28.9 ms</title></circle>
+<circle cx="203.7" cy="203.4" r="4.5" fill="var(--panel)" stroke="var(--n3)" stroke-width="2" class="pt"><title>n3iwue1*: offered 50 kbit/s, delivered 33.1 kbit/s, loss 0 %, jitter 45.8 ms</title></circle>
+<circle cx="235.2" cy="204.5" r="4.5" fill="var(--panel)" stroke="var(--n3)" stroke-width="2" class="pt"><title>n3iwue1*: offered 60 kbit/s, delivered 32.5 kbit/s, loss 0.4 %, jitter 52.2 ms</title></circle>
+<circle cx="298.3" cy="204.0" r="4.5" fill="var(--panel)" stroke="var(--n3)" stroke-width="2" class="pt"><title>n3iwue1*: offered 80 kbit/s, delivered 32.8 kbit/s, loss 16.7 %, jitter 42.8 ms</title></circle>
+<circle cx="361.4" cy="220.4" r="4.5" fill="var(--panel)" stroke="var(--n3)" stroke-width="2" class="pt"><title>n3iwue1*: offered 100 kbit/s, delivered 23.8 kbit/s, loss 34.9 %, jitter 64.8 ms</title></circle>
+<circle cx="424.5" cy="200.5" r="4.5" fill="var(--panel)" stroke="var(--n3)" stroke-width="2" class="pt"><title>n3iwue1*: offered 120 kbit/s, delivered 34.7 kbit/s, loss 28.7 %, jitter 28.1 ms</title></circle>
+</svg></div>
+      <div><svg viewBox="0 0 470 300" class="cmpsvg" role="img" aria-label="Downlink · ext-dn → UE: kbit/s delivered against kbit/s offered">
+<text x="46" y="15" class="ct">Downlink · ext-dn → UE</text>
+<line x1="46" x2="456" y1="264.0" y2="264.0" class="grid"/><text x="40" y="267.5" class="ax" text-anchor="end">0</text>
+<text x="46.0" y="279" class="ax" text-anchor="middle">0</text>
+<line x1="46" x2="456" y1="227.4" y2="227.4" class="grid"/><text x="40" y="230.9" class="ax" text-anchor="end">20</text>
+<text x="109.1" y="279" class="ax" text-anchor="middle">20</text>
+<line x1="46" x2="456" y1="190.8" y2="190.8" class="grid"/><text x="40" y="194.3" class="ax" text-anchor="end">40</text>
+<text x="172.2" y="279" class="ax" text-anchor="middle">40</text>
+<line x1="46" x2="456" y1="154.2" y2="154.2" class="grid"/><text x="40" y="157.7" class="ax" text-anchor="end">60</text>
+<text x="235.2" y="279" class="ax" text-anchor="middle">60</text>
+<line x1="46" x2="456" y1="117.5" y2="117.5" class="grid"/><text x="40" y="121.0" class="ax" text-anchor="end">80</text>
+<text x="298.3" y="279" class="ax" text-anchor="middle">80</text>
+<line x1="46" x2="456" y1="80.9" y2="80.9" class="grid"/><text x="40" y="84.4" class="ax" text-anchor="end">100</text>
+<text x="361.4" y="279" class="ax" text-anchor="middle">100</text>
+<line x1="46" x2="456" y1="44.3" y2="44.3" class="grid"/><text x="40" y="47.8" class="ax" text-anchor="end">120</text>
+<text x="424.5" y="279" class="ax" text-anchor="middle">120</text>
+<text x="251.0" y="296" class="ax" text-anchor="middle">offered, kbit/s (UDP, 500 B)</text>
+<line x1="46.0" y1="264.0" x2="456.0" y2="26.0" class="diag"/><text x="418.2" y="37.0" class="ax" text-anchor="end">all delivered</text>
+<polyline points="77.5,245.5 109.1,227.4 140.6,208.9 172.2,190.8 203.7,172.3 235.2,154.7 298.3,119.0 361.4,93.2" fill="none" stroke="var(--embb)" stroke-width="2" stroke-linejoin="round"/>
+<circle cx="77.5" cy="245.5" r="4.5" fill="var(--embb)" stroke="var(--embb)" stroke-width="2" class="pt"><title>nrUE1: offered 10 kbit/s, delivered 10.1 kbit/s, loss 0 %, jitter 36.3 ms</title></circle>
+<circle cx="109.1" cy="227.4" r="4.5" fill="var(--embb)" stroke="var(--embb)" stroke-width="2" class="pt"><title>nrUE1: offered 20 kbit/s, delivered 20.0 kbit/s, loss 0 %, jitter 38.4 ms</title></circle>
+<circle cx="140.6" cy="208.9" r="4.5" fill="var(--embb)" stroke="var(--embb)" stroke-width="2" class="pt"><title>nrUE1: offered 30 kbit/s, delivered 30.1 kbit/s, loss 0 %, jitter 30.9 ms</title></circle>
+<circle cx="172.2" cy="190.8" r="4.5" fill="var(--embb)" stroke="var(--embb)" stroke-width="2" class="pt"><title>nrUE1: offered 40 kbit/s, delivered 40.0 kbit/s, loss 0 %, jitter 75.9 ms</title></circle>
+<circle cx="203.7" cy="172.3" r="4.5" fill="var(--embb)" stroke="var(--embb)" stroke-width="2" class="pt"><title>nrUE1: offered 50 kbit/s, delivered 50.1 kbit/s, loss 0 %, jitter 80.3 ms</title></circle>
+<circle cx="235.2" cy="154.7" r="4.5" fill="var(--embb)" stroke="var(--embb)" stroke-width="2" class="pt"><title>nrUE1: offered 60 kbit/s, delivered 59.7 kbit/s, loss 0 %, jitter 69.1 ms</title></circle>
+<circle cx="298.3" cy="119.0" r="4.5" fill="var(--embb)" stroke="var(--embb)" stroke-width="2" class="pt"><title>nrUE1: offered 80 kbit/s, delivered 79.2 kbit/s, loss 0 %, jitter 54.0 ms</title></circle>
+<circle cx="361.4" cy="93.2" r="4.5" fill="var(--panel)" stroke="var(--embb)" stroke-width="2" class="pt"><title>nrUE1: offered 100 kbit/s, delivered 93.3 kbit/s, loss 0 %, jitter 47.7 ms</title></circle>
+<text x="361.4" y="83.2" class="dl" text-anchor="end">NR · nrUE1</text>
+<polyline points="77.5,245.5 109.1,226.8 140.6,208.9 172.2,204.5 203.7,204.0 235.2,204.9 298.3,204.5 361.4,204.5 424.5,204.9" fill="none" stroke="var(--n3)" stroke-width="2" stroke-linejoin="round"/>
+<circle cx="77.5" cy="245.5" r="4.5" fill="var(--n3)" stroke="var(--n3)" stroke-width="2" class="pt"><title>n3iwue1: offered 10 kbit/s, delivered 10.1 kbit/s, loss 0 %, jitter 19.9 ms</title></circle>
+<circle cx="109.1" cy="226.8" r="4.5" fill="var(--n3)" stroke="var(--n3)" stroke-width="2" class="pt"><title>n3iwue1: offered 20 kbit/s, delivered 20.3 kbit/s, loss 0 %, jitter 40.2 ms</title></circle>
+<circle cx="140.6" cy="208.9" r="4.5" fill="var(--n3)" stroke="var(--n3)" stroke-width="2" class="pt"><title>n3iwue1: offered 30 kbit/s, delivered 30.1 kbit/s, loss 0 %, jitter 18.7 ms</title></circle>
+<circle cx="172.2" cy="204.5" r="4.5" fill="var(--panel)" stroke="var(--n3)" stroke-width="2" class="pt"><title>n3iwue1: offered 40 kbit/s, delivered 32.5 kbit/s, loss 9.2 %, jitter 39.6 ms</title></circle>
+<circle cx="203.7" cy="204.0" r="4.5" fill="var(--panel)" stroke="var(--n3)" stroke-width="2" class="pt"><title>n3iwue1: offered 50 kbit/s, delivered 32.8 kbit/s, loss 25.8 %, jitter 45.0 ms</title></circle>
+<circle cx="235.2" cy="204.9" r="4.5" fill="var(--panel)" stroke="var(--n3)" stroke-width="2" class="pt"><title>n3iwue1: offered 60 kbit/s, delivered 32.3 kbit/s, loss 36.1 %, jitter 30.5 ms</title></circle>
+<circle cx="298.3" cy="204.5" r="4.5" fill="var(--panel)" stroke="var(--n3)" stroke-width="2" class="pt"><title>n3iwue1: offered 80 kbit/s, delivered 32.5 kbit/s, loss 49.0 %, jitter 34.7 ms</title></circle>
+<circle cx="361.4" cy="204.5" r="4.5" fill="var(--panel)" stroke="var(--n3)" stroke-width="2" class="pt"><title>n3iwue1: offered 100 kbit/s, delivered 32.5 kbit/s, loss 57.4 %, jitter 26.7 ms</title></circle>
+<circle cx="424.5" cy="204.9" r="4.5" fill="var(--panel)" stroke="var(--n3)" stroke-width="2" class="pt"><title>n3iwue1: offered 120 kbit/s, delivered 32.3 kbit/s, loss 62.3 %, jitter 26.3 ms</title></circle>
+<text x="424.5" y="220.9" class="dl" text-anchor="end">Bluetooth, paced 40</text>
+<polyline points="77.5,245.5 109.1,226.8 140.6,209.3 172.2,191.3 203.7,190.8 235.2,187.8 298.3,192.8 361.4,189.9 424.5,190.8" fill="none" stroke="var(--n3)" stroke-width="2" stroke-linejoin="round" stroke-dasharray="6 4"/>
+<circle cx="77.5" cy="245.5" r="4.5" fill="var(--n3)" stroke="var(--n3)" stroke-width="2" class="pt"><title>n3iwue1*: offered 10 kbit/s, delivered 10.1 kbit/s, loss 0 %, jitter 20.8 ms</title></circle>
+<circle cx="109.1" cy="226.8" r="4.5" fill="var(--n3)" stroke="var(--n3)" stroke-width="2" class="pt"><title>n3iwue1*: offered 20 kbit/s, delivered 20.3 kbit/s, loss 0 %, jitter 34.3 ms</title></circle>
+<circle cx="140.6" cy="209.3" r="4.5" fill="var(--n3)" stroke="var(--n3)" stroke-width="2" class="pt"><title>n3iwue1*: offered 30 kbit/s, delivered 29.9 kbit/s, loss 0 %, jitter 22.2 ms</title></circle>
+<circle cx="172.2" cy="191.3" r="4.5" fill="var(--n3)" stroke="var(--n3)" stroke-width="2" class="pt"><title>n3iwue1*: offered 40 kbit/s, delivered 39.7 kbit/s, loss 0 %, jitter 22.7 ms</title></circle>
+<circle cx="203.7" cy="190.8" r="4.5" fill="var(--panel)" stroke="var(--n3)" stroke-width="2" class="pt"><title>n3iwue1*: offered 50 kbit/s, delivered 40.0 kbit/s, loss 0 %, jitter 16.9 ms</title></circle>
+<circle cx="235.2" cy="187.8" r="4.5" fill="var(--panel)" stroke="var(--n3)" stroke-width="2" class="pt"><title>n3iwue1*: offered 60 kbit/s, delivered 41.6 kbit/s, loss 0 %, jitter 31.2 ms</title></circle>
+<circle cx="298.3" cy="192.8" r="4.5" fill="var(--panel)" stroke="var(--n3)" stroke-width="2" class="pt"><title>n3iwue1*: offered 80 kbit/s, delivered 38.9 kbit/s, loss 9.2 %, jitter 37.3 ms</title></circle>
+<circle cx="361.4" cy="189.9" r="4.5" fill="var(--panel)" stroke="var(--n3)" stroke-width="2" class="pt"><title>n3iwue1*: offered 100 kbit/s, delivered 40.5 kbit/s, loss 16.6 %, jitter 26.5 ms</title></circle>
+<circle cx="424.5" cy="190.8" r="4.5" fill="var(--panel)" stroke="var(--n3)" stroke-width="2" class="pt"><title>n3iwue1*: offered 120 kbit/s, delivered 40.0 kbit/s, loss 24.9 %, jitter 46.5 ms</title></circle>
+<text x="424.5" y="180.8" class="dl" text-anchor="end">Bluetooth, unpaced</text>
+</svg></div>
+    </div>
+    <div class="cmpkey" aria-hidden="true">
+      <span><i style="border-color:var(--embb)"></i>NR, nrUE1 over the nrlink boards</span>
+      <span><i style="border-color:var(--n3)"></i>Bluetooth LE, n3iwue1, paced 40 kbit/s</span>
+      <span><i style="border-color:var(--n3);border-top-style:dashed"></i>Bluetooth LE, n3iwue1, unpaced</span>
+      <span>hollow point = loss ≥ 1 % or under 95 % of the offered rate delivered · hover a point for its numbers</span>
+    </div>
+    <div class="tbl" style="border-top:1px solid var(--line)">
+      <table>
+        <thead><tr><th>One UE at a time</th><th>Idle RTT · 56 / 500 / 1400 B</th><th>UDP up · clean / most</th><th>UDP down · clean / most</th><th>TCP up · down, kbit/s</th><th>RTT under TCP · up · down</th></tr></thead>
+        <tbody>
+<tr><td><span class="cls" style="background:var(--embb)">eMBB</span> nrUE1</td><td class="mono">502 ms · 533 ms · 687 ms</td><td class="mono">40 / 44</td><td class="mono">80 / 93</td><td class="mono">24 · 56</td><td class="mono">6831 ms · 3342 ms</td></tr>
+<tr><td><span class="cls" style="background:var(--urllc)">URLLC</span> nrUE2</td><td class="mono">478 ms · 603 ms · 695 ms</td><td class="mono">40 / 45</td><td class="mono">80 / 95</td><td class="mono">24 · 55</td><td class="mono">6841 ms · 3366 ms</td></tr>
+<tr><td><span class="cls" style="background:var(--n3)">N3GPP</span> n3iwue1 · paced 40</td><td class="mono">120 ms · 244 ms · 552 ms</td><td class="mono">30 / 32</td><td class="mono">30 / 33</td><td class="mono">27 · 16</td><td class="mono">505 ms · 302 ms</td></tr>
+<tr><td><span class="cls" style="background:var(--n3)">N3GPP</span> n3iwue2 · paced 40</td><td class="mono">110 ms · 256 ms · 561 ms</td><td class="mono">30 / 32</td><td class="mono">30 / 32</td><td class="mono">26 · 7</td><td class="mono">492 ms · 196 ms</td></tr>
+<tr><td><span class="cls" style="background:var(--n3)">N3GPP</span> n3iwue1 · unpaced</td><td class="mono">116 ms · 256 ms · 567 ms</td><td class="mono">30 / 35</td><td class="mono">40 / 42</td><td class="mono">24 · 18</td><td class="mono">596 ms · 431 ms</td></tr>
+<tr><td><span class="cls" style="background:var(--n3)">N3GPP</span> n3iwue2 · unpaced</td><td class="mono">112 ms · 329 ms · 1006 ms</td><td class="mono">20 / 22</td><td class="mono">– / 41</td><td class="mono">21 · 24</td><td class="mono">509 ms · 597 ms</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="bd" style="border-top:1px solid var(--line)">
+      <span class="label">What it says</span>
+      <ol class="next">
+        <li><b>Throughput: NR wins downlink, the two are close uplink.</b> NR carries 40 kbit/s up cleanly and saturates at 44, and 80 down cleanly with a 93–95 peak. Bluetooth carries 30 cleanly each way and saturates at 32–33 up. Down it reaches 40 once unpaced. NR's limit is its slot scheme: 2 uplink slots per period, and each one costs a 25 ms poll timeout. Bluetooth's limit is 27 B link-layer packets in 45 ms connection events, after the IPsec/GRE overhead. Our 40 kbit/s pacing sits just under that ceiling.</li>
+        <li><b>Latency: Bluetooth wins, by about 4×.</b> Idle round trip 110–120 ms against 480–500 ms, because an NR uplink packet needs a scheduling request and a grant first. Under TCP the gap grows: NR's deep RLC queues push its RTT to 3.3 s (down) and 6.8 s (up), against 0.2–0.6 s on Bluetooth, whose bulk queue is capped at 1 s.</li>
+        <li><b>TCP: NR is better downlink, Bluetooth slightly better uplink.</b> NR moves 55 kbit/s down and 23.5 up; Bluetooth 7–24 down and 21–27 up. Lost fragments stall TCP at Bluetooth's round trips.</li>
+        <li><b>Why the pacing stays.</b> Unpaced, the Bluetooth link gains about 1 kbit/s up and 8 down. But n3iwue2's IKE gave up during the uplink overload (30–40 kbit/s offered) and the watchdog had to restart it three times. The BLE2 board kept running (hci_bb v15), so this is the IKE keepalives drowning in a full controller buffer, not the old hang. Default pacing is back to 40 kbit/s; a downlink-only rise to about 50 is the obvious next try.</li>
+        <li><b>Shared air.</b> Both radios use the 2.4 GHz band, and nrlink's fixed channel (2402 MHz) is Bluetooth advertising channel 37. These runs were one radio at a time, so neither saw the other's traffic.</li>
+      </ol>
+      <span class="hint">Raw results on the UE PC and the core PC: <code>~/oai/nrlink/logs/compare/compare_20261109.json</code> (all four UEs, paced), <code>compare_20261109_ble_unpaced.json</code> (n3iwues, unpaced); Trial 3 telemetry <code>logs/factory/live2_core/trial3_20261109.jsonl</code>.</span>
+    </div>
+
+  </section>
   <section class="card" aria-label="Bluetooth board firmware">
     <div class="hd"><h2>Bluetooth board firmware: the hang hunt</h2><span class="meta">5–9 Nov 2026 · solved in v15 · every flash backed up first (UE PC ~/nxp/backups) · images and patches in ~/nxp/images</span></div>
     <div class="bd">
@@ -360,20 +513,21 @@ const $ = id => document.getElementById(id);
 const NS = "http://www.w3.org/2000/svg";
 function el(tag, attrs = {}, parent) { const e = document.createElementNS(NS, tag); for (const k in attrs) e.setAttribute(k, attrs[k]); if (parent) parent.appendChild(e); return e; }
 
-const OX = 150, VW = OX + 1840, VH = 880, W = 140, H = 72;
+const OX = 150, VW = OX + 1840, VH = 992, SHIFT = 112, W = 140, H = 72;
 const COL = { A: 30, B: 200, C: 370, D: 540, E: 710, F: 1005, G: 1170, H: 1335, I: 1500, J: 1665 };
 const ROW = { 1: 48, 2: 152, 3: 276, 4: 400, 5: 534, 6: 652 };
 const KC = { embb: "var(--embb)", urllc: "var(--urllc)", n3: "var(--n3)", mix: "var(--ink-2)" };
-const VEND = { f5gc: "free5GC", oai: "OpenAirInterface", host: "Host software", nxp: "NXP", intel: "Intel" };
+const VEND = { f5gc: "free5GC", oai: "OpenAirInterface", host: "Host software", pico: "Raspberry Pi", nxp: "NXP", intel: "Intel" };
 
 // lanes: [top, bottom, name, sub lines, colour token]
 const LANES = [
   [0, 250, "free5GC", ["v4.3.0", "core NFs, N3IWF", "and n3iwue"], "--f5gc"],
   [250, 372, "OpenAirInterface", ["gNB VNF + PNF", "nrUE, ext-dn"], "--oai"],
   [372, 498, "Host · Linux", ["nrlink Python,", "BlueZ, Docker"], "--host"],
-  [498, 630, "NXP", ["FRDM-MCXW72 boards", "nrlink v4 · hci_bb v15"], "--nxp"],
-  [630, 742, "Intel", ["8265 Bluetooth 4.2", "core PC adapter"], "--intel"],
-  [742, 880, "Over the air", ["2.4 GHz ISM band", "nrlink fixed 2402 MHz", "BLE hops 2404–2478"], "--ink-3"],
+  [498, 610, "Raspberry Pi", ["Pico · MicroPython", "HCI UART ↔ USB", "with RTS flow control"], "--pico"],
+  [610, 742, "NXP", ["FRDM-MCXW72 boards", "nrlink v4 · hci_bb v15"], "--nxp"],
+  [742, 854, "Intel", ["8265 Bluetooth 4.2", "core PC adapter"], "--intel"],
+  [854, 992, "Over the air", ["2.4 GHz ISM band", "nrlink fixed 2402 MHz", "BLE hops 2404–2478"], "--ink-3"],
 ];
 
 const NODES = {
@@ -398,12 +552,14 @@ const NODES = {
   ble2l: { c: "H", r: 4, v: "host", t: "ble_ip_link 2", s: "--connect · BlueZ", s2: "ble2 10.70.0.12", k: "n3", d: "Same as link 1, for BLE2 and n3iwue2." },
   ub1:   { c: "I", r: 4, v: "host", t: "ue_bridge 1", s: "nrlink · Python", s2: "udp/5001", k: "embb", d: "Hands downlink slots to nrUE1 and answers the gNB's polls with nrUE1's uplink." },
   ub2:   { c: "J", r: 4, v: "host", t: "ue_bridge 2", s: "nrlink · Python", s2: "udp/5002", k: "urllc", d: "Hands downlink slots to nrUE2 and answers the gNB's polls with nrUE2's uplink." },
-  bb1:   { c: "G", r: 5, v: "nxp", t: "BLE1 board", s: "NXP · hci_bb v15", s2: "3VWLILYT2A1AK", k: "n3", led: "g", ver: "hci_bb v15", d: "FRDM-MCXW72 running NXP's hci_bb Bluetooth LE controller, v15 since 9 Nov (hang fixed, 2 s hardware watchdog): HCI on LPUART0 at 1 Mbaud with RTS, bridged to USB by Raspberry Pi Pico e661640843676727 on the UE PC. The green LED shares the RTS pin. btattach makes it Linux adapter hci0 on the UE PC, and ble_attach.sh sets its address to 02:4E:52:65:B3:A1. A board reset loses the address, so ble_attach.sh must run again." },
+  bb1:   { c: "G", r: 5, v: "nxp", t: "BLE1 board", s: "NXP · hci_bb v15", s2: "3VWLILYT2A1AK", k: "n3", led: "g", ver: "hci_bb v15", d: "FRDM-MCXW72 running NXP's hci_bb Bluetooth LE controller, v15 since 9 Nov (hang fixed, 2 s hardware watchdog): HCI on LPUART0 at 1 Mbaud with RTS, bridged to USB by Pico 1 (Raspberry Pi lane above). The green LED shares the RTS pin. Its MCU-Link USB on the UE PC gives power, flashing and the isp recovery command. Through the Pico it is Linux adapter hci0 on the UE PC, and ble_attach.sh sets its address to 02:4E:52:65:B3:A1. A board reset loses the address, so ble_attach.sh must run again." },
   bb2:   { c: "H", r: 5, v: "nxp", t: "BLE2 board", s: "NXP · hci_bb v15", s2: "GLNAOWUSDREB4", k: "n3", led: "g", ver: "hci_bb v15", d: "Second hci_bb board, also on v15, through Pico e6616408439b6727 on the UE PC: Linux adapter hci1, address 02:4E:52:77:BF:5D. Its MCU-Link USB is on the core PC (power, flashing, isp), so a hardware reset of BLE2 has to come from the core PC." },
+  pi1:   { c: "G", y: 518, v: "pico", t: "Pico 1", s: "Raspberry Pi Pico", s2: "e661640843676727", k: "n3", noshift: 1, d: "Raspberry Pi Pico running a MicroPython 1.24.1 bridge (nxp-tools/pico/main.py, bridge v2): USB CDC to the UE PC on one side, UART0 at 1 Mbaud to the BLE1 board on the other. GP0 → J1-1 (board RX), GP1 ← J1-2 (board TX), GP2 ← J1-5 (the board's RTS, used as CTS), GND → J2-4. It forwards bytes both ways without parsing H4, holds PC → board bytes while the board raises RTS, and counts the holds (pico/stats.py). It is powered from its own USB; the board keeps its MCU-Link cable for power, flashing and the isp command." },
+  pi2:   { c: "H", y: 518, v: "pico", t: "Pico 2", s: "Raspberry Pi Pico", s2: "e6616408439b6727", k: "n3", noshift: 1, d: "Second Pico, the same bridge and wiring, for the BLE2 board. Both Picos are on the UE PC's USB, so all Bluetooth HCI traffic stays on the UE PC even though BLE2's MCU-Link is on the core PC." },
   u1b:   { c: "I", r: 5, v: "nxp", t: "UE1 board", s: "NXP · nrlink v4", s2: "2HOKMMVEX1WMP", k: "embb", led: "b1", d: "FRDM-MCXW72 radio for nrUE1, nrlink v4. Its LED blinks blue once when it is served (eMBB code: blue × 1)." },
   u2b:   { c: "J", r: 5, v: "nxp", t: "UE2 board", s: "NXP · nrlink v4", s2: "GBAMNH4BQ3CSB", k: "urllc", led: "r2", d: "FRDM-MCXW72 radio for nrUE2, nrlink v4. Its LED blinks red twice when it is served (URLLC code: red × 2)." },
 };
-for (const N of Object.values(NODES)) { N.x = COL[N.c]; N.y = ROW[N.r]; }
+for (const N of Object.values(NODES)) { N.x = COL[N.c]; if (N.y === undefined) N.y = ROW[N.r]; }
 const pt = (id, side, f = 0.5) => { const N = NODES[id]; return side === "t" ? [N.x + W * f, N.y] : side === "b" ? [N.x + W * f, N.y + H] : side === "l" ? [N.x, N.y + H * f] : [N.x + W, N.y + H * f]; };
 const vline = (a, b) => [pt(a, "b"), pt(b, "t")];
 
@@ -423,8 +579,10 @@ const LINKS = [
   { id: "bi", st: "up", k: "n3", pts: vline("blel", "intel"), lbl: [618, 580, "start", "USB HCI"], name: "HCI", cap: "USB, BlueZ", what: "BlueZ drives the Intel adapter. The listener has turned on connectable LE advertising and waits on PSM 0x0081." },
   { id: "t1", st: "up", k: "n3", pts: vline("n3ue1", "ble1l"), lbl: [1248, 300, "start", "tun ble1"], lbl2: "IKE · IPsec", name: "tun ble1", cap: "10.70.0.11", what: "ble_ip_link moved ble1 into the n3iwue1 container and routes the N3IWF through it, so IKEv2, IPsec and GRE all travel over Bluetooth. The container waits for that route before starting the n3iwue." },
   { id: "t2", st: "up", k: "n3", pts: vline("n3ue2", "ble2l"), lbl: [1413, 300, "start", "tun ble2"], lbl2: "IKE · IPsec", name: "tun ble2", cap: "10.70.0.12", what: "The same for n3iwue2." },
-  { id: "h1", lat: [1248, 500, "start", "6 ms cmd · 10 ms/kB"], latd: "HCI command round trip 5.6 ms through the Pico (1000 commands, worst 14 ms); a 1000 B ACL packet needs about 10 ms at 1 Mbaud",  st: "up", k: "n3", pts: vline("ble1l", "bb1"), lbl: [1248, 518, "start", "H4 1 Mbaud · Pico"], name: "HCI H4", cap: "Pico USB ↔ LPUART0, 1 Mbaud, RTS", what: "btattach -N -P h4 -S 1000000 on the Pico's tty. The Pico bridges USB to the board's LPUART0 (J1-1, J1-2) and pauses when the board raises RTS on J1-5." },
-  { id: "h2", lat: [1413, 500, "start", "same as BLE1"], latd: "HCI through the Pico with RTS on J1-5 since the wire moved on 9 Nov",  st: "up", k: "n3", pts: vline("ble2l", "bb2"), lbl: [1413, 518, "start", "H4 1 Mbaud · Pico"], name: "HCI H4", cap: "Pico USB ↔ LPUART0, 1 Mbaud, RTS", what: "Same as BLE1: btattach on Pico e6616408439b6727's tty; the board pauses the Pico with RTS on J1-5." },
+  { id: "c1", noshift: 1, st: "up", k: "n3", pts: [[1240, 472], [1240, 518]], lbl: [1248, 490, "start", "USB CDC · btattach"], lbl2: "H4 → hci0", name: "USB to the Pico", cap: "USB CDC serial (ttyACM)", what: "btattach -N -P h4 -S 1000000 on Pico 1's tty makes it Linux adapter hci0 on the UE PC. The baud rate setting has no effect on USB; the real 1 Mbaud is on the Pico's UART." },
+  { id: "c2", noshift: 1, st: "up", k: "n3", pts: [[1405, 472], [1405, 518]], lbl: [1413, 490, "start", "USB CDC · btattach"], lbl2: "H4 → hci1", name: "USB to the Pico", cap: "USB CDC serial (ttyACM)", what: "The same for Pico 2: Linux adapter hci1." },
+  { id: "h1", noshift: 1, lat: [1248, 630, "start", "6 ms cmd · 10 ms/kB"], latd: "HCI command round trip 5.6 ms through the Pico (1000 commands, worst 14 ms); a 1000 B ACL packet needs about 10 ms at 1 Mbaud",  st: "up", k: "n3", pts: [[1240, 590], [1240, 646]], lbl: [1248, 604, "start", "UART0 1 Mbaud · RTS"], name: "HCI H4 over UART", cap: "LPUART0, 1 Mbaud 8N1, RTS on J1-5", what: "Pico GP0/GP1 to the board's LPUART0 (J1-1 RX, J1-2 TX), and GP2 to J1-5 (PTA19, LPUART0_RTS_b). The board raises RTS when its receive FIFO fills and the Pico pauses. hci_bb v11 and later put PTA19 back to RTS after PLATFORM_InitLcl() had taken it for radio debug." },
+  { id: "h2", noshift: 1, lat: [1413, 630, "start", "same as BLE1"], latd: "the same as BLE1",  st: "up", k: "n3", pts: [[1405, 590], [1405, 646]], lbl: [1413, 604, "start", "UART0 1 Mbaud · RTS"], name: "HCI H4 over UART", cap: "LPUART0, 1 Mbaud 8N1, RTS on J1-5", what: "The same wiring for Pico 2 and the BLE2 board." },
   { id: "e1", st: "up", k: "embb", pts: vline("nrue1", "ub1"), lbl: [1578, 384, "start", "UDP"], name: "UDP", cap: "veth", what: "Downlink slots to nrUE1, and its uplink for each TX slot back." },
   { id: "e2", st: "up", k: "urllc", pts: vline("nrue2", "ub2"), lbl: [1743, 384, "start", "UDP"], name: "UDP", cap: "veth", what: "Downlink slots to nrUE2, and its uplink for each TX slot back." },
   { id: "s1", lat: [1578, 500, "start", "2.6 ms / 255 B"], latd: "2.6 ms per 255 B air packet at 1 Mbaud SLIP (computed)",  st: "up", k: "embb", pts: vline("ub1", "u1b"), lbl: [1578, 518, "start", "USB 1 Mbaud"], name: "USB VCOM", cap: "1 Mbaud SLIP", what: "Serial link from the UE1 board to its bridge." },
@@ -435,6 +593,13 @@ const LINKS = [
   { id: "ar2", lat: [928, 866, "middle", "DL one-way ≈ 111 ms · RTT 531 ms"], latd: "same radio and slots as UE1: 111 ms median one-way down (robot updates), 531 ms round trip",  st: "up", k: "urllc", pts: [[420, 606], [420, 850], [1735, 850], [1735, 606]], lbl: [928, 854, "middle", "UE2 · same 2402 MHz channel, time-shared"], name: "nrlink radio", cap: "GFSK 1 Mbit/s, one channel shared", what: "The same channel as UE1, time-shared by the gNB's polling." },
 ];
 
+const SH = y => (y >= 498 ? y + SHIFT : y);
+for (const N of Object.values(NODES)) if (!N.noshift) N.y = SH(N.y);
+for (const L of LINKS) if (!L.noshift) {
+  L.pts = L.pts.map(([x, y]) => [x, SH(y)]);
+  if (L.lat) L.lat = [L.lat[0], SH(L.lat[1]), ...L.lat.slice(2)];
+  if (L.lbl) L.lbl = [L.lbl[0], SH(L.lbl[1]), ...L.lbl.slice(2)];
+}
 let selected = { link: "ab1" };
 const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
 function build() {
@@ -451,7 +616,7 @@ function build() {
   el("line", { x1: OX, x2: OX, y1: 0, y2: VH, stroke: "var(--line)" }, svg);
   // PC frames
   for (const [x0, x1, t, s] of [[14, 866, "CORE PC · claudepc", "192.168.10.223"], [990, 1822, "UE PC · claudepc2", "192.168.10.232"]]) {
-    el("rect", { class: "pcframe", x: X(x0), y: 8, width: x1 - x0, height: 734, rx: 10 }, svg);
+    el("rect", { class: "pcframe", x: X(x0), y: 8, width: x1 - x0, height: 846, rx: 10 }, svg);
   }
   el("text", { class: "pctitle", x: X(1005), y: 34 }, svg).textContent = "UE PC · claudepc2";
   el("text", { class: "pcsub", x: X(1160), y: 34 }, svg).textContent = "192.168.10.232";
@@ -478,7 +643,7 @@ function build() {
     const g = el("g", { class: "node" + (N.pend ? " pending" : ""), "data-id": id, tabindex: 0, role: "button", "aria-label": `${N.t}, ${VEND[N.v]}` }, svg);
     el("rect", { class: "box", x: X(N.x), y: N.y, width: W, height: H, rx: 6 }, g);
     if (N.k && N.k !== "mix") el("rect", { x: X(N.x), y: N.y + 9, width: 3, height: H - 18, fill: KC[N.k] }, g);
-    const vt = { f5gc: "--f5gc", oai: "--oai", host: "--host", nxp: "--nxp", intel: "--intel" }[N.v];
+    const vt = { f5gc: "--f5gc", oai: "--oai", host: "--host", pico: "--pico", nxp: "--nxp", intel: "--intel" }[N.v];
     el("circle", { cx: X(N.x) + W - 12, cy: N.y + 13, r: 4.5, fill: `var(${vt})` }, g);
     el("text", { class: "n1", x: X(N.x) + 12, y: N.y + 24 }, g).textContent = N.t;
     el("text", { class: "n2", x: X(N.x) + 12, y: N.y + 43 }, g).textContent = N.s;

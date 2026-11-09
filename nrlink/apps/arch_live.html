@@ -10,7 +10,7 @@
   --bg: #eef1f4; --panel: #ffffff; --panel-2: #f5f7f9; --line: #d3d9e0;
   --ink: #17202b; --ink-2: #4b5866; --ink-3: #7a8693;
   --signal: #b86e00; --embb: #1f63d6; --urllc: #d0342c; --n3: #1d8a3c; --ok: #0f7a55; --warn: #b86e00;
-  --f5gc: #0d857c; --oai: #3d5a99; --nxp: #b86e00; --intel: #0068b5; --host: #6b7684;
+  --f5gc: #0d857c; --oai: #3d5a99; --nxp: #b86e00; --intel: #0068b5; --host: #6b7684; --pico: #c51a4a;
   --display: "Barlow Semi Condensed", "Arial Narrow", "Roboto Condensed", system-ui, sans-serif;
   --mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
   --r: 6px;
@@ -19,13 +19,13 @@
   :root:not([data-theme="light"]) {
     --bg: #0e141b; --panel: #151d26; --panel-2: #1b2530; --line: #2a3644; --ink: #e6ebf0; --ink-2: #a9b4bf; --ink-3: #74808c;
     --signal: #f0a830; --embb: #5b93f5; --urllc: #f0605a; --n3: #45c06a; --ok: #3dbb72; --warn: #f0a830;
-    --f5gc: #2fc0b3; --oai: #7e9be0; --nxp: #f0a830; --intel: #4ea3e6; --host: #8f9aa6; color-scheme: dark;
+    --f5gc: #2fc0b3; --oai: #7e9be0; --nxp: #f0a830; --intel: #4ea3e6; --host: #8f9aa6; --pico: #f0607f; color-scheme: dark;
   }
 }
 :root[data-theme="dark"] {
   --bg: #0e141b; --panel: #151d26; --panel-2: #1b2530; --line: #2a3644; --ink: #e6ebf0; --ink-2: #a9b4bf; --ink-3: #74808c;
   --signal: #f0a830; --embb: #5b93f5; --urllc: #f0605a; --n3: #45c06a; --ok: #3dbb72; --warn: #f0a830;
-  --f5gc: #2fc0b3; --oai: #7e9be0; --nxp: #f0a830; --intel: #4ea3e6; --host: #8f9aa6; color-scheme: dark;
+  --f5gc: #2fc0b3; --oai: #7e9be0; --nxp: #f0a830; --intel: #4ea3e6; --host: #8f9aa6; --pico: #f0607f; color-scheme: dark;
 }
 * { box-sizing: border-box; }
 body { background: var(--bg); color: var(--ink); font-family: var(--display); font-size: 15px; line-height: 1.4; }
@@ -373,20 +373,21 @@ const $ = id => document.getElementById(id);
 const NS = "http://www.w3.org/2000/svg";
 function el(tag, attrs = {}, parent) { const e = document.createElementNS(NS, tag); for (const k in attrs) e.setAttribute(k, attrs[k]); if (parent) parent.appendChild(e); return e; }
 
-const OX = 150, VW = OX + 1840, VH = 880, W = 140, H = 72;
+const OX = 150, VW = OX + 1840, VH = 992, SHIFT = 112, W = 140, H = 72;
 const COL = { A: 30, B: 200, C: 370, D: 540, E: 710, F: 1005, G: 1170, H: 1335, I: 1500, J: 1665 };
 const ROW = { 1: 48, 2: 152, 3: 276, 4: 400, 5: 534, 6: 652 };
 const KC = { embb: "var(--embb)", urllc: "var(--urllc)", n3: "var(--n3)", mix: "var(--ink-2)" };
-const VEND = { f5gc: "free5GC", oai: "OpenAirInterface", host: "Host software", nxp: "NXP", intel: "Intel" };
+const VEND = { f5gc: "free5GC", oai: "OpenAirInterface", host: "Host software", pico: "Raspberry Pi", nxp: "NXP", intel: "Intel" };
 
 // lanes: [top, bottom, name, sub lines, colour token]
 const LANES = [
   [0, 250, "free5GC", ["v4.3.0", "core NFs, N3IWF", "and n3iwue"], "--f5gc"],
   [250, 372, "OpenAirInterface", ["gNB VNF + PNF", "nrUE, ext-dn"], "--oai"],
   [372, 498, "Host · Linux", ["nrlink Python,", "BlueZ, Docker"], "--host"],
-  [498, 630, "NXP", ["FRDM-MCXW72 boards", "nrlink v4 · hci_bb v15"], "--nxp"],
-  [630, 742, "Intel", ["8265 Bluetooth 4.2", "core PC adapter"], "--intel"],
-  [742, 880, "Over the air", ["2.4 GHz ISM band", "nrlink fixed 2402 MHz", "BLE hops 2404–2478"], "--ink-3"],
+  [498, 610, "Raspberry Pi", ["Pico · MicroPython", "HCI UART ↔ USB", "with RTS flow control"], "--pico"],
+  [610, 742, "NXP", ["FRDM-MCXW72 boards", "nrlink v4 · hci_bb v15"], "--nxp"],
+  [742, 854, "Intel", ["8265 Bluetooth 4.2", "core PC adapter"], "--intel"],
+  [854, 992, "Over the air", ["2.4 GHz ISM band", "nrlink fixed 2402 MHz", "BLE hops 2404–2478"], "--ink-3"],
 ];
 
 const NODES = {
@@ -411,12 +412,14 @@ const NODES = {
   ble2l: { c: "H", r: 4, v: "host", t: "ble_ip_link 2", s: "--connect · BlueZ", s2: "ble2 10.70.0.12", k: "n3", d: "Same as link 1, for BLE2 and n3iwue2." },
   ub1:   { c: "I", r: 4, v: "host", t: "ue_bridge 1", s: "nrlink · Python", s2: "udp/5001", k: "embb", d: "Hands downlink slots to nrUE1 and answers the gNB's polls with nrUE1's uplink." },
   ub2:   { c: "J", r: 4, v: "host", t: "ue_bridge 2", s: "nrlink · Python", s2: "udp/5002", k: "urllc", d: "Hands downlink slots to nrUE2 and answers the gNB's polls with nrUE2's uplink." },
-  bb1:   { c: "G", r: 5, v: "nxp", t: "BLE1 board", s: "NXP · hci_bb v15", s2: "3VWLILYT2A1AK", k: "n3", led: "g", ver: "hci_bb v15", d: "FRDM-MCXW72 running NXP's hci_bb Bluetooth LE controller, v15 since 9 Nov (hang fixed, 2 s hardware watchdog): HCI on LPUART0 at 1 Mbaud with RTS, bridged to USB by Raspberry Pi Pico e661640843676727 on the UE PC. The green LED shares the RTS pin. btattach makes it Linux adapter hci0 on the UE PC, and ble_attach.sh sets its address to 02:4E:52:65:B3:A1. A board reset loses the address, so ble_attach.sh must run again." },
+  bb1:   { c: "G", r: 5, v: "nxp", t: "BLE1 board", s: "NXP · hci_bb v15", s2: "3VWLILYT2A1AK", k: "n3", led: "g", ver: "hci_bb v15", d: "FRDM-MCXW72 running NXP's hci_bb Bluetooth LE controller, v15 since 9 Nov (hang fixed, 2 s hardware watchdog): HCI on LPUART0 at 1 Mbaud with RTS, bridged to USB by Pico 1 (Raspberry Pi lane above). The green LED shares the RTS pin. Its MCU-Link USB on the UE PC gives power, flashing and the isp recovery command. Through the Pico it is Linux adapter hci0 on the UE PC, and ble_attach.sh sets its address to 02:4E:52:65:B3:A1. A board reset loses the address, so ble_attach.sh must run again." },
   bb2:   { c: "H", r: 5, v: "nxp", t: "BLE2 board", s: "NXP · hci_bb v15", s2: "GLNAOWUSDREB4", k: "n3", led: "g", ver: "hci_bb v15", d: "Second hci_bb board, also on v15, through Pico e6616408439b6727 on the UE PC: Linux adapter hci1, address 02:4E:52:77:BF:5D. Its MCU-Link USB is on the core PC (power, flashing, isp), so a hardware reset of BLE2 has to come from the core PC." },
+  pi1:   { c: "G", y: 518, v: "pico", t: "Pico 1", s: "Raspberry Pi Pico", s2: "e661640843676727", k: "n3", noshift: 1, d: "Raspberry Pi Pico running a MicroPython 1.24.1 bridge (nxp-tools/pico/main.py, bridge v2): USB CDC to the UE PC on one side, UART0 at 1 Mbaud to the BLE1 board on the other. GP0 → J1-1 (board RX), GP1 ← J1-2 (board TX), GP2 ← J1-5 (the board's RTS, used as CTS), GND → J2-4. It forwards bytes both ways without parsing H4, holds PC → board bytes while the board raises RTS, and counts the holds (pico/stats.py). It is powered from its own USB; the board keeps its MCU-Link cable for power, flashing and the isp command." },
+  pi2:   { c: "H", y: 518, v: "pico", t: "Pico 2", s: "Raspberry Pi Pico", s2: "e6616408439b6727", k: "n3", noshift: 1, d: "Second Pico, the same bridge and wiring, for the BLE2 board. Both Picos are on the UE PC's USB, so all Bluetooth HCI traffic stays on the UE PC even though BLE2's MCU-Link is on the core PC." },
   u1b:   { c: "I", r: 5, v: "nxp", t: "UE1 board", s: "NXP · nrlink v4", s2: "2HOKMMVEX1WMP", k: "embb", led: "b1", d: "FRDM-MCXW72 radio for nrUE1, nrlink v4. Its LED blinks blue once when it is served (eMBB code: blue × 1)." },
   u2b:   { c: "J", r: 5, v: "nxp", t: "UE2 board", s: "NXP · nrlink v4", s2: "GBAMNH4BQ3CSB", k: "urllc", led: "r2", d: "FRDM-MCXW72 radio for nrUE2, nrlink v4. Its LED blinks red twice when it is served (URLLC code: red × 2)." },
 };
-for (const N of Object.values(NODES)) { N.x = COL[N.c]; N.y = ROW[N.r]; }
+for (const N of Object.values(NODES)) { N.x = COL[N.c]; if (N.y === undefined) N.y = ROW[N.r]; }
 const pt = (id, side, f = 0.5) => { const N = NODES[id]; return side === "t" ? [N.x + W * f, N.y] : side === "b" ? [N.x + W * f, N.y + H] : side === "l" ? [N.x, N.y + H * f] : [N.x + W, N.y + H * f]; };
 const vline = (a, b) => [pt(a, "b"), pt(b, "t")];
 
@@ -436,8 +439,10 @@ const LINKS = [
   { id: "bi", st: "up", k: "n3", pts: vline("blel", "intel"), lbl: [618, 580, "start", "USB HCI"], name: "HCI", cap: "USB, BlueZ", what: "BlueZ drives the Intel adapter. The listener has turned on connectable LE advertising and waits on PSM 0x0081." },
   { id: "t1", st: "up", k: "n3", pts: vline("n3ue1", "ble1l"), lbl: [1248, 300, "start", "tun ble1"], lbl2: "IKE · IPsec", name: "tun ble1", cap: "10.70.0.11", what: "ble_ip_link moved ble1 into the n3iwue1 container and routes the N3IWF through it, so IKEv2, IPsec and GRE all travel over Bluetooth. The container waits for that route before starting the n3iwue." },
   { id: "t2", st: "up", k: "n3", pts: vline("n3ue2", "ble2l"), lbl: [1413, 300, "start", "tun ble2"], lbl2: "IKE · IPsec", name: "tun ble2", cap: "10.70.0.12", what: "The same for n3iwue2." },
-  { id: "h1", lat: [1248, 500, "start", "6 ms cmd · 10 ms/kB"], latd: "HCI command round trip 5.6 ms through the Pico (1000 commands, worst 14 ms); a 1000 B ACL packet needs about 10 ms at 1 Mbaud",  st: "up", k: "n3", pts: vline("ble1l", "bb1"), lbl: [1248, 518, "start", "H4 1 Mbaud · Pico"], name: "HCI H4", cap: "Pico USB ↔ LPUART0, 1 Mbaud, RTS", what: "btattach -N -P h4 -S 1000000 on the Pico's tty. The Pico bridges USB to the board's LPUART0 (J1-1, J1-2) and pauses when the board raises RTS on J1-5." },
-  { id: "h2", lat: [1413, 500, "start", "same as BLE1"], latd: "HCI through the Pico with RTS on J1-5 since the wire moved on 9 Nov",  st: "up", k: "n3", pts: vline("ble2l", "bb2"), lbl: [1413, 518, "start", "H4 1 Mbaud · Pico"], name: "HCI H4", cap: "Pico USB ↔ LPUART0, 1 Mbaud, RTS", what: "Same as BLE1: btattach on Pico e6616408439b6727's tty; the board pauses the Pico with RTS on J1-5." },
+  { id: "c1", noshift: 1, st: "up", k: "n3", pts: [[1240, 472], [1240, 518]], lbl: [1248, 490, "start", "USB CDC · btattach"], lbl2: "H4 → hci0", name: "USB to the Pico", cap: "USB CDC serial (ttyACM)", what: "btattach -N -P h4 -S 1000000 on Pico 1's tty makes it Linux adapter hci0 on the UE PC. The baud rate setting has no effect on USB; the real 1 Mbaud is on the Pico's UART." },
+  { id: "c2", noshift: 1, st: "up", k: "n3", pts: [[1405, 472], [1405, 518]], lbl: [1413, 490, "start", "USB CDC · btattach"], lbl2: "H4 → hci1", name: "USB to the Pico", cap: "USB CDC serial (ttyACM)", what: "The same for Pico 2: Linux adapter hci1." },
+  { id: "h1", noshift: 1, lat: [1248, 630, "start", "6 ms cmd · 10 ms/kB"], latd: "HCI command round trip 5.6 ms through the Pico (1000 commands, worst 14 ms); a 1000 B ACL packet needs about 10 ms at 1 Mbaud",  st: "up", k: "n3", pts: [[1240, 590], [1240, 646]], lbl: [1248, 604, "start", "UART0 1 Mbaud · RTS"], name: "HCI H4 over UART", cap: "LPUART0, 1 Mbaud 8N1, RTS on J1-5", what: "Pico GP0/GP1 to the board's LPUART0 (J1-1 RX, J1-2 TX), and GP2 to J1-5 (PTA19, LPUART0_RTS_b). The board raises RTS when its receive FIFO fills and the Pico pauses. hci_bb v11 and later put PTA19 back to RTS after PLATFORM_InitLcl() had taken it for radio debug." },
+  { id: "h2", noshift: 1, lat: [1413, 630, "start", "same as BLE1"], latd: "the same as BLE1",  st: "up", k: "n3", pts: [[1405, 590], [1405, 646]], lbl: [1413, 604, "start", "UART0 1 Mbaud · RTS"], name: "HCI H4 over UART", cap: "LPUART0, 1 Mbaud 8N1, RTS on J1-5", what: "The same wiring for Pico 2 and the BLE2 board." },
   { id: "e1", st: "up", k: "embb", pts: vline("nrue1", "ub1"), lbl: [1578, 384, "start", "UDP"], name: "UDP", cap: "veth", what: "Downlink slots to nrUE1, and its uplink for each TX slot back." },
   { id: "e2", st: "up", k: "urllc", pts: vline("nrue2", "ub2"), lbl: [1743, 384, "start", "UDP"], name: "UDP", cap: "veth", what: "Downlink slots to nrUE2, and its uplink for each TX slot back." },
   { id: "s1", lat: [1578, 500, "start", "2.6 ms / 255 B"], latd: "2.6 ms per 255 B air packet at 1 Mbaud SLIP (computed)",  st: "up", k: "embb", pts: vline("ub1", "u1b"), lbl: [1578, 518, "start", "USB 1 Mbaud"], name: "USB VCOM", cap: "1 Mbaud SLIP", what: "Serial link from the UE1 board to its bridge." },
@@ -448,6 +453,13 @@ const LINKS = [
   { id: "ar2", lat: [928, 866, "middle", "DL one-way ≈ 111 ms · RTT 531 ms"], latd: "same radio and slots as UE1: 111 ms median one-way down (robot updates), 531 ms round trip",  st: "up", k: "urllc", pts: [[420, 606], [420, 850], [1735, 850], [1735, 606]], lbl: [928, 854, "middle", "UE2 · same 2402 MHz channel, time-shared"], name: "nrlink radio", cap: "GFSK 1 Mbit/s, one channel shared", what: "The same channel as UE1, time-shared by the gNB's polling." },
 ];
 
+const SH = y => (y >= 498 ? y + SHIFT : y);
+for (const N of Object.values(NODES)) if (!N.noshift) N.y = SH(N.y);
+for (const L of LINKS) if (!L.noshift) {
+  L.pts = L.pts.map(([x, y]) => [x, SH(y)]);
+  if (L.lat) L.lat = [L.lat[0], SH(L.lat[1]), ...L.lat.slice(2)];
+  if (L.lbl) L.lbl = [L.lbl[0], SH(L.lbl[1]), ...L.lbl.slice(2)];
+}
 let selected = { link: "ab1" };
 const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
 function build() {
@@ -464,7 +476,7 @@ function build() {
   el("line", { x1: OX, x2: OX, y1: 0, y2: VH, stroke: "var(--line)" }, svg);
   // PC frames
   for (const [x0, x1, t, s] of [[14, 866, "CORE PC · claudepc", "192.168.10.223"], [990, 1822, "UE PC · claudepc2", "192.168.10.232"]]) {
-    el("rect", { class: "pcframe", x: X(x0), y: 8, width: x1 - x0, height: 734, rx: 10 }, svg);
+    el("rect", { class: "pcframe", x: X(x0), y: 8, width: x1 - x0, height: 846, rx: 10 }, svg);
   }
   el("text", { class: "pctitle", x: X(1005), y: 34 }, svg).textContent = "UE PC · claudepc2";
   el("text", { class: "pcsub", x: X(1160), y: 34 }, svg).textContent = "192.168.10.232";
@@ -491,7 +503,7 @@ function build() {
     const g = el("g", { class: "node" + (N.pend ? " pending" : ""), "data-id": id, tabindex: 0, role: "button", "aria-label": `${N.t}, ${VEND[N.v]}` }, svg);
     el("rect", { class: "box", x: X(N.x), y: N.y, width: W, height: H, rx: 6 }, g);
     if (N.k && N.k !== "mix") el("rect", { x: X(N.x), y: N.y + 9, width: 3, height: H - 18, fill: KC[N.k] }, g);
-    const vt = { f5gc: "--f5gc", oai: "--oai", host: "--host", nxp: "--nxp", intel: "--intel" }[N.v];
+    const vt = { f5gc: "--f5gc", oai: "--oai", host: "--host", pico: "--pico", nxp: "--nxp", intel: "--intel" }[N.v];
     el("circle", { cx: X(N.x) + W - 12, cy: N.y + 13, r: 4.5, fill: `var(${vt})` }, g);
     el("text", { class: "n1", x: X(N.x) + 12, y: N.y + 24 }, g).textContent = N.t;
     el("text", { class: "n2", x: X(N.x) + 12, y: N.y + 43 }, g).textContent = N.s;
