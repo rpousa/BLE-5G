@@ -305,9 +305,11 @@ static void Vcom_Poll(void)
     }
 }
 
+static void Hcibb_IrqPrioritiesBelowTick(void);
 void OSA_SysTickHook(uint32_t *frame)
 {
-    static uint32_t lastLoop, stillMs, rxWaitMs;
+    static uint32_t lastLoop, stillMs, rxWaitMs, ms;
+    if ((++ms % 1000U) == 0U) { Hcibb_IrqPrioritiesBelowTick(); }
     Vcom_Poll();
     /* v5: input sitting in the RX FIFO (or an overrun) for 1 s means nobody services the UART */
     if ((((HCI_UART->WATER & LPUART_WATER_RXCOUNT_MASK) >> LPUART_WATER_RXCOUNT_SHIFT) != 0U) ||
@@ -334,8 +336,23 @@ void OSA_SysTickHook(uint32_t *frame)
     {
         Diag_Report((mDiagKind != 0U) ? mDiagKind : 3U, frame[6], frame[5], frame[7],
                     (mDiagKind != 0U) ? mDiagInfo : stillMs);
+        /* v12: which interrupts are active (IABR: an interrupt that never returns stays active) and ICSR */
+        Diag_Report(7U, NVIC->IABR[0], NVIC->IABR[1], NVIC->IABR[2], SCB->ICSR);
     }
 }
+
+/* v12: SysTick (OSA's 1 kHz tick, which calls OSA_SysTickHook above) on the highest priority, every other interrupt
+ * one level below it, so a handler that never returns is preempted and reported (kinds 3 and 7) while the main loop
+ * is stuck. The hook re-applies the priorities every second: drivers set their own as they start. */
+static void Hcibb_IrqPrioritiesBelowTick(void)
+{
+    for (uint32_t i = 0U; i < (uint32_t)(NUMBER_OF_INT_VECTORS - 16); i++)
+    {
+        if (NVIC_GetPriority((IRQn_Type)i) == 0U) { NVIC_SetPriority((IRQn_Type)i, 1U); }
+    }
+    NVIC_SetPriority(SysTick_IRQn, 0U);
+}
+
 
 void HardFault_C(uint32_t *frame)
 {
@@ -927,7 +944,8 @@ void main_task(uint32_t param)
 
         PLATFORM_SetHciRxCallback(HCI_AppControllerRxCallback);
         PLATFORM_RegisterErrorCallback(Diag_PlatformError);
-        NVIC_SetPriority(SysTick_IRQn, 0U);   /* nrlink: the stall detector must preempt a stuck interrupt handler */
+        if ((SysTick->CTRL & SysTick_CTRL_ENABLE_Msk) == 0U) { (void)SysTick_Config(SystemCoreClock / 1000U); }
+        Hcibb_IrqPrioritiesBelowTick();       /* v12: the stall detector must preempt a stuck interrupt handler */
 
 #else
         if (gBleSuccess_c != DTM_Init((serial_handle_t) gSerMgrIf))
