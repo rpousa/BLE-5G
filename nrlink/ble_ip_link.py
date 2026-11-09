@@ -35,8 +35,28 @@ BDADDR_LE_PUBLIC, BDADDR_LE_RANDOM = 1, 2
 L2CAP_MTU = 1500
 # Shaping, tun -> Bluetooth on both ends. The hci_bb boards' 115200 baud UART has no flow control (MCU-Link VCOM):
 # driven past its capacity (about 40 kbit/s of IP each way was measured) the controller stopped answering the host.
-RATE_KBPS = 40
+RATE_KBPS = 40       # default pacing; hci_bb v15 boards (Pico, RTS) no longer need it, but it keeps queues short
 RATE_BPS = RATE_KBPS * 1000 / 8
+RATE_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "ble_rate_kbps")   # optional override, kbit/s;
+UNPACED_BPS = 250_000 / 8     # 0 = unpaced (L2CAP credits are the only limit); the bulk queue is then sized for this
+_rate = [RATE_BPS, 0.0, None]  # current bytes/s, last check, file mtime
+
+
+def rate_bps():
+    """Pacing rate in bytes/s, from RATE_FILE if present (re-read at most once a second); 0 = unpaced."""
+    now = time.monotonic()
+    if now - _rate[1] >= 1.0:
+        _rate[1] = now
+        try:
+            m = os.stat(RATE_FILE).st_mtime
+            if m != _rate[2]:
+                _rate[2] = m; _rate[0] = float(open(RATE_FILE).read().split()[0]) * 1000 / 8
+                log(f"pacing {'off' if not _rate[0] else f'{_rate[0] * 8 / 1000:g} kbit/s'} ({RATE_FILE})")
+        except (OSError, ValueError, IndexError):
+            if _rate[2] is not None:
+                log(f"pacing back to the default {RATE_KBPS} kbit/s")
+            _rate[0], _rate[2] = RATE_BPS, None
+    return _rate[0]
 BURST = 1600          # bytes: one full packet at air speed. Larger bursts reach the hci_bb board faster than its
                       # UART passes them on; lost PDUs never return their L2CAP credits and the link stalls for good
 MAX_WAIT = 1.0        # s of bulk data queued at the shaped rate (about 4 full packets); beyond that, drop
@@ -111,7 +131,6 @@ def pump(sock, tun, name):
     prio, bulk = collections.deque(), collections.deque()
     qlock = threading.Condition()
     drops = [0, 0]                       # [bulk over MAX_WAIT, send buffer full]
-    BULK_MAX = int(RATE_BPS * MAX_WAIT) + TUN_MTU
 
     def reader():  # tun -> queues
         bulk_bytes = 0
@@ -128,7 +147,7 @@ def pump(sock, tun, name):
                     if small:
                         if len(prio) < 256:
                             prio.append(p)
-                    elif sum(len(x) for x in bulk) + len(p) <= BULK_MAX:
+                    elif sum(len(x) for x in bulk) + len(p) <= int((rate_bps() or UNPACED_BPS) * MAX_WAIT) + TUN_MTU:
                         bulk.append(p)
                     else:
                         drops[0] += 1
@@ -152,11 +171,14 @@ def pump(sock, tun, name):
                     p = prio.popleft() if prio else bulk.popleft()
                 size = len(p)
                 now = time.monotonic()
-                tokens = min(BURST, tokens + (now - last) * RATE_BPS)
+                rb = rate_bps()
+                tokens = min(BURST, tokens + (now - last) * (rb or UNPACED_BPS))
                 last = now
-                if tokens < size:
-                    time.sleep((size - tokens) / RATE_BPS)
+                if rb and tokens < size:
+                    time.sleep((size - tokens) / rb)
                     tokens, last = size, time.monotonic()
+                elif not rb:
+                    tokens = max(tokens, size)
                 try:
                     sock.send(p)              # blocking: waits for L2CAP credits (MSG_DONTWAIT dropped every
                 except BlockingIOError:       # multi-PDU SDU even on an idle link)
@@ -202,7 +224,7 @@ def pump(sock, tun, name):
         sock.close()
     except OSError:
         pass
-    log(f"{name}: link down ({rx} packets received; dropped {drops[0]} bulk over {RATE_KBPS} kbit/s (queue > {MAX_WAIT} s), {drops[1]} on a full send buffer)")
+    log(f"{name}: link down ({rx} packets received; dropped {drops[0]} bulk over the pacing rate (queue > {MAX_WAIT} s), {drops[1]} on a full send buffer)")
 
 
 def advertise(hci):

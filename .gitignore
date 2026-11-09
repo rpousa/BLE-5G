@@ -4,3 +4,4 @@ logs/
 nrlink/media/
 deploy/free5gc/cert/
 *.elf
+nrlink/ble_rate_kbps
