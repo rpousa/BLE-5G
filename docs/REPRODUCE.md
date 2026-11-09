@@ -189,7 +189,22 @@ core PC:  apps/factory_dl.py send --scen logs/factory/scen --dst flow=ip ...   #
 
 ### 11.3 Factory floor, closed loop (live)
 This runs as part of `nrlink.sh live start`: `apps/factory2.py edge` on the core, and the robots, LiDAR and agent on the UE PC.
-The page switches between Trials 1–3, which are traffic levels.
+The page switches between Trials 1–3, which are traffic levels. Trial 3 is the maximum (LiDAR 4 Hz, reports 50 Hz, video 2 fps).
+To set it without the page: `curl -X POST -d '{"level":"L3"}' http://<core>:8090/level`.
+After Trial 2 or 3 the nrUEs keep an uplink backlog in RLC that outlives the demo: run `docker restart oai-nrue1 oai-nrue2`
+on the UE PC before any other test.
+
+### 11.3b NR against Bluetooth LE, same source and sink
+Stop the live demo on both PCs (`./nrlink.sh live stop`), then on the UE PC:
+```
+cd ~/oai/nrlink
+python3 compare_links.py --ues nrUE1,n3iwue1,nrUE2,n3iwue2 --out logs/compare/run.json
+```
+It runs the same tests against the same iperf3 servers in ext-dn (started by `stress.py servers` on the core), one UE at a time:
+pings at 56/472/1372 B, a UDP sweep of 500 B datagrams from 10 to 120 kbit/s up and down (15 s each, queues drained in between),
+then 30 s of TCP each way with pings alongside. About 8 minutes per UE.
+To take ble_ip_link's own pacing out of the comparison, write `0` to `~/oai/nrlink/ble_rate_kbps` on **both** PCs (kbit/s; 0 = unpaced,
+no file = the default 40). Both ends re-read it within a second. Remove it again afterwards: unpaced uplink overload can make an n3iwue's IKE give up.
 
 ### 11.4 hci_bb uplink load test (one BLE board)
 On the UE PC, as root:
@@ -227,4 +242,5 @@ The output shows:
 - Neither PC runs NTP and their clocks differ by hours. Only round trips are measured, except in the factory runs, which measure the clock offset.
 - The board connected through the other PC's USB (BLE2 in our setup) can only be hardware-reset from that PC: `~/nxp/venv/bin/python -I ~/nxp/hwreset.py <serial>`.
 - `bluetoothd` is masked on the UE PC while the links run (`ble_attach.sh` does it). Its GATT client triggers a failed pairing that drops the LE link.
+- `gnb_bridge.py` can be left holding a dead serial handle (its log fills with `write failed: [Errno 5]`, 0 slots/s) while the gNB board answers fine. Restart gnb_bridge, then both `ue_bridge.py` on the UE PC, then the nrUEs.
 - Never `pkill -f` a pattern that also matches your own shell's command line. Several scripts use bracket patterns for this reason.

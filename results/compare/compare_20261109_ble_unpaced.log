@@ -1,0 +1,67 @@
+16:57:09 == n3iwue1: idle pings
+16:57:54 n3iwue1: idle RTT 115.651 ms; 472 B 256.233; 1372 B 566.953
+16:58:11 n3iwue1: udp_ul 10 kbit/s -> 10.0 kbit/s, loss 0 %, jitter 18.8 ms 
+16:58:28 n3iwue1: udp_ul 20 kbit/s -> 19.8 kbit/s, loss 0 %, jitter 28.7 ms 
+16:58:45 n3iwue1: udp_ul 30 kbit/s -> 29.7 kbit/s, loss 0 %, jitter 25.1 ms 
+16:59:05 n3iwue1: udp_ul 40 kbit/s -> 33.2 kbit/s, loss 0 %, jitter 28.9 ms 
+16:59:29 n3iwue1: udp_ul 50 kbit/s -> 33.1 kbit/s, loss 0 %, jitter 45.8 ms 
+16:59:53 n3iwue1: udp_ul 60 kbit/s -> 32.5 kbit/s, loss 0.4 %, jitter 52.2 ms 
+17:00:17 n3iwue1: udp_ul 80 kbit/s -> 32.8 kbit/s, loss 16.7 %, jitter 42.8 ms 
+17:00:40 n3iwue1: udp_ul 100 kbit/s -> 23.8 kbit/s, loss 34.9 %, jitter 64.8 ms 
+17:01:03 n3iwue1: udp_ul 120 kbit/s -> 34.7 kbit/s, loss 28.7 %, jitter 28.1 ms 
+17:01:20 n3iwue1: udp_dl 10 kbit/s -> 10.1 kbit/s, loss 0 %, jitter 20.8 ms 
+17:01:38 n3iwue1: udp_dl 20 kbit/s -> 20.3 kbit/s, loss 0 %, jitter 34.3 ms 
+17:01:55 n3iwue1: udp_dl 30 kbit/s -> 29.9 kbit/s, loss 0 %, jitter 22.2 ms 
+17:02:12 n3iwue1: udp_dl 40 kbit/s -> 39.7 kbit/s, loss 0 %, jitter 22.7 ms 
+17:02:32 n3iwue1: udp_dl 50 kbit/s -> 40.0 kbit/s, loss 0 %, jitter 16.9 ms 
+17:02:55 n3iwue1: udp_dl 60 kbit/s -> 41.6 kbit/s, loss 0 %, jitter 31.2 ms 
+17:03:19 n3iwue1: udp_dl 80 kbit/s -> 38.9 kbit/s, loss 9.2 %, jitter 37.3 ms 
+17:03:42 n3iwue1: udp_dl 100 kbit/s -> 40.5 kbit/s, loss 16.6 %, jitter 26.5 ms 
+17:04:05 n3iwue1: udp_dl 120 kbit/s -> 40.0 kbit/s, loss 24.9 %, jitter 46.5 ms 
+17:04:43 n3iwue1: tcp_ul 23.8 kbit/s, RTT under load None ms 
+17:05:15 n3iwue1: tcp_dl 17.7 kbit/s, RTT under load None ms 
+17:05:16 == n3iwue2: idle pings
+17:06:02 n3iwue2: idle RTT 111.924 ms; 472 B 329.14; 1372 B 1005.944
+17:06:20 n3iwue2: udp_ul 10 kbit/s -> 10.0 kbit/s, loss 0 %, jitter 23.6 ms 
+17:06:37 n3iwue2: udp_ul 20 kbit/s -> 19.8 kbit/s, loss 0 %, jitter 30.1 ms 
+17:07:01 n3iwue2: udp_ul 30 kbit/s -> 21.6 kbit/s, loss 0 %, jitter 60.5 ms 
+17:08:17 n3iwue2: udp_ul 40 kbit/s -> None kbit/s, loss None %, jitter None ms interrupt - the client has terminated
+17:08:55 n3iwue2: udp_ul 50 kbit/s -> None kbit/s, loss None %, jitter None ms unable to receive results: 
+17:09:57 n3iwue2: udp_ul 60 kbit/s -> None kbit/s, loss None %, jitter None ms unable to receive results: 
+17:10:42 n3iwue2: udp_ul 80 kbit/s -> None kbit/s, loss None %, jitter None ms unable to connect to server - server may have stopped running or use a different port, firewall issue, etc.: Connection timed out
+17:11:12 n3iwue2: udp_ul 100 kbit/s -> None kbit/s, loss None %, jitter None ms gretun-id-2-1 has no PDU address
+17:11:42 n3iwue2: udp_ul 120 kbit/s -> None kbit/s, loss None %, jitter None ms gretun-id-2-1 has no PDU address
+17:11:58 n3iwue2: udp_dl 10 kbit/s -> None kbit/s, loss None %, jitter None ms gretun-id-2-1 has no PDU address
+17:12:34 n3iwue2: udp_dl 20 kbit/s -> 10.1 kbit/s, loss 0 %, jitter 183.5 ms 
+17:13:26 n3iwue2: udp_dl 30 kbit/s -> None kbit/s, loss None %, jitter None ms er_ms":	241.05013236203354,
+				"lost_packets":	0,
+				"packets":	2,
+				"lost_percent":	0,
+				"omitted":	false,
+				"sender":	false
+			}
+		}],
+	"end":	{
+	},
+	"error":	"unable to receive results: "
+}
+17:14:02 n3iwue2: udp_dl 40 kbit/s -> None kbit/s, loss None %, jitter None ms jitter_ms":	261.1236118383,
+				"lost_packets":	0,
+				"packets":	3,
+				"lost_percent":	0,
+				"omitted":	false,
+				"sender":	false
+			}
+		}],
+	"end":	{
+	},
+	"error":	"unable to receive results: "
+}
+17:14:24 n3iwue2: udp_dl 50 kbit/s -> 38.4 kbit/s, loss 0 %, jitter 17.8 ms 
+17:14:48 n3iwue2: udp_dl 60 kbit/s -> 39.2 kbit/s, loss 0 %, jitter 43.4 ms 
+17:15:11 n3iwue2: udp_dl 80 kbit/s -> 39.7 kbit/s, loss 6.9 %, jitter 37.7 ms 
+17:15:34 n3iwue2: udp_dl 100 kbit/s -> 40.8 kbit/s, loss 21.4 %, jitter 35.8 ms 
+17:15:57 n3iwue2: udp_dl 120 kbit/s -> 41.1 kbit/s, loss 25.3 %, jitter 27.5 ms 
+17:16:36 n3iwue2: tcp_ul 21.0 kbit/s, RTT under load None ms 
+17:17:08 n3iwue2: tcp_dl 24.0 kbit/s, RTT under load None ms 
+17:17:08 done -> logs/compare/compare_20261109_ble_unpaced.json

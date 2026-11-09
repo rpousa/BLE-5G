@@ -31,7 +31,7 @@ Raw data is in `results/`. Unless noted, the measurements are from ext-dn (192.1
 
 All four UEs together. NR: about 44 kbit/s up and 90 kbit/s down clean, with 3–10 s RTT under TCP.
 BLE: 20–30 kbit/s clean, with 0.4–1.1 s RTT under load. In the final 10-minute run two BLE board hangs happened, and `ble_watchdog.sh` recovered both.
-(The hangs were the hci_bb bug of section 6.)
+(The hangs were the hci_bb bug of section 8.)
 
 ## 4. Factory floor, downlink only, 6 Nov 2026 (`results/factory/run1`)
 
@@ -53,7 +53,40 @@ Two findings:
 
 During Trial 3 the free5GC N3IWF panicked once (`ngap handler.go:1272`). The live server now restarts it.
 
-## 6. The hci_bb board hang (5–9 Nov 2026, `results/hci_bb_loadtests/`)
+## 6. Factory floor at the maximum, Trial 3, 9 Nov 2026 (`results/factory/trial3_20261109.jsonl`)
+
+5 minutes of gnb_bridge and Bluetooth telemetry once the level had settled.
+
+| Flow | Offered | Carried | Result |
+|---|---|---|---|
+| NR uplink: LiDAR (nrUE1) + AGV reports (nrUE2) | ≈124 kbit/s | 44.8 kbit/s, 22.4 per UE | queue grows; nothing arrives within 60 s |
+| NR downlink: stop/go commands | ≈26 kbit/s at most | 13 kbit/s | 100 % delivered, median 109 ms, p90 195 ms |
+| Bluetooth downlink: video per link | 40 kbit/s + IPsec/GRE | ≈42.5 kbit/s on each link | 0–2 % of frames arrive whole; RTT ≈3 s |
+
+The slot rate fell to 37.5 slots/s (11.2 UL slots/s) with both uplinks saturated.
+
+## 7. NR against Bluetooth LE, same source and sink, 9 Nov 2026 (`results/compare/`)
+
+`compare_links.py`, one UE at a time, everything else idle. UDP datagrams are 500 B. "Clean" is the highest offered rate with under 1 % loss and at least 95 % delivered.
+
+| UE | Idle RTT 56 / 500 / 1400 B | UDP up clean / most | UDP down clean / most | TCP up · down | RTT under TCP up · down |
+|---|---|---|---|---|---|
+| nrUE1 (NR) | 502 / 533 / 687 ms | 40 / 44 kbit/s | 80 / 93 kbit/s | 23.5 · 55.8 kbit/s | 6.8 · 3.3 s |
+| nrUE2 (NR) | 478 / 603 / 695 ms | 40 / 45 | 80 / 95 | 23.5 · 55.4 | 6.8 · 3.4 s |
+| n3iwue1 (BLE, paced 40) | 120 / 244 / 552 ms | 30 / 32 | 30 / 33 | 26.9 · 15.5 | 0.50 · 0.30 s |
+| n3iwue2 (BLE, paced 40) | 110 / 256 / 561 ms | 30 / 32 | 30 / 32 | 26.2 · 7.0 | 0.49 · 0.20 s |
+| n3iwue1 (BLE, unpaced) | 116 / 256 / 567 ms | 30 / 35 | 40 / 42 | 23.8 · 17.7 | 0.60 · 0.43 s |
+| n3iwue2 (BLE, unpaced) | 112 / 329 / 1006 ms | 20 / 22 | – / 41 | 21.0 · 24.0 | 0.51 · 0.60 s |
+
+- **Throughput.** NR wins downlink (80 clean, about 95 at most), and the two are close uplink (NR 40–44, Bluetooth 30–33).
+  NR's limit is its slot scheme: 2 UL slots per period, each costing a 25 ms poll timeout.
+  Bluetooth's limit is 27 B link-layer packets in 45 ms connection events, after about 80 B of IPsec/GRE/IP overhead per packet. The 40 kbit/s pacing sits just under it.
+- **Latency.** Bluetooth is about 4× faster idle (110–120 ms against 480–500 ms; an NR uplink packet first needs a scheduling request and a grant).
+  Under TCP the gap grows: 3–7 s on NR (deep RLC queues), 0.2–0.6 s on Bluetooth (bulk queue capped at 1 s).
+- **Pacing.** Unpaced, Bluetooth gains about 1 kbit/s up and 8 down. But n3iwue2's IKE gave up three times under uplink overload, and the watchdog restarted it.
+  The board kept running (hci_bb v15). The default pacing of 40 kbit/s was put back.
+
+## 8. The hci_bb board hang (5–9 Nov 2026, `results/hci_bb_loadtests/`)
 
 **Symptom:** under PC → board (uplink) traffic, a BLE board stopped completely. There were no HCI events, no answer to vendor commands, and RTS stayed high. The radio core kept the LE link up.
 
