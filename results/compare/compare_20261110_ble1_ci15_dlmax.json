@@ -1,0 +1,110 @@
+{
+ "_meta": {
+  "sink": "192.168.70.132",
+  "udp_len": 500,
+  "tcp_win": "32K",
+  "rates_kbps": [
+   100,
+   150,
+   200,
+   250,
+   300
+  ],
+  "udp_s": 15,
+  "tcp_s": 30,
+  "tests": [
+   "udp_dl",
+   "tcp_dl"
+  ],
+  "note": "one UE at a time; all other UEs registered but idle; live factory stopped"
+ },
+ "n3iwue1": {
+  "class": "non-3GPP",
+  "t0": 1794351010.6681643,
+  "ping": {
+   "56": {
+    "sent": 30,
+    "size": 56,
+    "recv": 30,
+    "loss_pct": 0.0,
+    "min": 53.558,
+    "avg": 74.684,
+    "max": 113.583,
+    "mdev": 14.081
+   },
+   "472": {
+    "sent": 30,
+    "size": 472,
+    "recv": 30,
+    "loss_pct": 0.0,
+    "min": 133.78,
+    "avg": 157.662,
+    "max": 194.031,
+    "mdev": 12.817
+   },
+   "1372": {
+    "sent": 30,
+    "size": 1372,
+    "recv": 30,
+    "loss_pct": 0.0,
+    "min": 311.37,
+    "avg": 336.929,
+    "max": 374.683,
+    "mdev": 14.233
+   }
+  },
+  "udp_dl": [
+   {
+    "offered_kbps": 100,
+    "kbps": 100.0,
+    "loss_pct": 0,
+    "jitter_ms": 6.0,
+    "drain_s": 0.6
+   },
+   {
+    "offered_kbps": 150,
+    "kbps": 108.3,
+    "loss_pct": 12.3,
+    "jitter_ms": 13.8,
+    "drain_s": 0.6
+   },
+   {
+    "offered_kbps": 200,
+    "kbps": 107.2,
+    "loss_pct": 31.0,
+    "jitter_ms": 10.1,
+    "drain_s": 0.7
+   },
+   {
+    "offered_kbps": 250,
+    "kbps": 112.0,
+    "loss_pct": 39.6,
+    "jitter_ms": 9.1,
+    "drain_s": 0.6
+   },
+   {
+    "offered_kbps": 300,
+    "kbps": 110.9,
+    "loss_pct": 47.6,
+    "jitter_ms": 9.6,
+    "drain_s": 0.7
+   }
+  ],
+  "tcp_dl": {
+   "kbps": 102.4,
+   "bytes": 384112,
+   "secs": 30.0,
+   "retransmits": 51,
+   "rtt_loaded": {
+    "sent": 52,
+    "recv": 52,
+    "loss_pct": 0.0,
+    "min": 60.219,
+    "avg": 219.6,
+    "max": 515.794,
+    "mdev": 98.011
+   }
+  },
+  "t1": 1794351178.734097
+ }
+}

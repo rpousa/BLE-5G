@@ -1,0 +1,9 @@
+17:50:10 == n3iwue1: idle pings
+17:50:54 n3iwue1: idle RTT 74.684 ms; 472 B 157.662; 1372 B 336.929
+17:51:11 n3iwue1: udp_dl 100 kbit/s -> 100.0 kbit/s, loss 0 %, jitter 6.0 ms 
+17:51:30 n3iwue1: udp_dl 150 kbit/s -> 108.3 kbit/s, loss 12.3 %, jitter 13.8 ms 
+17:51:49 n3iwue1: udp_dl 200 kbit/s -> 107.2 kbit/s, loss 31.0 %, jitter 10.1 ms 
+17:52:08 n3iwue1: udp_dl 250 kbit/s -> 112.0 kbit/s, loss 39.6 %, jitter 9.1 ms 
+17:52:26 n3iwue1: udp_dl 300 kbit/s -> 110.9 kbit/s, loss 47.6 %, jitter 9.6 ms 
+17:52:58 n3iwue1: tcp_dl 102.4 kbit/s, RTT under load 219.6 ms 
+17:52:58 done -> logs/compare/compare_20261110_ble1_ci15_dlmax.json

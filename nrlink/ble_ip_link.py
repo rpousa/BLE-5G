@@ -35,7 +35,12 @@ BDADDR_LE_PUBLIC, BDADDR_LE_RANDOM = 1, 2
 L2CAP_MTU = 1500
 # Shaping, tun -> Bluetooth on both ends. The hci_bb boards' 115200 baud UART has no flow control (MCU-Link VCOM):
 # driven past its capacity (about 40 kbit/s of IP each way was measured) the controller stopped answering the host.
-RATE_KBPS = 40       # default pacing; hci_bb v15 boards (Pico, RTS) no longer need it, but it keeps queues short
+# Default pacing, per direction, sized for the 15 ms connection interval the UEs ask for (CONN_INTERVAL_MS):
+# measured 10 Nov 2026 with both links at 15 ms, IP over IPsec: 40 kbit/s up and 120 down clean (UDP, 500 B). The hci_bb v15
+# boards (Pico, RTS) no longer need pacing to stay up, but it keeps the queues (and the round trip) short.
+RATE_KBPS_DOWN = 150   # access point -> UE (the --listen side sends this way)
+RATE_KBPS_UP = 50      # UE -> access point
+RATE_KBPS = RATE_KBPS_UP   # set by main() from the role
 RATE_BPS = RATE_KBPS * 1000 / 8
 RATE_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "ble_rate_kbps")   # optional override, kbit/s;
 UNPACED_BPS = 250_000 / 8     # 0 = unpaced (L2CAP credits are the only limit); the bulk queue is then sized for this
@@ -59,6 +64,12 @@ def rate_bps():
     return _rate[0]
 BURST = 1600          # bytes: one full packet at air speed. Larger bursts reach the hci_bb board faster than its
                       # UART passes them on; lost PDUs never return their L2CAP credits and the link stalls for good
+CONN_INTERVAL_MS = 15    # UE: LE connection interval asked for after each connect (the default is 45 ms);
+                         # 1M PHY and 27 B link-layer packets are fixed by the core PC's Bluetooth 4.2 adapter,
+                         # so more connection events per second is what raises throughput (and cuts the RTT).
+                         # 7.5 ms is faster for one link alone, but with both UEs on the one Intel radio the
+                         # second link starved (TCP down 4.8 kbit/s); 15 ms on both keeps both near full speed.
+SUPERVISION_MS = 420     # kept as negotiated at connect
 MAX_WAIT = 1.0        # s of bulk data queued at the shaped rate (about 4 full packets); beyond that, drop
 TUN_QLEN = 64         # packets in the tun's ring (the reader thread drains it at once)
 SMALL = 300           # bytes: packets this small (pings, ACKs) are served before bulk
@@ -257,6 +268,61 @@ def readvertise(hci):
         s.close()
 
 
+def hci_index(addr):
+    """hciN (index) whose controller has this Bluetooth address, or None."""
+    s = socket.socket(AF_BLUETOOTH, socket.SOCK_RAW, 1)
+    try:
+        for i in range(16):
+            buf = bytearray(struct.pack("<H", i) + bytes(90))
+            try:
+                fcntl.ioctl(s.fileno(), 0x800448D3, buf)                 # HCIGETDEVINFO
+            except OSError:
+                continue
+            if ":".join(f"{b:02X}" for b in reversed(buf[10:16])) == addr.upper():
+                return i
+    finally:
+        s.close()
+    return None
+
+
+def set_interval(sock, local, name, ms=None):
+    """UE (LE central): ask for a ms connection interval on the link under this L2CAP socket (HCI LE Connection
+    Update), and log what the controllers agreed on. Per connection: run after every (re)connect."""
+    ms = CONN_INTERVAL_MS if ms is None else ms
+    if not ms:
+        return
+    try:
+        info = sock.getsockopt(6, 2, 8)                                     # SOL_L2CAP, L2CAP_CONNINFO
+        h = struct.unpack_from("<H", info)[0]
+        hci = hci_index(local)
+        if hci is None:
+            raise OSError(f"no hci device with address {local}")
+    except OSError as e:
+        log(f"{name}: connection interval left as is ({e})"); return
+    units, to = round(ms / 1.25), SUPERVISION_MS // 10
+    r = socket.socket(AF_BLUETOOTH, socket.SOCK_RAW, 1)
+    try:
+        r.setsockopt(0, 2, struct.pack("<IIIH2x", 1 << 4, 1 << 0x0F, 1 << (0x3E - 32), 0))  # Command Status, LE Meta
+        r.bind((hci,))
+        r.send(bytes([0x01, 0x13, 0x20, 14]) + struct.pack("<HHHHHHH", h, units, units, 0, to, 0, 0))
+        end = time.monotonic() + 4
+        while time.monotonic() < end:
+            r.settimeout(max(0.1, end - time.monotonic()))
+            ev = r.recv(64)
+            if ev[1] == 0x0F and ev[5:7] == b"\x13\x20" and ev[3] != 0:       # Command Status, refused
+                log(f"{name}: hci{hci} refused the connection update, status {ev[3]:#04x}"); return
+            if ev[1] == 0x3E and ev[3] == 0x03 and struct.unpack_from("<H", ev, 5)[0] == h:
+                st, iv = ev[4], struct.unpack_from("<H", ev, 7)[0]
+                log(f"{name}: connection interval {iv * 1.25:g} ms" if st == 0 else
+                    f"{name}: connection update failed, status {st:#04x}")
+                return
+        log(f"{name}: no answer to the connection update")
+    except OSError as e:
+        log(f"{name}: connection update: {e}")
+    finally:
+        r.close()
+
+
 def listen(args):
     local = args.local or "00:00:00:00:00:00"
     advertise(args.hci)
@@ -330,6 +396,7 @@ def connect(args):
             if s.recv(16) != HELLO + bytes([k]):
                 raise OSError("no hello from the access point")
             s.settimeout(None)
+            set_interval(s, args.local, name, args.interval)
             again = tun is not None
             if not again:
                 t = tun_open(name)
@@ -365,7 +432,11 @@ def main():
     ap.add_argument("--route", action="append", help="UE: route through the link (repeatable)")
     ap.add_argument("--peer-random", action="store_true", help="the access point uses a random (static) address")
     ap.add_argument("--hci", type=int, default=0, help="access point: adapter index to advertise on (default 0)")
+    ap.add_argument("--interval", type=float, help=f"UE: LE connection interval to ask for, ms (default {CONN_INTERVAL_MS}; 0 = keep)")
     args = ap.parse_args()
+    global RATE_KBPS, RATE_BPS
+    RATE_KBPS = RATE_KBPS_DOWN if args.listen else RATE_KBPS_UP
+    RATE_BPS = _rate[0] = RATE_KBPS * 1000 / 8
     if os.geteuid() != 0:
         sys.exit("needs root (tun, netns)")
     if args.connect and not args.local:

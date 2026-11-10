@@ -81,7 +81,7 @@ What happened here, at the user's request ("proceed"):
   `setsid nohup ./ble_watchdog.sh`, log logs/ble_watchdog.log) resets a hung board, re-attaches it and restarts its n3iwue + link;
   it also restarts an n3iwue whose PDU session is gone. Recovery < 40 s.
 - `ble_attach.sh`: btmgmt hangs with no terminal, so it now runs btmgmt via `script` with a timeout, and finds adapters with hciconfig.
-- `ble_ip_link.py`: paced to 40 kbit/s in the sender; small packets and IKE go first; bulk queue <= 1 s, tail drop.
+- `ble_ip_link.py`: paced in the sender (40 kbit/s until 10 Nov 2026; now 150 down, 50 up, with a 15 ms connection interval); small packets and IKE go first; bulk queue <= 1 s, tail drop.
 - `stress.py run [--quick] [--only ..] [--solo ..]`: core runs `stress.py servers` (iperf3 3.16 sidecars). Results in logs/stress/.
   n3iwue tests use iperf3 sidecars from nrlink-run:local. Do NOT clean up by image: the nrUEs use the same image (I removed them
   once that way and restarted them with docker compose).

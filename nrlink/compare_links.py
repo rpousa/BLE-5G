@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """compare_links.py: the same tests, one UE at a time, from the same source/sink (ext-dn 192.168.70.132, iperf3
 servers of stress.py), to compare 3GPP access over the nrlink GenFSK boards with non-3GPP access over Bluetooth LE.
-Everything else stays idle (stop the live factory first).  Usage: compare_links.py [--ues nrUE1,n3iwue1] [--out f.json]"""
+Everything else stays idle (stop the live factory first).  Usage: compare_links.py [--ues nrUE1,n3iwue1] [--rates 10,20,..] [--tests udp_ul,udp_dl,tcp_ul,tcp_dl] [--out f.json]"""
 import argparse, json, os, sys, time
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import stress as S
@@ -27,6 +27,7 @@ def test(ue, out):
     idle = r["ping"][56].get("avg") or 200
     S.log(f"{name}: idle RTT {idle} ms; 472 B {r['ping'][472].get('avg')}; 1372 B {r['ping'][1372].get('avg')}")
     for d, rev in (("udp_ul", False), ("udp_dl", True)):
+        if d not in A.tests: continue
         r[d] = []
         for k in RATES:
             x = S.iperf(ue, UDP_S, rev, k); x["drain_s"] = drain(ue, idle); r[d].append(x)
@@ -35,8 +36,9 @@ def test(ue, out):
                 break                                       # well past saturation: the rest only fills queues
             json.dump(out, open(A.out, "w"), indent=1)
     for d, rev in (("tcp_ul", False), ("tcp_dl", True)):
+        if d not in A.tests: continue
         r[d] = S.tcp_with_ping(ue, TCP_S, rev); drain(ue, idle)
-        S.log(f"{name}: {d} {r[d].get('kbps')} kbit/s, RTT under load {(r[d].get('ping') or {}).get('avg')} ms {r[d].get('error','')}")
+        S.log(f"{name}: {d} {r[d].get('kbps')} kbit/s, RTT under load {(r[d].get('rtt_loaded') or {}).get('avg')} ms {r[d].get('error','')}")
     r["t1"] = time.time(); json.dump(out, open(A.out, "w"), indent=1)
 
 
@@ -54,9 +56,13 @@ S.ping_sz = ping_sz
 
 if __name__ == "__main__":
     ap = argparse.ArgumentParser(); ap.add_argument("--ues", default="nrUE1,n3iwue1")
-    ap.add_argument("--out", default=f"logs/compare/compare_{time.strftime('%Y%m%d-%H%M%S')}.json"); A = ap.parse_args()
+    ap.add_argument("--out", default=f"logs/compare/compare_{time.strftime('%Y%m%d-%H%M%S')}.json")
+    ap.add_argument("--rates", help="UDP rates in kbit/s, comma-separated (default %s)" % ",".join(map(str, RATES)))
+    ap.add_argument("--tests", default="udp_ul,udp_dl,tcp_ul,tcp_dl", help="which tests, comma-separated")
+    A = ap.parse_args(); A.tests = A.tests.split(",")
+    if A.rates: RATES[:] = [int(x) for x in A.rates.split(",")]
     os.makedirs(os.path.dirname(A.out), exist_ok=True)
-    out = {"_meta": {"sink": S.DN, "udp_len": S.UDP_LEN, "tcp_win": S.WIN, "rates_kbps": RATES, "udp_s": UDP_S, "tcp_s": TCP_S,
+    out = {"_meta": {"sink": S.DN, "udp_len": S.UDP_LEN, "tcp_win": S.WIN, "rates_kbps": RATES, "udp_s": UDP_S, "tcp_s": TCP_S, "tests": A.tests,
                      "note": "one UE at a time; all other UEs registered but idle; live factory stopped"}}
     for n in A.ues.split(","):
         ue = next(u for u in S.UES if u[0] == n)

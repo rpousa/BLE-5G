@@ -22,8 +22,9 @@ Raw data is in `results/`. Unless noted, the measurements are from ext-dn (192.1
 ## 2. Non-3GPP access over Bluetooth LE
 
 - Idle, the core ↔ board link has an RTT of 86 ms (BLE1) and 75 ms (BLE2), with minimums of 53–54 ms. A 1000 B ping takes 335–443 ms.
-- Connection interval 45 ms, supervision timeout 420 ms. At most 27 B per link-layer packet (no data length extension), and about 9 exchanges per event at 40 kbit/s pacing.
-- `ble_ip_link.py` paces each link to 40 kbit/s. Small packets (pings, ACKs, IKE) go first, and the bulk queue is capped at 1 s.
+- Connection interval 45 ms until 10 Nov 2026, 15 ms since (section 7b); supervision timeout 420 ms. LE 1M and at most 27 B per link-layer packet:
+  the core PC's Intel 8265 (Bluetooth 4.2) has neither 2M nor data length extension, though the boards have both.
+- `ble_ip_link.py` paced each link to 40 kbit/s; since 10 Nov 2026 to 150 kbit/s down and 50 up. Small packets (pings, ACKs, IKE) go first, and the bulk queue is capped at 1 s.
   This cut the RTT under load from 2–5 s to 0.4–1.1 s.
 - n3iwue1/2 carry 20–30 kbit/s clean and saturate at about 32 kbit/s, measured on hci_bb v12 and v15.
 
@@ -85,6 +86,32 @@ The slot rate fell to 37.5 slots/s (11.2 UL slots/s) with both uplinks saturated
   Under TCP the gap grows: 3–7 s on NR (deep RLC queues), 0.2–0.6 s on Bluetooth (bulk queue capped at 1 s).
 - **Pacing.** Unpaced, Bluetooth gains about 1 kbit/s up and 8 down. But n3iwue2's IKE gave up three times under uplink overload, and the watchdog restarted it.
   The board kept running (hci_bb v15). The default pacing of 40 kbit/s was put back.
+
+## 7b. Faster Bluetooth links: the connection interval, 10 Nov 2026 (`results/compare/compare_20261110_*`)
+
+2M PHY and 251 B link-layer packets were tried first, on BLE1. The board accepted LE Set Data Length but nothing changed,
+and refused LE Set PHY (status 0x11): the peer, the core PC's Intel 8265, reports neither feature (LE remote features 0x1f).
+The connection interval is the knob that works. The UE asks for it with HCI LE Connection Update, and the Intel accepts.
+
+Same tests as section 7 (`compare_links.py`, one UE at a time, live demo stopped). UDP clean / most, kbit/s:
+
+| Setting | UE | Idle RTT | UDP up | UDP down | TCP up · down | RTT under TCP up · down |
+|---|---|---|---|---|---|---|
+| 45 ms, unpaced (baseline) | n3iwue1 | 111 ms | 30 / 35 | 40 / 43.5 | 25.4 · 21.4 | |
+| BLE1 at 15 ms, BLE2 at 45, unpaced | n3iwue1 | 67–75 ms | | 100 / 110 | fails · 102–105 | · 0.22 s |
+| BLE1 at 7.5 ms, BLE2 at 45, unpaced | n3iwue1 | 70 ms | 40 / 46 | 100 / 143 | · 105 | · 0.18 s |
+| both at 7.5 ms, paced 150/50 | n3iwue1 | 78 ms | 40 / 40 | (dips) / 103 | 39.1 · 104.9 | 0.45 · 0.19 s |
+| both at 7.5 ms, paced 150/50 | n3iwue2 | 198 ms | 40 / 41 | 60 / 74 | 14.0 · 4.8 | 0.87 · 0.94 s |
+| **both at 15 ms, paced 150/50 (the default now)** | n3iwue1 | 67 ms | 40 / 40.5 | 120 / 122 | 37.0 · 104.3 | 0.45 · 0.16 s |
+| **both at 15 ms, paced 150/50 (the default now)** | n3iwue2 | 87 ms | 40 / 40 | 20 (dips), 120 / 119 | 37.9 · 61.7 | 0.46 · 0.20 s |
+
+- One link alone is fastest at 7.5 ms: about 3× the downlink of 45 ms (143 against 43.5 at most) and faster than NR's downlink (80 / 95).
+- Two links at 7.5 ms on the one Intel radio starve the second (n3iwue2 TCP down 4.8 kbit/s). At 15 ms both stay near full speed,
+  so `ble_ip_link.py` asks for 15 ms (`CONN_INTERVAL_MS`, or `--interval`).
+- Uplink tops out at about 40 kbit/s whatever the interval (46 unpaced, 7.5 ms). The pacing (50 kbit/s of IP up) sits just above it.
+- Open: some downlink steps deliver far less than offered with 0 % loss and 100–300 ms jitter (n3iwue1 at 20–40 kbit/s
+  with both at 7.5 ms, n3iwue2 at 40–80 with both at 15 ms), and the next, faster step is clean again. It looks like a stall of a few seconds.
+  It was not seen at 45 ms or with one fast link. TCP uplink at 15 ms with BLE2 at 45 once lost n3iwue1's session (the watchdog restarted it).
 
 ## 8. The hci_bb board hang (5–9 Nov 2026, `results/hci_bb_loadtests/`)
 

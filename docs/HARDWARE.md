@@ -42,4 +42,7 @@ The MCU-Link USB-C cable stays connected. It powers the board and carries flashi
 ## Bluetooth access point (core PC)
 
 The core PC uses its built-in adapter, an Intel 8265 (Bluetooth 4.2) at hci0. Its LE advertising is connectable on 2402/2426/2480 MHz.
-Each UE board connects to it with an L2CAP CoC on PSM 0x0081, at LE 1M with a 45 ms connection interval.
+Each UE board connects to it with an L2CAP CoC on PSM 0x0081, at LE 1M. The link opens at a 45 ms connection interval, and
+`ble_ip_link.py` on the UE then asks for 15 ms (HCI LE Connection Update, after every connect).
+The adapter is the limit on the air side: it has no LE 2M PHY and no data length extension, so link-layer packets stay at 27 B
+(the hci_bb boards support both: LE features 0xFF 0x79, max data length 251 B).
