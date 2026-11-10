@@ -1,0 +1,49 @@
+19:24:47 == n3iwue1: idle pings
+19:25:32 n3iwue1: idle RTT 75.907 ms; 472 B 167.631; 1372 B 376.382
+19:25:48 n3iwue1: udp_ul 10 kbit/s -> 10.1 kbit/s, loss 0 %, jitter 23.5 ms 
+19:26:05 n3iwue1: udp_ul 20 kbit/s -> 19.9 kbit/s, loss 0 %, jitter 19.9 ms 
+19:26:22 n3iwue1: udp_ul 30 kbit/s -> 29.9 kbit/s, loss 0 %, jitter 16.1 ms 
+19:26:40 n3iwue1: udp_ul 40 kbit/s -> 35.8 kbit/s, loss 0 %, jitter 19.8 ms 
+19:26:58 n3iwue1: udp_ul 50 kbit/s -> 35.9 kbit/s, loss 17.0 %, jitter 34.5 ms 
+19:27:16 n3iwue1: udp_ul 60 kbit/s -> 36.5 kbit/s, loss 28.9 %, jitter 44.2 ms 
+19:27:35 n3iwue1: udp_ul 80 kbit/s -> 36.8 kbit/s, loss 44 %, jitter 32.7 ms 
+19:27:53 n3iwue1: udp_ul 100 kbit/s -> 36.7 kbit/s, loss 54.1 %, jitter 29.5 ms 
+19:28:11 n3iwue1: udp_ul 120 kbit/s -> 37.7 kbit/s, loss 60 %, jitter 31.9 ms 
+19:28:29 n3iwue1: udp_ul 150 kbit/s -> 37.7 kbit/s, loss 66.1 %, jitter 26.9 ms 
+19:28:46 n3iwue1: udp_dl 10 kbit/s -> 10.1 kbit/s, loss 0 %, jitter 20.6 ms 
+19:29:03 n3iwue1: udp_dl 20 kbit/s -> 20.0 kbit/s, loss 0 %, jitter 15.2 ms 
+19:29:19 n3iwue1: udp_dl 30 kbit/s -> 30.1 kbit/s, loss 0 %, jitter 14.6 ms 
+19:29:36 n3iwue1: udp_dl 40 kbit/s -> 40.0 kbit/s, loss 0 %, jitter 19.6 ms 
+19:29:52 n3iwue1: udp_dl 50 kbit/s -> 50.1 kbit/s, loss 0 %, jitter 11.5 ms 
+19:30:09 n3iwue1: udp_dl 60 kbit/s -> 60.0 kbit/s, loss 0 %, jitter 12.2 ms 
+19:30:27 n3iwue1: udp_dl 80 kbit/s -> 72.8 kbit/s, loss 0 %, jitter 14.6 ms 
+19:30:46 n3iwue1: udp_dl 100 kbit/s -> 74.7 kbit/s, loss 10.3 %, jitter 21.5 ms 
+19:31:05 n3iwue1: udp_dl 120 kbit/s -> 78.4 kbit/s, loss 20.3 %, jitter 13.6 ms 
+19:31:24 n3iwue1: udp_dl 150 kbit/s -> 78.7 kbit/s, loss 33.6 %, jitter 13.5 ms 
+19:31:58 n3iwue1: tcp_ul 32.1 kbit/s, RTT under load 451.674 ms 
+19:32:30 n3iwue1: tcp_dl 51.7 kbit/s, RTT under load 290.035 ms 
+19:32:30 == n3iwue2: idle pings
+19:33:15 n3iwue2: idle RTT 94.278 ms; 472 B 199.055; 1372 B 443.901
+19:33:31 n3iwue2: udp_ul 10 kbit/s -> 10.1 kbit/s, loss 0 %, jitter 15.2 ms 
+19:33:48 n3iwue2: udp_ul 20 kbit/s -> 19.9 kbit/s, loss 0 %, jitter 20.5 ms 
+19:34:05 n3iwue2: udp_ul 30 kbit/s -> 29.9 kbit/s, loss 0 %, jitter 13.6 ms 
+19:34:22 n3iwue2: udp_ul 40 kbit/s -> 39.4 kbit/s, loss 0 %, jitter 18.7 ms 
+19:34:39 n3iwue2: udp_ul 50 kbit/s -> 40.4 kbit/s, loss 10.1 %, jitter 32.0 ms 
+19:34:58 n3iwue2: udp_ul 60 kbit/s -> 38.3 kbit/s, loss 26.7 %, jitter 40.9 ms 
+19:35:16 n3iwue2: udp_ul 80 kbit/s -> 37.5 kbit/s, loss 43.7 %, jitter 31.0 ms 
+19:35:34 n3iwue2: udp_ul 100 kbit/s -> 36.8 kbit/s, loss 53.1 %, jitter 40.5 ms 
+19:35:52 n3iwue2: udp_ul 120 kbit/s -> 37.5 kbit/s, loss 59.1 %, jitter 20.7 ms 
+19:36:11 n3iwue2: udp_ul 150 kbit/s -> 34.0 kbit/s, loss 67.5 %, jitter 38.0 ms 
+19:36:28 n3iwue2: udp_dl 10 kbit/s -> 10.1 kbit/s, loss 0 %, jitter 16.2 ms 
+19:36:44 n3iwue2: udp_dl 20 kbit/s -> 20.3 kbit/s, loss 0 %, jitter 18.6 ms 
+19:37:01 n3iwue2: udp_dl 30 kbit/s -> 30.1 kbit/s, loss 0 %, jitter 19.0 ms 
+19:37:18 n3iwue2: udp_dl 40 kbit/s -> 40.3 kbit/s, loss 0 %, jitter 25.2 ms 
+19:37:35 n3iwue2: udp_dl 50 kbit/s -> 50.1 kbit/s, loss 0 %, jitter 12.0 ms 
+19:37:51 n3iwue2: udp_dl 60 kbit/s -> 60.3 kbit/s, loss 0 %, jitter 12.8 ms 
+19:38:08 n3iwue2: udp_dl 80 kbit/s -> 79.2 kbit/s, loss 0 %, jitter 10.7 ms 
+19:38:27 n3iwue2: udp_dl 100 kbit/s -> 79.7 kbit/s, loss 6.4 %, jitter 21.9 ms 
+19:38:46 n3iwue2: udp_dl 120 kbit/s -> 75.5 kbit/s, loss 22.9 %, jitter 17.4 ms 
+19:39:04 n3iwue2: udp_dl 150 kbit/s -> 73.3 kbit/s, loss 37.1 %, jitter 17.2 ms 
+19:39:38 n3iwue2: tcp_ul 31.6 kbit/s, RTT under load 448.625 ms 
+19:40:11 n3iwue2: tcp_dl 36.3 kbit/s, RTT under load 348.258 ms 
+19:40:11 done -> logs/compare/compare_20261110_ci15_18_paced.json

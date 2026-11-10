@@ -137,6 +137,17 @@ svg .lat { font-family: var(--mono); font-size: 10.5px; font-weight: 600; fill: 
 @media (max-width: 980px) { .grid2 { grid-template-columns: minmax(0, 1fr); } }
 @media (max-width: 760px) { .net .side { grid-template-columns: minmax(0, 1fr); } }
 @media (prefers-reduced-motion: reduce) { svg .link .flow { animation: none; } }
+
+.cmpgrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 12px 22px; padding: 14px 18px 4px; }
+.cmpsvg { width: 100%; height: auto; display: block; }
+.cmpsvg .grid { stroke: var(--line); stroke-width: 1; }
+.cmpsvg .ax { font: 10.5px var(--mono); fill: var(--ink-3); }
+.cmpsvg .ct { font: 600 12.5px var(--display); fill: var(--ink); }
+.cmpsvg .dl { font: 600 11px var(--display); fill: var(--ink-2); }
+.cmpsvg .diag { stroke: var(--ink-3); stroke-dasharray: 2 4; stroke-width: 1.2; }
+.cmpsvg .pt { cursor: default; }
+.cmpkey { display: flex; flex-wrap: wrap; gap: 6px 18px; padding: 0 18px 12px; font-size: 12.5px; color: var(--ink-2); }
+.cmpkey i { display: inline-block; width: 22px; height: 0; border-top: 2px solid; vertical-align: middle; margin-right: 6px; }
 </style><style>
 svg .node.down rect.box { stroke: var(--bad); stroke-width: 2.4; stroke-dasharray: 5 3; }
 svg .node .stdot { stroke: var(--panel); stroke-width: 1.5; }
@@ -190,17 +201,17 @@ svg .led.live { animation: none !important; transition: fill .05s; }
 
   <section class="grid2">
     <article class="card">
-      <div class="hd"><h2>Who is connected where</h2><span class="meta">6 Nov · 30 pings from ext-dn 192.168.70.132 (UEs) or the core (links), idle · addresses change when a UE re-registers</span></div>
+      <div class="hd"><h2>Who is connected where</h2><span class="meta">10 Nov · 30 pings from ext-dn 192.168.70.132 (UEs) or the core (links), idle and with the live demo at Trial 1 · 6 Nov at the 45 ms Bluetooth interval for comparison · addresses change when a UE re-registers</span></div>
       <div class="tbl">
         <table>
-          <thead><tr><th>UE</th><th>Access</th><th>Path to the core</th><th>Address</th><th>RTT</th><th>State</th></tr></thead>
+          <thead><tr><th>UE</th><th>Access</th><th>Path to the core</th><th>Address</th><th>RTT idle</th><th>Trial 1</th><th>6 Nov</th><th>State</th></tr></thead>
           <tbody>
-            <tr><td><span class="cls" style="background:var(--embb)">eMBB</span> nrUE1</td><td>5G NR</td><td>UE1 board 2HOKMMVEX1WMP → gNB board, 2402 MHz</td><td class="mono">12.1.1.27</td><td class="mono">529 ms (min 242)</td><td><span class="st up">up</span></td></tr>
-            <tr><td><span class="cls" style="background:var(--urllc)">URLLC</span> nrUE2</td><td>5G NR</td><td>UE2 board GBAMNH4BQ3CSB → gNB board, 2402 MHz</td><td class="mono">12.1.1.28</td><td class="mono">531 ms (min 287)</td><td><span class="st up">up</span></td></tr>
-            <tr><td><span class="cls" style="background:var(--n3)">N3GPP</span> n3iwue1</td><td>Untrusted non-3GPP</td><td>BLE1 board → core hci0 → N3IWF</td><td class="mono">12.1.1.66</td><td class="mono">96 ms (min 59)</td><td><span class="st up">up</span></td></tr>
-            <tr><td><span class="cls" style="background:var(--n3)">N3GPP</span> n3iwue2</td><td>Untrusted non-3GPP</td><td>BLE2 board → core hci0 → N3IWF</td><td class="mono">12.1.1.63</td><td class="mono">80 ms (min 56)</td><td><span class="st up">up</span></td></tr>
-            <tr><td>BLE1 link</td><td>Bluetooth LE</td><td>BLE1 board 02:4E:52:65:B3:A1 → core hci0</td><td class="mono">10.70.0.11</td><td class="mono">86 ms (min 54)</td><td><span class="st up">up</span></td></tr>
-            <tr><td>BLE2 link</td><td>Bluetooth LE</td><td>BLE2 board 02:4E:52:77:BF:5D → core hci0</td><td class="mono">10.70.0.12</td><td class="mono">75 ms (min 53)</td><td><span class="st up">up</span></td></tr>
+            <tr><td><span class="cls" style="background:var(--embb)">eMBB</span> nrUE1</td><td>5G NR</td><td>UE1 board 2HOKMMVEX1WMP → gNB board, 2402 MHz</td><td class="mono">12.1.1.182</td><td class="mono">583 ms (min 175)</td><td class="mono">930 ms</td><td class="mono">529 ms</td><td><span class="st up">up</span></td></tr>
+            <tr><td><span class="cls" style="background:var(--urllc)">URLLC</span> nrUE2</td><td>5G NR</td><td>UE2 board GBAMNH4BQ3CSB → gNB board, 2402 MHz</td><td class="mono">12.1.1.183</td><td class="mono">567 ms (min 178)</td><td class="mono">705 ms</td><td class="mono">531 ms</td><td><span class="st up">up</span></td></tr>
+            <tr><td><span class="cls" style="background:var(--n3)">N3GPP</span> n3iwue1</td><td>Untrusted non-3GPP</td><td>BLE1 board → core hci0 → N3IWF</td><td class="mono">12.1.1.167</td><td class="mono">112 ms (min 74)</td><td class="mono">93 ms</td><td class="mono">96 ms</td><td><span class="st up">up</span></td></tr>
+            <tr><td><span class="cls" style="background:var(--n3)">N3GPP</span> n3iwue2</td><td>Untrusted non-3GPP</td><td>BLE2 board → core hci0 → N3IWF</td><td class="mono">12.1.1.168</td><td class="mono">87 ms (min 68)</td><td class="mono">126 ms</td><td class="mono">80 ms</td><td><span class="st up">up</span></td></tr>
+            <tr><td>BLE1 link</td><td>Bluetooth LE</td><td>BLE1 board 02:4E:52:65:B3:A1 → core hci0</td><td class="mono">10.70.0.11</td><td class="mono">62 ms (min 39)</td><td class="mono">65 ms</td><td class="mono">86 ms</td><td><span class="st up">up</span></td></tr>
+            <tr><td>BLE2 link</td><td>Bluetooth LE</td><td>BLE2 board 02:4E:52:77:BF:5D → core hci0</td><td class="mono">10.70.0.12</td><td class="mono">62 ms (min 45)</td><td class="mono">66 ms</td><td class="mono">75 ms</td><td><span class="st up">up</span></td></tr>
           </tbody>
         </table>
       </div>
@@ -208,7 +219,7 @@ svg .led.live { animation: none !important; transition: fill .05s; }
         <span class="label">Next, in order</span>
         <ol class="next">
           <li><b>Make it one command.</b> These links were started by hand. <code>./nrlink.sh up --role ue --transport ble</code> does the same steps, but it needs root without a terminal on the UE PC: a sudoers rule like the core's, or run it from the user's terminal.</li>
-          <li><b>Bluetooth boards fixed (9 Nov).</b> Each BLE board's HCI runs on its LPUART0 through a Raspberry Pi Pico on the UE PC, at 1 Mbaud with RTS (<a href="https://claude.ai/artifact/KeuutgDBSWgMLrcWweP12F" target="_blank" rel="noopener">wiring page</a>). The old PC→board hang was a bus fault in the radio-core interrupt handler; hci_bb v15 fixes it, and both boards run it. BLE1 then carried 17 minutes of 30–70 kbit/s uplink without a hang. Still to do: rerun the full stress test, and find why n3iwue1's tunnel sometimes stops passing traffic under load while the board keeps working.</li>
+          <li><b>Bluetooth boards fixed (9 Nov).</b> Each BLE board's HCI runs on its LPUART0 through a Raspberry Pi Pico on the UE PC, at 1 Mbaud with RTS (<a href="https://claude.ai/artifact/KeuutgDBSWgMLrcWweP12F" target="_blank" rel="noopener">wiring page</a>). The old PC→board hang was a bus fault in the radio-core interrupt handler; hci_bb v15 fixes it, and both boards run it. BLE1 then carried 17 minutes of 30–70 kbit/s uplink without a hang. Since 10 Nov the UE side asks for a 15 ms (BLE1) and 18.75 ms (BLE2) connection interval after every connect, and the pacing is 150 kbit/s down and 50 up: about twice the downlink, and the round trip at about 60 ms (see the comparison below). Still to do: rerun the all-four-at-once stress test at these settings.</li>
           <li><b>Poll timeouts on the NR radio.</b> Half of gnb_bridge's polls wait out their 25 ms. That is about 0.7 s of every second, and it sets the slot rate (see <i>Slot schemes</i>).</li>
           <li><b>Later.</b> Split-role support for the dashboard, and NTP on both PCs (their clocks differ by about 8 h 50 min).</li>
         </ol>
@@ -236,7 +247,7 @@ svg .led.live { animation: none !important; transition: fill .05s; }
   </section>
 
   <section class="card" aria-label="Latency per hop">
-    <div class="hd"><h2>Latency per hop</h2><span class="meta">6 Nov 2026, idle network · ping round trips, one-way from the factory run, and serial or air times computed from bit rates</span></div>
+    <div class="hd"><h2>Latency per hop</h2><span class="meta">6 Nov 2026, idle network; the Bluetooth rows re-measured 10 Nov at the 15 / 18.75 ms intervals · ping round trips, one-way from the factory run, and serial or air times computed from bit rates</span></div>
     <div class="bd">
       <span class="label">Where one downlink packet spends its time, ext-dn → UE</span>
       <div class="bars" id="bars"></div>
@@ -253,13 +264,13 @@ svg .led.live { animation: none !important; transition: fill .05s; }
           <tr><td>PNF ↔ gnb_bridge, one slot</td><td>NR</td><td class="mono">10.6 ms</td><td class="mono">≈ 3.5 DL / 28 UL</td><td>94 slots/s from gnb_bridge statistics</td></tr>
           <tr><td>USB VCOM 1 Mbaud, each board</td><td>NR</td><td class="mono">2.6 ms</td><td class="mono">per 255 B packet</td><td>computed, SLIP framing</td></tr>
           <tr><td>GenFSK air, 2402 MHz</td><td>NR</td><td class="mono">2.1 ms</td><td class="mono">per 255 B packet</td><td>computed, 1 Mbit/s plus preamble, header, CRC</td></tr>
-          <tr><td>core ↔ BLE1 over Bluetooth</td><td>Bluetooth</td><td class="mono">86 ms</td><td class="mono">54 / 169 ms</td><td>30 pings, 56 B · 443 ms with 1000 B</td></tr>
-          <tr><td>core ↔ BLE2 over Bluetooth</td><td>Bluetooth</td><td class="mono">75 ms</td><td class="mono">53 / 95 ms</td><td>30 pings, 56 B · 335 ms with 1000 B</td></tr>
+          <tr><td>core ↔ BLE1 over Bluetooth</td><td>Bluetooth</td><td class="mono">62 ms</td><td class="mono">39 / 93 ms</td><td>10 Nov, 15 ms interval: 30 pings, 56 B · 417 ms with 1000 B. At 45 ms (6 Nov): 86 ms · 443 ms</td></tr>
+          <tr><td>core ↔ BLE2 over Bluetooth</td><td>Bluetooth</td><td class="mono">62 ms</td><td class="mono">45 / 82 ms</td><td>10 Nov, 18.75 ms interval: 30 pings, 56 B · 397 ms with 1000 B. At 45 ms (6 Nov): 75 ms · 335 ms</td></tr>
           <tr><td>HCI UART 1 Mbaud via a Pico, each BLE board</td><td>Bluetooth</td><td class="mono">5.6 ms</td><td class="mono">worst 14 ms · ≈ 10 ms per 1000 B</td><td>1000 HCI commands through the Pico, 9 Nov (BLE1); data time computed. Was 2.8 ms and 87 ms per 1000 B at 115200</td></tr>
-          <tr><td>ext-dn ↔ nrUE1, end to end</td><td>NR</td><td class="mono">529 ms</td><td class="mono">242 / 816 ms</td><td>30 pings · one-way down 111 ms (factory run)</td></tr>
-          <tr><td>ext-dn ↔ nrUE2, end to end</td><td>NR</td><td class="mono">531 ms</td><td class="mono">287 / 790 ms</td><td>30 pings</td></tr>
-          <tr><td>ext-dn ↔ n3iwue1, end to end</td><td>Bluetooth</td><td class="mono">96 ms</td><td class="mono">59 / 187 ms</td><td>30 pings, through IPsec and GRE</td></tr>
-          <tr><td>ext-dn ↔ n3iwue2, end to end</td><td>Bluetooth</td><td class="mono">80 ms</td><td class="mono">56 / 115 ms</td><td>30 pings</td></tr>
+          <tr><td>ext-dn ↔ nrUE1, end to end</td><td>NR</td><td class="mono">529 ms</td><td class="mono">242 / 816 ms</td><td>30 pings · one-way down 111 ms (factory run) · 10 Nov: 583 ms (min 175)</td></tr>
+          <tr><td>ext-dn ↔ nrUE2, end to end</td><td>NR</td><td class="mono">531 ms</td><td class="mono">287 / 790 ms</td><td>30 pings · 10 Nov: 567 ms (min 178)</td></tr>
+          <tr><td>ext-dn ↔ n3iwue1, end to end</td><td>Bluetooth</td><td class="mono">112 ms</td><td class="mono">74 / 149 ms</td><td>10 Nov: 30 pings, through IPsec and GRE, alongside the other pings of this table (76 ms in the comparison run, alone). 6 Nov: 96 ms</td></tr>
+          <tr><td>ext-dn ↔ n3iwue2, end to end</td><td>Bluetooth</td><td class="mono">87 ms</td><td class="mono">68 / 120 ms</td><td>10 Nov: 30 pings (94 ms in the comparison run). 6 Nov: 80 ms</td></tr>
         </tbody>
       </table>
     </div>
@@ -272,9 +283,9 @@ svg .led.live { animation: none !important; transition: fill .05s; }
       <p class="hint" style="max-width:100ch">The VNF schedules a normal NR TDD pattern: 30 kHz subcarriers, a 5 ms period of 10 slots, 7 downlink (D), 1 special (S: 6 DL symbols, 4 guard, 4 UL) and 2 uplink (U). The PNF does not run on a clock. It waits until gnb_bridge has broadcast the slot and, for S and U slots, polled both UE boards for their uplink. So a DL slot takes about 3.5 ms and an uplink slot about 28 ms, and the period stretches from 5 ms to about 106 ms (94 slots/s, 21× slower than real NR). Half of the polls wait out the full 25 ms timeout, which is most of the uplink slots' time.</p>
       <div style="overflow-x:auto"><svg class="slotsvg" id="slotnr" viewBox="0 0 1100 250" role="img" aria-label="One TDD period: nominal 10 slots in 5 ms, and the real timing on nrlink, 106 ms"></svg></div>
       <h3>Bluetooth LE: connection events on one shared adapter</h3>
-      <p class="hint" style="max-width:100ch">Each UE board is the central of its own LE connection to the core's Intel adapter. They talk only in connection events, every 45 ms (measured from the LE Enhanced Connection Complete event: interval 45 ms, latency 0, supervision timeout 420 ms). In each event the board sends first and the Intel adapter answers, with up to 27 B of data per packet (no data length extension), about 0.7 ms per exchange. Each event hops to the next of the 37 data channels (2404–2478 MHz). Both links share the Intel radio, so their events interleave. ble_ip_link paces each link to 40 kbit/s, about 225 B, or 9 packets, per event.</p>
-      <div style="overflow-x:auto"><svg class="slotsvg" id="slotble" viewBox="0 0 1100 170" role="img" aria-label="Two Bluetooth LE connections with 45 ms connection events interleaved on the Intel adapter"></svg></div>
-      <span class="hint">The offset between the two links' events is drawn at 20 ms for illustration; the controller chooses it. nrlink's fixed channel, 2402 MHz, is Bluetooth advertising channel 37, not one of the data channels.</span>
+      <p class="hint" style="max-width:100ch">Each UE board is the central of its own LE connection to the core's Intel adapter. They talk only in connection events. A link opens at a 45 ms interval (LE Enhanced Connection Complete: interval 45 ms, latency 0, supervision timeout 420 ms); since 10 Nov <code>ble_ip_link</code> then asks for <b>15 ms on BLE1 and 18.75 ms on BLE2</b> (HCI LE Connection Update). In each event the board sends first and the Intel adapter answers, with up to 27 B of data per packet, about 0.7 ms per exchange: the Intel 8265 (Bluetooth 4.2) has neither LE 2M nor data length extension, so more events per second is the only way to more throughput. Each event hops to the next of the 37 data channels (2404–2478 MHz). Both links share the Intel radio, and it serves one event at a time. Each board times its own link by its own clock, so the two links' events drift past each other. With equal intervals they stayed overlapped for minutes and one link starved (pings to 1.3 s, then the links swapped). With different intervals they meet only briefly, as drawn below. At 80 kbit/s a 15 ms event carries about 150 B, 5–6 exchanges.</p>
+      <div style="overflow-x:auto"><svg class="slotsvg" id="slotble" viewBox="0 0 1100 170" role="img" aria-label="Two Bluetooth LE connections, 15 ms and 18.75 ms connection intervals, sharing the Intel adapter"></svg></div>
+      <span class="hint">The starting offset between the two links is drawn at 8 ms for illustration; the boards choose it, and it drifts. Where the two links' events meet, the Intel adapter serves one and the other loses that event (marked ×). nrlink's fixed channel, 2402 MHz, is Bluetooth advertising channel 37, not one of the data channels.</span>
     </div>
   </section>
 
@@ -313,13 +324,162 @@ svg .led.live { animation: none !important; transition: fill .05s; }
       <span class="label">What the numbers say</span>
       <ol class="next">
         <li><b>5G NR path.</b> It carries about 44 kbit/s up and 90 kbit/s down without loss, shared by both nrUEs. Its queues are deep, so a TCP flow pushes the round trip from about 0.5 s to 3–10 s.</li>
-        <li><b>Bluetooth path.</b> Each link is shaped to 40 kbit/s on air. After IPsec and GRE overhead, 20–30 kbit/s of UDP gets through cleanly. TCP stays poor: one lost segment at these round trips stalls it for seconds.</li>
+        <li><b>Bluetooth path (5 Nov, 45 ms interval).</b> Each link is shaped to 40 kbit/s on air. After IPsec and GRE overhead, 20–30 kbit/s of UDP gets through cleanly. TCP stays poor: one lost segment at these round trips stalls it for seconds.</li>
         <li><b>Why the n3iwues dropped out.</b> The hci_bb boards talk to the PC over a 115200-baud UART with no flow control. Under load a board stops answering HCI (<code>command tx timeout</code>) while its radio link stays up, and nothing gets through. The n3iwue's IKE then gives up and the container exits. This happened 2 times in the final 10-minute run, and 4 times earlier in the day.</li>
         <li><b>What changed on the link.</b> <code>ble_ip_link.py</code> now paces traffic to 40 kbit/s itself. Small packets (pings, ACKs, IKE) go before bulk data, and the bulk queue keeps at most 1 s. That cut the Bluetooth RTT under load from 2–5 s to 0.4–1.1 s. <code>ble_watchdog.sh</code> resets a hung board and restarts its n3iwue; <code>stress.py</code> waits for the session and lists each recovery in its results.</li>
         <li><b>The real fix, done 9 Nov.</b> Each BLE board's HCI now runs on LPUART0 through a Raspberry Pi Pico at 1 Mbaud with RTS, and hci_bb v15 removes the hang itself (see the firmware section below). These numbers are from before it; a full rerun is still to do. A single-board uplink run on v15 (BLE1, 17 min, 30–70 kbit/s) had no hang and saturated at about 32 kbit/s.</li>
+        <li><b>10 Nov: shorter connection intervals.</b> At 15 / 18.75 ms and 150 / 50 kbit/s pacing, each n3iwue alone carries 30–40 kbit/s up and 60–80 down cleanly, and TCP 32 up and 36–52 down (see the comparison below). The all-four-at-once run has not been repeated at these settings.</li>
       </ol>
       <span class="hint">Raw results: <code>~/oai/nrlink/logs/stress/run_nrue.json</code> (nrUEs alone) and <code>run_n3_all.json</code> (n3iwues alone, all four together) on the core PC.</span>
     </div>
+  </section>
+  <section class="card" aria-label="NR against Bluetooth LE" id="compare">
+    <div class="hd"><h2>How much each way: maximum load, and NR against Bluetooth LE</h2><span class="meta">9 and 10 Nov 2026 · nrlink v4 · hci_bb v15 · iperf3 3.16 and ping, ext-dn 192.168.70.132 ↔ one UE</span></div>
+    <div class="bd">
+      <p style="margin:0;max-width:100ch"><b>The factory at its maximum, Trial 3</b> (9 Nov, Bluetooth still at 45 ms: LiDAR 4 Hz, AGV reports 50 Hz, video 2 fps, sampled for 5 min once settled). It offers about 124 kbit/s of NR uplink (LiDAR 77 + reports 47). The uplink carries <b>44.8 kbit/s</b>, split evenly at 22.4 per nrUE, and the rest queues: no scan or report reached the edge within the 60 s window. The downlink commands are small (13 kbit/s) and all arrive, median 109 ms, p90 195 ms. Each Bluetooth link carried about <b>42.5 kbit/s</b> of camera traffic, but only 0–2 % of the 2.5 kB frames arrived whole, at about 3 s round trip. Trial 3 also leaves a backlog in the nrUEs' RLC uplink queues that outlives the demo. <code>docker restart oai-nrue1 oai-nrue2</code> clears it.</p>
+      <p style="margin:10px 0 0;max-width:100ch"><b>The live demo again, 10 Nov, at the new Bluetooth intervals.</b> Camera video now gets through where it did not: Trial 1 100 % of frames whole, median 196 / 280 ms (camera 1 / 2; about 0.8 s at 45 ms); Trial 2 (20 kbit/s per link) <b>100 %, 185 / 254 ms</b> (33–40 % at about 6 s before); Trial 3 (40 kbit/s per link) <b>68 %</b> at 5.4 s (0–2 % before). With both cameras streaming at once the two links share the Intel radio, so each carries about 30 kbit/s of video, well under the 60–80 one link reaches alone below. The NR side is unchanged: at Trials 2 and 3 the LiDAR uplink still queues for over a minute.</p>
+      <p style="margin:10px 0 0;max-width:100ch"><b>A fair comparison.</b> One source and one sink for both radios: <code>compare_links.py</code> runs the same iperf3 server in ext-dn and the same tests from inside each UE, one UE at a time, with the live demo stopped. The other UEs stay registered but idle. UDP datagrams are 500 B, rates rise from 10 to 150 kbit/s for 15 s each, and the queues drain between steps. Then come 30 s of TCP each way with pings alongside. Both paths carry the same IP packets end to end. The difference is what rides on air: NR adds a few bytes of PDCP, RLC and MAC per packet. Bluetooth adds about 80 B of IPsec ESP, GRE and an outer IP header (about 15 % at 500 B), plus L2CAP and 27 B link-layer packets.</p>
+      <p style="margin:10px 0 0;max-width:100ch"><b>Bluetooth, before and now.</b> On 9 Nov the links ran at the 45 ms connection interval they open with, and <code>ble_ip_link</code> paced each to 40 kbit/s. Since 10 Nov the UE asks for <b>15 ms (BLE1) and 18.75 ms (BLE2)</b> after every connect, and the pacing is 150 kbit/s down and 50 up. 2M PHY and 251 B link-layer packets were tried first and are not possible: the core PC's Intel 8265 (Bluetooth 4.2) supports neither, although the NXP boards do.</p>
+    </div>
+    <div class="cmpgrid">
+      <div><svg viewBox="0 0 470 300" class="cmpsvg" role="img" aria-label="Uplink · UE → ext-dn: kbit/s delivered against kbit/s offered">
+<text x="46" y="15" class="ct">Uplink · UE → ext-dn</text>
+<line x1="46" x2="456" y1="264.0" y2="264.0" class="grid"/><text x="40" y="267.5" class="ax" text-anchor="end">0</text>
+<text x="46.0" y="279" class="ax" text-anchor="middle">0</text>
+<line x1="46" x2="456" y1="234.2" y2="234.2" class="grid"/><text x="40" y="237.8" class="ax" text-anchor="end">20</text>
+<line x1="46" x2="456" y1="204.5" y2="204.5" class="grid"/><text x="40" y="208.0" class="ax" text-anchor="end">40</text>
+<text x="148.5" y="279" class="ax" text-anchor="middle">40</text>
+<line x1="46" x2="456" y1="174.8" y2="174.8" class="grid"/><text x="40" y="178.2" class="ax" text-anchor="end">60</text>
+<line x1="46" x2="456" y1="145.0" y2="145.0" class="grid"/><text x="40" y="148.5" class="ax" text-anchor="end">80</text>
+<text x="251.0" y="279" class="ax" text-anchor="middle">80</text>
+<line x1="46" x2="456" y1="115.2" y2="115.2" class="grid"/><text x="40" y="118.8" class="ax" text-anchor="end">100</text>
+<line x1="46" x2="456" y1="85.5" y2="85.5" class="grid"/><text x="40" y="89.0" class="ax" text-anchor="end">120</text>
+<text x="353.5" y="279" class="ax" text-anchor="middle">120</text>
+<line x1="46" x2="456" y1="55.8" y2="55.8" class="grid"/><text x="40" y="59.2" class="ax" text-anchor="end">140</text>
+<line x1="46" x2="456" y1="26.0" y2="26.0" class="grid"/><text x="40" y="29.5" class="ax" text-anchor="end">160</text>
+<text x="456.0" y="279" class="ax" text-anchor="middle">160</text>
+<text x="251.0" y="296" class="ax" text-anchor="middle">offered, kbit/s (UDP, 500 B)</text>
+<line x1="46.0" y1="264.0" x2="456.0" y2="26.0" class="diag"/><text x="430.4" y="31.9" class="ax" text-anchor="end">all delivered</text>
+<polyline points="71.6,249.4 97.2,234.8 122.9,221.3 148.5,206.0 174.1,199.0 199.8,199.3 251.0,198.6 302.2,198.3 353.5,198.0" fill="none" stroke="var(--embb)" stroke-width="2" stroke-linejoin="round"/>
+<circle cx="71.6" cy="249.4" r="4.5" fill="var(--embb)" stroke="var(--embb)" stroke-width="2" class="pt"><title>NR · nrUE1: offered 10 kbit/s, delivered 9.8 kbit/s, loss 0 %, jitter 267.0 ms</title></circle>
+<circle cx="97.2" cy="234.8" r="4.5" fill="var(--embb)" stroke="var(--embb)" stroke-width="2" class="pt"><title>NR · nrUE1: offered 20 kbit/s, delivered 19.6 kbit/s, loss 0 %, jitter 133.9 ms</title></circle>
+<circle cx="122.9" cy="221.3" r="4.5" fill="var(--embb)" stroke="var(--embb)" stroke-width="2" class="pt"><title>NR · nrUE1: offered 30 kbit/s, delivered 28.7 kbit/s, loss 0 %, jitter 107.6 ms</title></circle>
+<circle cx="148.5" cy="206.0" r="4.5" fill="var(--embb)" stroke="var(--embb)" stroke-width="2" class="pt"><title>NR · nrUE1: offered 40 kbit/s, delivered 39.0 kbit/s, loss 0 %, jitter 46.2 ms</title></circle>
+<circle cx="174.1" cy="199.0" r="4.5" fill="var(--panel)" stroke="var(--embb)" stroke-width="2" class="pt"><title>NR · nrUE1: offered 50 kbit/s, delivered 43.7 kbit/s, loss 0 %, jitter 40.2 ms</title></circle>
+<circle cx="199.8" cy="199.3" r="4.5" fill="var(--panel)" stroke="var(--embb)" stroke-width="2" class="pt"><title>NR · nrUE1: offered 60 kbit/s, delivered 43.5 kbit/s, loss 0 %, jitter 42.6 ms</title></circle>
+<circle cx="251.0" cy="198.6" r="4.5" fill="var(--panel)" stroke="var(--embb)" stroke-width="2" class="pt"><title>NR · nrUE1: offered 80 kbit/s, delivered 44.0 kbit/s, loss 0 %, jitter 58.2 ms</title></circle>
+<circle cx="302.2" cy="198.3" r="4.5" fill="var(--panel)" stroke="var(--embb)" stroke-width="2" class="pt"><title>NR · nrUE1: offered 100 kbit/s, delivered 44.2 kbit/s, loss 0 %, jitter 61.3 ms</title></circle>
+<circle cx="353.5" cy="198.0" r="4.5" fill="var(--panel)" stroke="var(--embb)" stroke-width="2" class="pt"><title>NR · nrUE1: offered 120 kbit/s, delivered 44.4 kbit/s, loss 0 %, jitter 66.5 ms</title></circle>
+<text x="251.0" y="186.6" class="dl" text-anchor="end">NR · nrUE1</text>
+<polyline points="71.6,249.1 97.2,234.5 122.9,219.7 148.5,216.0 174.1,216.0 199.8,216.3 251.0,216.1 302.2,216.0 353.5,216.1" fill="none" stroke="var(--n3)" stroke-width="2" stroke-linejoin="round" stroke-dasharray="6 4"/>
+<circle cx="71.6" cy="249.1" r="4.5" fill="var(--n3)" stroke="var(--n3)" stroke-width="2" class="pt"><title>Bluetooth, 9 Nov · 45 ms: offered 10 kbit/s, delivered 10.0 kbit/s, loss 0 %, jitter 17.4 ms</title></circle>
+<circle cx="97.2" cy="234.5" r="4.5" fill="var(--n3)" stroke="var(--n3)" stroke-width="2" class="pt"><title>Bluetooth, 9 Nov · 45 ms: offered 20 kbit/s, delivered 19.8 kbit/s, loss 0 %, jitter 29.9 ms</title></circle>
+<circle cx="122.9" cy="219.7" r="4.5" fill="var(--n3)" stroke="var(--n3)" stroke-width="2" class="pt"><title>Bluetooth, 9 Nov · 45 ms: offered 30 kbit/s, delivered 29.8 kbit/s, loss 0 %, jitter 10.4 ms</title></circle>
+<circle cx="148.5" cy="216.0" r="4.5" fill="var(--panel)" stroke="var(--n3)" stroke-width="2" class="pt"><title>Bluetooth, 9 Nov · 45 ms: offered 40 kbit/s, delivered 32.3 kbit/s, loss 10 %, jitter 42.5 ms</title></circle>
+<circle cx="174.1" cy="216.0" r="4.5" fill="var(--panel)" stroke="var(--n3)" stroke-width="2" class="pt"><title>Bluetooth, 9 Nov · 45 ms: offered 50 kbit/s, delivered 32.3 kbit/s, loss 26.1 %, jitter 48.0 ms</title></circle>
+<circle cx="199.8" cy="216.3" r="4.5" fill="var(--panel)" stroke="var(--n3)" stroke-width="2" class="pt"><title>Bluetooth, 9 Nov · 45 ms: offered 60 kbit/s, delivered 32.1 kbit/s, loss 36.9 %, jitter 38.4 ms</title></circle>
+<circle cx="251.0" cy="216.1" r="4.5" fill="var(--panel)" stroke="var(--n3)" stroke-width="2" class="pt"><title>Bluetooth, 9 Nov · 45 ms: offered 80 kbit/s, delivered 32.2 kbit/s, loss 50.7 %, jitter 28.5 ms</title></circle>
+<circle cx="302.2" cy="216.0" r="4.5" fill="var(--panel)" stroke="var(--n3)" stroke-width="2" class="pt"><title>Bluetooth, 9 Nov · 45 ms: offered 100 kbit/s, delivered 32.3 kbit/s, loss 58.7 %, jitter 25.3 ms</title></circle>
+<circle cx="353.5" cy="216.1" r="4.5" fill="var(--panel)" stroke="var(--n3)" stroke-width="2" class="pt"><title>Bluetooth, 9 Nov · 45 ms: offered 120 kbit/s, delivered 32.2 kbit/s, loss 64 %, jitter 29.1 ms</title></circle>
+<text x="148.5" y="236.0" class="dl" text-anchor="start">Bluetooth, 9 Nov · 45 ms</text>
+<polyline points="71.6,249.0 97.2,234.4 122.9,219.5 148.5,210.7 174.1,210.6 199.8,209.7 251.0,209.3 302.2,209.4 353.5,207.9 430.4,207.9" fill="none" stroke="var(--n3)" stroke-width="2" stroke-linejoin="round"/>
+<circle cx="71.6" cy="249.0" r="4.5" fill="var(--n3)" stroke="var(--n3)" stroke-width="2" class="pt"><title>Bluetooth now · 15 ms: offered 10 kbit/s, delivered 10.1 kbit/s, loss 0 %, jitter 23.5 ms</title></circle>
+<circle cx="97.2" cy="234.4" r="4.5" fill="var(--n3)" stroke="var(--n3)" stroke-width="2" class="pt"><title>Bluetooth now · 15 ms: offered 20 kbit/s, delivered 19.9 kbit/s, loss 0 %, jitter 19.9 ms</title></circle>
+<circle cx="122.9" cy="219.5" r="4.5" fill="var(--n3)" stroke="var(--n3)" stroke-width="2" class="pt"><title>Bluetooth now · 15 ms: offered 30 kbit/s, delivered 29.9 kbit/s, loss 0 %, jitter 16.1 ms</title></circle>
+<circle cx="148.5" cy="210.7" r="4.5" fill="var(--panel)" stroke="var(--n3)" stroke-width="2" class="pt"><title>Bluetooth now · 15 ms: offered 40 kbit/s, delivered 35.8 kbit/s, loss 0 %, jitter 19.8 ms</title></circle>
+<circle cx="174.1" cy="210.6" r="4.5" fill="var(--panel)" stroke="var(--n3)" stroke-width="2" class="pt"><title>Bluetooth now · 15 ms: offered 50 kbit/s, delivered 35.9 kbit/s, loss 17.0 %, jitter 34.5 ms</title></circle>
+<circle cx="199.8" cy="209.7" r="4.5" fill="var(--panel)" stroke="var(--n3)" stroke-width="2" class="pt"><title>Bluetooth now · 15 ms: offered 60 kbit/s, delivered 36.5 kbit/s, loss 28.9 %, jitter 44.2 ms</title></circle>
+<circle cx="251.0" cy="209.3" r="4.5" fill="var(--panel)" stroke="var(--n3)" stroke-width="2" class="pt"><title>Bluetooth now · 15 ms: offered 80 kbit/s, delivered 36.8 kbit/s, loss 44 %, jitter 32.7 ms</title></circle>
+<circle cx="302.2" cy="209.4" r="4.5" fill="var(--panel)" stroke="var(--n3)" stroke-width="2" class="pt"><title>Bluetooth now · 15 ms: offered 100 kbit/s, delivered 36.7 kbit/s, loss 54.1 %, jitter 29.5 ms</title></circle>
+<circle cx="353.5" cy="207.9" r="4.5" fill="var(--panel)" stroke="var(--n3)" stroke-width="2" class="pt"><title>Bluetooth now · 15 ms: offered 120 kbit/s, delivered 37.7 kbit/s, loss 60 %, jitter 31.9 ms</title></circle>
+<circle cx="430.4" cy="207.9" r="4.5" fill="var(--panel)" stroke="var(--n3)" stroke-width="2" class="pt"><title>Bluetooth now · 15 ms: offered 150 kbit/s, delivered 37.7 kbit/s, loss 66.1 %, jitter 26.9 ms</title></circle>
+<text x="430.4" y="223.9" class="dl" text-anchor="end">Bluetooth now</text>
+</svg></div>
+      <div><svg viewBox="0 0 470 300" class="cmpsvg" role="img" aria-label="Downlink · ext-dn → UE: kbit/s delivered against kbit/s offered">
+<text x="46" y="15" class="ct">Downlink · ext-dn → UE</text>
+<line x1="46" x2="456" y1="264.0" y2="264.0" class="grid"/><text x="40" y="267.5" class="ax" text-anchor="end">0</text>
+<text x="46.0" y="279" class="ax" text-anchor="middle">0</text>
+<line x1="46" x2="456" y1="234.2" y2="234.2" class="grid"/><text x="40" y="237.8" class="ax" text-anchor="end">20</text>
+<line x1="46" x2="456" y1="204.5" y2="204.5" class="grid"/><text x="40" y="208.0" class="ax" text-anchor="end">40</text>
+<text x="148.5" y="279" class="ax" text-anchor="middle">40</text>
+<line x1="46" x2="456" y1="174.8" y2="174.8" class="grid"/><text x="40" y="178.2" class="ax" text-anchor="end">60</text>
+<line x1="46" x2="456" y1="145.0" y2="145.0" class="grid"/><text x="40" y="148.5" class="ax" text-anchor="end">80</text>
+<text x="251.0" y="279" class="ax" text-anchor="middle">80</text>
+<line x1="46" x2="456" y1="115.2" y2="115.2" class="grid"/><text x="40" y="118.8" class="ax" text-anchor="end">100</text>
+<line x1="46" x2="456" y1="85.5" y2="85.5" class="grid"/><text x="40" y="89.0" class="ax" text-anchor="end">120</text>
+<text x="353.5" y="279" class="ax" text-anchor="middle">120</text>
+<line x1="46" x2="456" y1="55.8" y2="55.8" class="grid"/><text x="40" y="59.2" class="ax" text-anchor="end">140</text>
+<line x1="46" x2="456" y1="26.0" y2="26.0" class="grid"/><text x="40" y="29.5" class="ax" text-anchor="end">160</text>
+<text x="456.0" y="279" class="ax" text-anchor="middle">160</text>
+<text x="251.0" y="296" class="ax" text-anchor="middle">offered, kbit/s (UDP, 500 B)</text>
+<line x1="46.0" y1="264.0" x2="456.0" y2="26.0" class="diag"/><text x="430.4" y="31.9" class="ax" text-anchor="end">all delivered</text>
+<polyline points="71.6,249.0 97.2,234.2 122.9,219.2 148.5,204.5 174.1,189.5 199.8,175.2 251.0,146.2 302.2,125.2" fill="none" stroke="var(--embb)" stroke-width="2" stroke-linejoin="round"/>
+<circle cx="71.6" cy="249.0" r="4.5" fill="var(--embb)" stroke="var(--embb)" stroke-width="2" class="pt"><title>NR · nrUE1: offered 10 kbit/s, delivered 10.1 kbit/s, loss 0 %, jitter 36.3 ms</title></circle>
+<circle cx="97.2" cy="234.2" r="4.5" fill="var(--embb)" stroke="var(--embb)" stroke-width="2" class="pt"><title>NR · nrUE1: offered 20 kbit/s, delivered 20.0 kbit/s, loss 0 %, jitter 38.4 ms</title></circle>
+<circle cx="122.9" cy="219.2" r="4.5" fill="var(--embb)" stroke="var(--embb)" stroke-width="2" class="pt"><title>NR · nrUE1: offered 30 kbit/s, delivered 30.1 kbit/s, loss 0 %, jitter 30.9 ms</title></circle>
+<circle cx="148.5" cy="204.5" r="4.5" fill="var(--embb)" stroke="var(--embb)" stroke-width="2" class="pt"><title>NR · nrUE1: offered 40 kbit/s, delivered 40.0 kbit/s, loss 0 %, jitter 75.9 ms</title></circle>
+<circle cx="174.1" cy="189.5" r="4.5" fill="var(--embb)" stroke="var(--embb)" stroke-width="2" class="pt"><title>NR · nrUE1: offered 50 kbit/s, delivered 50.1 kbit/s, loss 0 %, jitter 80.3 ms</title></circle>
+<circle cx="199.8" cy="175.2" r="4.5" fill="var(--embb)" stroke="var(--embb)" stroke-width="2" class="pt"><title>NR · nrUE1: offered 60 kbit/s, delivered 59.7 kbit/s, loss 0 %, jitter 69.1 ms</title></circle>
+<circle cx="251.0" cy="146.2" r="4.5" fill="var(--embb)" stroke="var(--embb)" stroke-width="2" class="pt"><title>NR · nrUE1: offered 80 kbit/s, delivered 79.2 kbit/s, loss 0 %, jitter 54.0 ms</title></circle>
+<circle cx="302.2" cy="125.2" r="4.5" fill="var(--panel)" stroke="var(--embb)" stroke-width="2" class="pt"><title>NR · nrUE1: offered 100 kbit/s, delivered 93.3 kbit/s, loss 0 %, jitter 47.7 ms</title></circle>
+<text x="302.2" y="115.2" class="dl" text-anchor="end">NR · nrUE1</text>
+<polyline points="71.6,249.0 97.2,233.8 122.9,219.2 148.5,215.7 174.1,215.2 199.8,216.0 251.0,215.7 302.2,215.7 353.5,216.0" fill="none" stroke="var(--n3)" stroke-width="2" stroke-linejoin="round" stroke-dasharray="6 4"/>
+<circle cx="71.6" cy="249.0" r="4.5" fill="var(--n3)" stroke="var(--n3)" stroke-width="2" class="pt"><title>Bluetooth, 9 Nov · 45 ms: offered 10 kbit/s, delivered 10.1 kbit/s, loss 0 %, jitter 19.9 ms</title></circle>
+<circle cx="97.2" cy="233.8" r="4.5" fill="var(--n3)" stroke="var(--n3)" stroke-width="2" class="pt"><title>Bluetooth, 9 Nov · 45 ms: offered 20 kbit/s, delivered 20.3 kbit/s, loss 0 %, jitter 40.2 ms</title></circle>
+<circle cx="122.9" cy="219.2" r="4.5" fill="var(--n3)" stroke="var(--n3)" stroke-width="2" class="pt"><title>Bluetooth, 9 Nov · 45 ms: offered 30 kbit/s, delivered 30.1 kbit/s, loss 0 %, jitter 18.7 ms</title></circle>
+<circle cx="148.5" cy="215.7" r="4.5" fill="var(--panel)" stroke="var(--n3)" stroke-width="2" class="pt"><title>Bluetooth, 9 Nov · 45 ms: offered 40 kbit/s, delivered 32.5 kbit/s, loss 9.2 %, jitter 39.6 ms</title></circle>
+<circle cx="174.1" cy="215.2" r="4.5" fill="var(--panel)" stroke="var(--n3)" stroke-width="2" class="pt"><title>Bluetooth, 9 Nov · 45 ms: offered 50 kbit/s, delivered 32.8 kbit/s, loss 25.8 %, jitter 45.0 ms</title></circle>
+<circle cx="199.8" cy="216.0" r="4.5" fill="var(--panel)" stroke="var(--n3)" stroke-width="2" class="pt"><title>Bluetooth, 9 Nov · 45 ms: offered 60 kbit/s, delivered 32.3 kbit/s, loss 36.1 %, jitter 30.5 ms</title></circle>
+<circle cx="251.0" cy="215.7" r="4.5" fill="var(--panel)" stroke="var(--n3)" stroke-width="2" class="pt"><title>Bluetooth, 9 Nov · 45 ms: offered 80 kbit/s, delivered 32.5 kbit/s, loss 49.0 %, jitter 34.7 ms</title></circle>
+<circle cx="302.2" cy="215.7" r="4.5" fill="var(--panel)" stroke="var(--n3)" stroke-width="2" class="pt"><title>Bluetooth, 9 Nov · 45 ms: offered 100 kbit/s, delivered 32.5 kbit/s, loss 57.4 %, jitter 26.7 ms</title></circle>
+<circle cx="353.5" cy="216.0" r="4.5" fill="var(--panel)" stroke="var(--n3)" stroke-width="2" class="pt"><title>Bluetooth, 9 Nov · 45 ms: offered 120 kbit/s, delivered 32.3 kbit/s, loss 62.3 %, jitter 26.3 ms</title></circle>
+<text x="353.5" y="232.0" class="dl" text-anchor="end">Bluetooth, 9 Nov · 45 ms</text>
+<polyline points="71.6,249.0 97.2,234.2 122.9,219.2 148.5,204.5 174.1,189.5 199.8,174.8 251.0,155.7 302.2,152.9 353.5,147.4 430.4,146.9" fill="none" stroke="var(--n3)" stroke-width="2" stroke-linejoin="round"/>
+<circle cx="71.6" cy="249.0" r="4.5" fill="var(--n3)" stroke="var(--n3)" stroke-width="2" class="pt"><title>Bluetooth now · 15 ms: offered 10 kbit/s, delivered 10.1 kbit/s, loss 0 %, jitter 20.6 ms</title></circle>
+<circle cx="97.2" cy="234.2" r="4.5" fill="var(--n3)" stroke="var(--n3)" stroke-width="2" class="pt"><title>Bluetooth now · 15 ms: offered 20 kbit/s, delivered 20.0 kbit/s, loss 0 %, jitter 15.2 ms</title></circle>
+<circle cx="122.9" cy="219.2" r="4.5" fill="var(--n3)" stroke="var(--n3)" stroke-width="2" class="pt"><title>Bluetooth now · 15 ms: offered 30 kbit/s, delivered 30.1 kbit/s, loss 0 %, jitter 14.6 ms</title></circle>
+<circle cx="148.5" cy="204.5" r="4.5" fill="var(--n3)" stroke="var(--n3)" stroke-width="2" class="pt"><title>Bluetooth now · 15 ms: offered 40 kbit/s, delivered 40.0 kbit/s, loss 0 %, jitter 19.6 ms</title></circle>
+<circle cx="174.1" cy="189.5" r="4.5" fill="var(--n3)" stroke="var(--n3)" stroke-width="2" class="pt"><title>Bluetooth now · 15 ms: offered 50 kbit/s, delivered 50.1 kbit/s, loss 0 %, jitter 11.5 ms</title></circle>
+<circle cx="199.8" cy="174.8" r="4.5" fill="var(--n3)" stroke="var(--n3)" stroke-width="2" class="pt"><title>Bluetooth now · 15 ms: offered 60 kbit/s, delivered 60.0 kbit/s, loss 0 %, jitter 12.2 ms</title></circle>
+<circle cx="251.0" cy="155.7" r="4.5" fill="var(--panel)" stroke="var(--n3)" stroke-width="2" class="pt"><title>Bluetooth now · 15 ms: offered 80 kbit/s, delivered 72.8 kbit/s, loss 0 %, jitter 14.6 ms</title></circle>
+<circle cx="302.2" cy="152.9" r="4.5" fill="var(--panel)" stroke="var(--n3)" stroke-width="2" class="pt"><title>Bluetooth now · 15 ms: offered 100 kbit/s, delivered 74.7 kbit/s, loss 10.3 %, jitter 21.5 ms</title></circle>
+<circle cx="353.5" cy="147.4" r="4.5" fill="var(--panel)" stroke="var(--n3)" stroke-width="2" class="pt"><title>Bluetooth now · 15 ms: offered 120 kbit/s, delivered 78.4 kbit/s, loss 20.3 %, jitter 13.6 ms</title></circle>
+<circle cx="430.4" cy="146.9" r="4.5" fill="var(--panel)" stroke="var(--n3)" stroke-width="2" class="pt"><title>Bluetooth now · 15 ms: offered 150 kbit/s, delivered 78.7 kbit/s, loss 33.6 %, jitter 13.5 ms</title></circle>
+<text x="430.4" y="136.9" class="dl" text-anchor="end">Bluetooth now · 15 ms</text>
+</svg></div>
+    </div>
+    <div class="cmpkey" aria-hidden="true">
+      <span><i style="border-color:var(--embb)"></i>NR, nrUE1 over the nrlink boards (9 Nov)</span>
+      <span><i style="border-color:var(--n3);border-top-style:dashed"></i>Bluetooth LE, n3iwue1, 9 Nov: 45 ms, paced 40</span>
+      <span><i style="border-color:var(--n3)"></i>Bluetooth LE, n3iwue1, now: 15 ms, paced 150 / 50</span>
+      <span>hollow point = loss ≥ 1 % or under 95 % of the offered rate delivered · hover a point for its numbers</span>
+    </div>
+    <div class="tbl" style="border-top:1px solid var(--line)">
+      <table>
+        <thead><tr><th>One UE at a time</th><th>Idle RTT · 56 / 500 / 1400 B</th><th>UDP up · clean / most</th><th>UDP down · clean / most</th><th>TCP up · down, kbit/s</th><th>RTT under TCP · up · down</th></tr></thead>
+        <tbody>
+<tr><td><span class="cls" style="background:var(--embb)">eMBB</span> nrUE1<span class="hint"> · 9 Nov</span></td><td class="mono">502 ms · 533 ms · 687 ms</td><td class="mono">40 / 44</td><td class="mono">80 / 93</td><td class="mono">24 · 56</td><td class="mono">6831 ms · 3342 ms</td></tr>
+<tr><td><span class="cls" style="background:var(--urllc)">URLLC</span> nrUE2<span class="hint"> · 9 Nov</span></td><td class="mono">478 ms · 603 ms · 695 ms</td><td class="mono">40 / 45</td><td class="mono">80 / 95</td><td class="mono">24 · 55</td><td class="mono">6841 ms · 3366 ms</td></tr>
+<tr><td><span class="cls" style="background:var(--n3)">N3GPP</span> n3iwue1<span class="hint"> · 9 Nov, 45 ms, paced 40</span></td><td class="mono">120 ms · 244 ms · 552 ms</td><td class="mono">30 / 32</td><td class="mono">30 / 33</td><td class="mono">27 · 16</td><td class="mono">505 ms · 302 ms</td></tr>
+<tr><td><span class="cls" style="background:var(--n3)">N3GPP</span> n3iwue2<span class="hint"> · 9 Nov, 45 ms, paced 40</span></td><td class="mono">110 ms · 256 ms · 561 ms</td><td class="mono">30 / 32</td><td class="mono">30 / 32</td><td class="mono">26 · 7</td><td class="mono">492 ms · 196 ms</td></tr>
+<tr><td><span class="cls" style="background:var(--n3)">N3GPP</span> n3iwue1<span class="hint"> · 10 Nov, 15 / 18.75 ms, paced 150 / 50</span></td><td class="mono">76 ms · 168 ms · 376 ms</td><td class="mono">30 / 38</td><td class="mono">60 / 79</td><td class="mono">32 · 52</td><td class="mono">452 ms · 290 ms</td></tr>
+<tr><td><span class="cls" style="background:var(--n3)">N3GPP</span> n3iwue2<span class="hint"> · 10 Nov, 15 / 18.75 ms, paced 150 / 50</span></td><td class="mono">94 ms · 199 ms · 444 ms</td><td class="mono">40 / 40</td><td class="mono">80 / 80</td><td class="mono">32 · 36</td><td class="mono">449 ms · 348 ms</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="bd" style="border-top:1px solid var(--line)">
+      <span class="label">What it says</span>
+      <ol class="next">
+        <li><b>Downlink: Bluetooth doubled, NR still ahead.</b> At 15 / 18.75 ms each Bluetooth link carries 60–80 kbit/s down cleanly and saturates at about 79, against 30 / 33 at 45 ms. NR carries 80 cleanly and peaks at 93–95. One Bluetooth link alone at 7.5 ms reached 143 kbit/s, but two links cannot both run that fast on one Intel radio (next point).</li>
+        <li><b>The two links must not share an interval.</b> Each board is the central of its own link and times it by its own clock, while the Intel adapter is the peripheral on both and serves one connection event at a time. At equal intervals (both 15 or both 7.5 ms) the two links' events drifted into each other and stayed overlapped for minutes: one link's pings went to 0.3–1.3 s and 1000 B pings to 2–8 s, then the links swapped. With 15 and 18.75 ms the events overlap only briefly, so each link loses a few events at a time instead of minutes.</li>
+        <li><b>Uplink: about the same as NR.</b> Bluetooth now carries 30–40 kbit/s up cleanly and saturates at 37–40, against 30 / 32 before; NR does 40 / 44. Uplink did not grow with the shorter interval (46 kbit/s at most even at 7.5 ms), so its limit is not the number of connection events; where it is has not been found yet.</li>
+        <li><b>TCP: Bluetooth is now level with NR uplink and closer downlink.</b> 32 kbit/s up and 36–52 down, against 23.5 and 55 on NR. Under TCP the round trip stays at 0.3–0.45 s on Bluetooth (bulk queue capped at 1 s), against 3.3–6.8 s on NR with its deep RLC queues.</li>
+        <li><b>Latency.</b> Idle, Bluetooth is 76–94 ms end to end through IPsec (110–120 before) and NR 480–500 ms, because an NR uplink packet first needs a scheduling request and a grant. The core ↔ board link alone answers in about 62 ms (75–86 at 45 ms).</li>
+        <li><b>Shared air.</b> Both radios use the 2.4 GHz band, and nrlink's fixed channel (2402 MHz) is Bluetooth advertising channel 37. These runs were one UE at a time, so neither saw the other's traffic.</li>
+      </ol>
+      <span class="hint">Raw results in the repository, <code>results/compare/</code>: <code>compare_20261109.json</code> (all four UEs, 45 ms, paced 40), <code>compare_20261109_ble_unpaced.json</code>, <code>compare_20261110_ci15_18_paced.json</code> (the n3iwues now), and the interval trials <code>compare_20261110_ble1_*</code>, <code>_ci7_paced</code>, <code>_ci15_both</code>; Trial 3 telemetry <code>results/factory/trial3_20261109.jsonl</code>.</span>
+    </div>
+
   </section>
   <section class="card" aria-label="Bluetooth board firmware">
     <div class="hd"><h2>Bluetooth board firmware: the hang hunt</h2><span class="meta">5–9 Nov 2026 · solved in v15 · every flash backed up first (UE PC ~/nxp/backups) · images and patches in ~/nxp/images</span></div>
@@ -447,8 +607,8 @@ const LINKS = [
   { id: "e2", st: "up", k: "urllc", pts: vline("nrue2", "ub2"), lbl: [1743, 384, "start", "UDP"], name: "UDP", cap: "veth", what: "Downlink slots to nrUE2, and its uplink for each TX slot back." },
   { id: "s1", lat: [1578, 500, "start", "2.6 ms / 255 B"], latd: "2.6 ms per 255 B air packet at 1 Mbaud SLIP (computed)",  st: "up", k: "embb", pts: vline("ub1", "u1b"), lbl: [1578, 518, "start", "USB 1 Mbaud"], name: "USB VCOM", cap: "1 Mbaud SLIP", what: "Serial link from the UE1 board to its bridge." },
   { id: "s2", lat: [1743, 500, "start", "2.6 ms / 255 B"], latd: "2.6 ms per 255 B air packet at 1 Mbaud SLIP (computed)",  st: "up", k: "urllc", pts: vline("ub2", "u2b"), lbl: [1743, 518, "start", "USB 1 Mbaud"], name: "USB VCOM", cap: "1 Mbaud SLIP", what: "Serial link from the UE2 board to its bridge." },
-  { id: "ab1", lat: [928, 760, "middle", "RTT 86 ms (56 B) · 443 ms (1 kB)"], latd: "core ↔ 10.70.0.11: 86 ms average, 54 ms min with 56 B pings; 443 ms with 1000 B. Connection interval 45 ms, supervision timeout 420 ms, central = the NXP board",  st: "up", k: "n3", pts: [[650, 724], [650, 770], [1240, 770], [1240, 606]], lbl: [928, 774, "middle", "BLE1 · LE 1M · hops 37 ch 2404–2478 MHz · CoC 0x0081"], name: "Bluetooth LE", cap: "LE 1M PHY, L2CAP CoC", what: "BLE1 board to the core's hci0, about 90 ms round trip. Early drops came from bluetoothd on both PCs reading each other's encrypted GATT data: the pairing that followed failed, and the kernel then drops the link. bluetoothd is masked on the UE PC; the link needs only the kernel." },
-  { id: "ab2", lat: [928, 812, "middle", "RTT 75 ms (56 B) · 335 ms (1 kB)"], latd: "core ↔ 10.70.0.12: 75 ms average, 53 ms min with 56 B pings; 335 ms with 1000 B. Connection interval 45 ms",  st: "up", k: "n3", pts: [[610, 724], [610, 794], [1405, 794], [1405, 606]], lbl: [928, 798, "middle", "BLE2 · LE 1M · hops 2404–2478 MHz · adv 2402/2426/2480"], name: "Bluetooth LE", cap: "LE 1M PHY, L2CAP CoC", what: "BLE2 board to the core's hci0, the same way." },
+  { id: "ab1", lat: [928, 760, "middle", "RTT 62 ms (56 B) · 417 ms (1 kB)"], latd: "core ↔ 10.70.0.11, 10 Nov, idle: 62 ms average, 39 ms min with 56 B pings; 417 ms with 1000 B (65 / 500 ms with the live demo at Trial 1). Connection interval 15 ms, asked for by ble_ip_link after each connect (it opens at 45 ms: 86 ms and 443 ms on 6 Nov), supervision timeout 420 ms, central = the NXP board",  st: "up", k: "n3", pts: [[650, 724], [650, 770], [1240, 770], [1240, 606]], lbl: [928, 774, "middle", "BLE1 · LE 1M · hops 37 ch 2404–2478 MHz · CoC 0x0081"], name: "Bluetooth LE", cap: "LE 1M PHY, L2CAP CoC", what: "BLE1 board to the core's hci0, about 60 ms round trip. LE 1M with 27 B link-layer packets: the Intel 8265 (Bluetooth 4.2) has neither 2M nor data length extension. Early drops came from bluetoothd on both PCs reading each other's encrypted GATT data: the pairing that followed failed, and the kernel then drops the link. bluetoothd is masked on the UE PC; the link needs only the kernel." },
+  { id: "ab2", lat: [928, 812, "middle", "RTT 62 ms (56 B) · 397 ms (1 kB)"], latd: "core ↔ 10.70.0.12, 10 Nov, idle: 62 ms average, 45 ms min with 56 B pings; 397 ms with 1000 B (66 / 464 ms with the live demo at Trial 1). Connection interval 18.75 ms: it must differ from BLE1's (see Slot schemes). On 6 Nov at 45 ms: 75 ms and 335 ms",  st: "up", k: "n3", pts: [[610, 724], [610, 794], [1405, 794], [1405, 606]], lbl: [928, 798, "middle", "BLE2 · LE 1M · hops 2404–2478 MHz · adv 2402/2426/2480"], name: "Bluetooth LE", cap: "LE 1M PHY, L2CAP CoC", what: "BLE2 board to the core's hci0, the same way." },
   { id: "ar1", lat: [928, 842, "middle", "DL one-way ≈ 111 ms · RTT 529 ms"], latd: "ext-dn → nrUE: 111 ms median one-way for a 73 B packet, 230 ms for a 2 kB LiDAR scan (factory run, level 1). Round trip ext-dn ↔ nrUE1 529 ms: the uplink needs a scheduling request and a grant, so it takes about 420 ms.",  st: "up", k: "embb", pts: [[460, 606], [460, 826], [1570, 826], [1570, 606]], lbl: [928, 830, "middle", "UE1 · nrlink GFSK 1 Mbit/s · 2402 MHz (ch 0x2A)"], name: "nrlink radio", cap: "GFSK 1 Mbit/s, one channel shared", what: "nrlink over GenFSK on one fixed channel, 2402 MHz (0x2A = 2360 + 42 MHz), 1 Mbit/s GFSK with a 24-bit CRC. OAI itself is configured for band n78, SSB ARFCN 641280 (3619.2 MHz), 106 PRB at 30 kHz; those values only label the emulated carrier. 2402 MHz is also Bluetooth advertising channel 37, so the access point's advertising shares it. The gNB board broadcasts each downlink slot and polls each UE board for uplink. This is the bottleneck: about 400 kbit/s usable, about 700 ms round trip." },
   { id: "ar2", lat: [928, 866, "middle", "DL one-way ≈ 111 ms · RTT 531 ms"], latd: "same radio and slots as UE1: 111 ms median one-way down (robot updates), 531 ms round trip",  st: "up", k: "urllc", pts: [[420, 606], [420, 850], [1735, 850], [1735, 606]], lbl: [928, 854, "middle", "UE2 · same 2402 MHz channel, time-shared"], name: "nrlink radio", cap: "GFSK 1 Mbit/s, one channel shared", what: "The same channel as UE1, time-shared by the gNB's polling." },
 ];
@@ -534,8 +694,8 @@ build();
 const BARS = [
   ["NR · 73 B down", "embb", [["core 0.2", 0.2, "--f5gc"], ["USB + air + USB ≈ 7", 7.3, "--nxp"], ["waiting for its DL slot ≈ 104", 103.5, "--embb"]], "111 ms"],
   ["NR · round trip", "embb", [["down 111", 111, "--embb"], ["up ≈ 418: request, grant, UL slot", 418, "--urllc"]], "529 ms"],
-  ["BLE · 56 B down", "n3", [["core + N3IWF ≈ 4", 4, "--f5gc"], ["Bluetooth link ≈ 40 (half of 80 RTT)", 40, "--n3"]], "≈ 44 ms"],
-  ["BLE · 2 kB frame down", "n3", [["core 0.2", 0.2, "--f5gc"], ["2.1 kB at the 40 kbit/s pacing ≈ 420 (UART 180 ms overlaps)", 410, "--n3"]], "384–436 ms"],
+  ["BLE · 56 B down", "n3", [["core + N3IWF ≈ 4", 4, "--f5gc"], ["Bluetooth link ≈ 31 (half of 62 RTT)", 31, "--n3"]], "≈ 35 ms"],
+  ["BLE · 2 kB frame down", "n3", [["core 0.2", 0.2, "--f5gc"], ["2.5 kB over the link ≈ 240 (live Trial 1; ≈ 420 at 45 ms)", 240, "--n3"]], "196–280 ms"],
 ];
 function bars() {
   const max = 540;
@@ -575,22 +735,29 @@ function slots() {
   el("line", { x1: x0, x2: x0 + W1, y1: 232, y2: 232, stroke: "var(--line)" }, g);
 
   const b = $("slotble"); b.textContent = ""; const bx = 90, BW = 990, span = 100, sx = t => bx + t * BW / span;
-  [["BLE1 link", 0, 30], ["BLE2 link", 20, 80]].forEach(([n, off, y]) => {
-    el("text", { class: "t", x: 0, y: y + 16 }, b).textContent = n;
+  const EX = 6, EW = EX * 0.68;   // exchanges per event at about 80 kbit/s, and the event's length in ms
+  const ev = (off, iv) => { const r = []; for (let t = off; t < span; t += iv) r.push(t); return r; };
+  const L1 = ev(0, 15), L2 = ev(8, 18.75);
+  const lost = t => L1.some(u => u < t + EW && t < u + EW && u <= t);   // BLE2's event meets a BLE1 event already running
+  [["BLE1 link · 15 ms", L1, 30, false], ["BLE2 link · 18.75 ms", L2, 80, true]].forEach(([n, evs, y, two]) => {
+    el("text", { class: "t", x: 0, y: y + 16 }, b).textContent = n.split(" · ")[0];
+    el("text", { x: 0, y: y + 30, style: "font-size:10.5px" }, b).textContent = n.split(" · ")[1];
     el("line", { x1: bx, x2: bx + BW, y1: y + 12, y2: y + 12, stroke: "var(--line)" }, b);
-    for (let t = off; t < span; t += 45) {
-      for (let k = 0; k < 9; k++) {   // 9 exchanges: board TX then Intel TX
+    evs.forEach(t => {
+      if (two && lost(t)) { el("text", { x: sx(t + EW / 2), y: y + 16, "text-anchor": "middle", style: "fill:var(--urllc);font-weight:700" }, b).textContent = "×"; return; }
+      for (let k = 0; k < (two ? 2 : EX); k++) {   // exchanges: board TX then Intel TX (BLE2 drawn nearly idle)
         el("rect", { x: sx(t + k * 0.68), y, width: Math.max(1.5, 0.3 * BW / span), height: 11, fill: "var(--n3)" }, b);
         el("rect", { x: sx(t + k * 0.68 + 0.45), y: y + 13, width: Math.max(1, 0.08 * BW / span), height: 11, fill: "var(--intel)" }, b);
       }
-      if (t < 60) el("text", { x: sx(t) + 70, y: y + 21 }, b).textContent = `event · next data channel`;
-    }
-    if (n === "BLE1 link") { el("line", { x1: sx(0), x2: sx(45), y1: y - 8, y2: y - 8, stroke: "var(--ink-2)" }, b); el("text", { x: sx(22.5), y: y - 12, "text-anchor": "middle" }, b).textContent = "45 ms connection interval"; }
+    });
+    const iv = two ? 18.75 : 15, t0 = evs[0];
+    el("line", { x1: sx(t0), x2: sx(t0 + iv), y1: y - 8, y2: y - 8, stroke: "var(--ink-2)" }, b);
+    el("text", { x: sx(t0 + iv / 2), y: y - 12, "text-anchor": "middle" }, b).textContent = `${iv} ms`;
   });
   for (let t = 0; t <= span; t += 10) { el("text", { x: sx(t), y: 140, "text-anchor": "middle" }, b).textContent = t + " ms"; }
   el("rect", { x: bx, y: 150, width: 12, height: 10, fill: "var(--n3)" }, b); el("text", { x: bx + 18, y: 159 }, b).textContent = "NXP board (central) sends, up to 27 B";
   el("rect", { x: bx + 300, y: 150, width: 12, height: 10, fill: "var(--intel)" }, b); el("text", { x: bx + 318, y: 159 }, b).textContent = "Intel hci0 answers";
-  el("text", { x: bx + 470, y: 159 }, b).textContent = "about 9 exchanges per event at the 40 kbit/s pacing";
+  el("text", { x: bx + 470, y: 159 }, b).textContent = "BLE1 busy (≈ 80 kbit/s), BLE2 idle · × = event lost";
 }
 bars(); slots();
 </script>

@@ -102,16 +102,27 @@ Same tests as section 7 (`compare_links.py`, one UE at a time, live demo stopped
 | BLE1 at 7.5 ms, BLE2 at 45, unpaced | n3iwue1 | 70 ms | 40 / 46 | 100 / 143 | · 105 | · 0.18 s |
 | both at 7.5 ms, paced 150/50 | n3iwue1 | 78 ms | 40 / 40 | (dips) / 103 | 39.1 · 104.9 | 0.45 · 0.19 s |
 | both at 7.5 ms, paced 150/50 | n3iwue2 | 198 ms | 40 / 41 | 60 / 74 | 14.0 · 4.8 | 0.87 · 0.94 s |
-| **both at 15 ms, paced 150/50 (the default now)** | n3iwue1 | 67 ms | 40 / 40.5 | 120 / 122 | 37.0 · 104.3 | 0.45 · 0.16 s |
-| **both at 15 ms, paced 150/50 (the default now)** | n3iwue2 | 87 ms | 40 / 40 | 20 (dips), 120 / 119 | 37.9 · 61.7 | 0.46 · 0.20 s |
+| both at 15 ms, paced 150/50 | n3iwue1 | 67 ms | 40 / 40.5 | 120 / 122 | 37.0 · 104.3 | 0.45 · 0.16 s |
+| both at 15 ms, paced 150/50 | n3iwue2 | 87 ms | 40 / 40 | 20 (dips), 120 / 119 | 37.9 · 61.7 | 0.46 · 0.20 s |
+| **BLE1 15 ms, BLE2 18.75 ms, paced 150/50 (the default now)** | n3iwue1 | 76 ms | 30 / 38 | 60 / 79 | 32.1 · 51.7 | 0.45 · 0.29 s |
+| **BLE1 15 ms, BLE2 18.75 ms, paced 150/50 (the default now)** | n3iwue2 | 94 ms | 40 / 40 | 80 / 80 | 31.6 · 36.3 | 0.45 · 0.35 s |
 
 - One link alone is fastest at 7.5 ms: about 3× the downlink of 45 ms (143 against 43.5 at most) and faster than NR's downlink (80 / 95).
-- Two links at 7.5 ms on the one Intel radio starve the second (n3iwue2 TCP down 4.8 kbit/s). At 15 ms both stay near full speed,
-  so `ble_ip_link.py` asks for 15 ms (`CONN_INTERVAL_MS`, or `--interval`).
+- **The two links must not share an interval.** Each board is the central of its own link and times it by its own clock; the Intel
+  adapter is the peripheral on both and serves one connection event at a time. At equal intervals the two links' events drift into
+  each other and stay overlapped for minutes. Live, with both at 15 ms: one link's pings went to 0.3–1.3 s (1000 B: 2–8 s, 15–25 % lost)
+  while the other's stayed at about 55 ms, and after about 2 min they swapped (`ping -D` on both, 10 s bins). The camera stream on
+  BLE2 dropped 1936 of 4457 packets for queueing over 1 s, and BLE2 had a supervision timeout. This is also what the "dips" in the
+  equal-interval rows are. With BLE1 at 15 and BLE2 at 18.75 ms the same 3-minute test stayed at 50–160 ms on both (median about 70),
+  and 1000 B pings at about 320 ms with no loss. So `ble_ip_link.py` asks for 15 + 3.75·(k−1) ms on UE k (`conn_interval_ms`, or `--interval`).
+- Two links at 7.5 ms starve the second outright (n3iwue2 TCP down 4.8 kbit/s); 7.5 ms is only for a single link.
 - Uplink tops out at about 40 kbit/s whatever the interval (46 unpaced, 7.5 ms). The pacing (50 kbit/s of IP up) sits just above it.
-- Open: some downlink steps deliver far less than offered with 0 % loss and 100–300 ms jitter (n3iwue1 at 20–40 kbit/s
-  with both at 7.5 ms, n3iwue2 at 40–80 with both at 15 ms), and the next, faster step is clean again. It looks like a stall of a few seconds.
-  It was not seen at 45 ms or with one fast link. TCP uplink at 15 ms with BLE2 at 45 once lost n3iwue1's session (the watchdog restarted it).
+- The live demo at 15 / 18.75 ms (`results/factory/by_level_20261110_ci15_18.json`): camera video, both links streaming at once,
+  Trial 1 100 % of frames at a median 196 / 280 ms (camera 1 / 2), Trial 2 100 % at 185 / 254 ms (33–40 % at about 6 s at 45 ms),
+  Trial 3 68 % at 5.4 s (0–2 % at 45 ms). Both links together leave each about 30 kbit/s of video. The NR side is unchanged.
+- Idle pings at 15 / 18.75 ms: core ↔ BLE1 and BLE2 62 ms (86 / 75 at 45 ms), 1000 B 417 / 397 ms; with the demo at Trial 1, 65 ms and 464–500 ms.
+- Open: TCP uplink at 15 ms with BLE2 at 45 once lost n3iwue1's session (the watchdog restarted it); the uplink limit (about 40 kbit/s
+  at any interval) is not located.
 
 ## 8. The hci_bb board hang (5–9 Nov 2026, `results/hci_bb_loadtests/`)
 

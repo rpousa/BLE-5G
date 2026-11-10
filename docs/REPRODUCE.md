@@ -205,8 +205,9 @@ pings at 56/472/1372 B, a UDP sweep of 500 B datagrams from 10 to 120 kbit/s up 
 then 30 s of TCP each way with pings alongside. About 8 minutes per UE.
 To take ble_ip_link's own pacing out of the comparison, write `0` to `~/oai/nrlink/ble_rate_kbps` on **both** PCs (kbit/s; 0 = unpaced,
 no file = the default: 150 down on the core, 50 up on the UE PC). Both ends re-read it within a second. Remove it again afterwards: unpaced uplink overload can make an n3iwue's IKE give up.
-`--rates 20,40,..` and `--tests udp_dl,tcp_dl` narrow a run. The UE side of `ble_ip_link.py` asks for a 15 ms connection interval after each
-connect (`--interval <ms>`, 0 = keep the 45 ms the link opens with); it logs `ble<k>: connection interval 15 ms`.
+`--rates 20,40,..` and `--tests udp_dl,tcp_dl` narrow a run. The UE side of `ble_ip_link.py` asks for a connection interval after each connect:
+15 ms for UE 1, 18.75 ms for UE 2 (`--interval <ms>` overrides, 0 = keep the 45 ms the link opens with); it logs `ble<k>: connection interval 15 ms`.
+Never give both links the same interval: their events lock together on the Intel adapter and one link starves for minutes.
 
 ### 11.4 hci_bb uplink load test (one BLE board)
 On the UE PC, as root:

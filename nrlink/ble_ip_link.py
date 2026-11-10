@@ -35,8 +35,8 @@ BDADDR_LE_PUBLIC, BDADDR_LE_RANDOM = 1, 2
 L2CAP_MTU = 1500
 # Shaping, tun -> Bluetooth on both ends. The hci_bb boards' 115200 baud UART has no flow control (MCU-Link VCOM):
 # driven past its capacity (about 40 kbit/s of IP each way was measured) the controller stopped answering the host.
-# Default pacing, per direction, sized for the 15 ms connection interval the UEs ask for (CONN_INTERVAL_MS):
-# measured 10 Nov 2026 with both links at 15 ms, IP over IPsec: 40 kbit/s up and 120 down clean (UDP, 500 B). The hci_bb v15
+# Default pacing, per direction, sized for the 15 / 18.75 ms connection intervals the UEs ask for
+# (conn_interval_ms): measured 10 Nov 2026, IP over IPsec, about 40 kbit/s up and 120 down clean (UDP, 500 B). The hci_bb v15
 # boards (Pico, RTS) no longer need pacing to stay up, but it keeps the queues (and the round trip) short.
 RATE_KBPS_DOWN = 150   # access point -> UE (the --listen side sends this way)
 RATE_KBPS_UP = 50      # UE -> access point
@@ -64,11 +64,16 @@ def rate_bps():
     return _rate[0]
 BURST = 1600          # bytes: one full packet at air speed. Larger bursts reach the hci_bb board faster than its
                       # UART passes them on; lost PDUs never return their L2CAP credits and the link stalls for good
-CONN_INTERVAL_MS = 15    # UE: LE connection interval asked for after each connect (the default is 45 ms);
-                         # 1M PHY and 27 B link-layer packets are fixed by the core PC's Bluetooth 4.2 adapter,
-                         # so more connection events per second is what raises throughput (and cuts the RTT).
-                         # 7.5 ms is faster for one link alone, but with both UEs on the one Intel radio the
-                         # second link starved (TCP down 4.8 kbit/s); 15 ms on both keeps both near full speed.
+def conn_interval_ms(k):
+    """UE k's LE connection interval, asked for after each connect (the link opens at 45 ms): 15 ms for UE 1,
+    18.75 for UE 2, 3.75 ms more for each further UE. 1M PHY and 27 B link-layer packets are fixed by the core
+    PC's Bluetooth 4.2 adapter, so more connection events per second is what raises throughput and cuts the RTT.
+    The intervals must differ: each board is the central of its own link and times it by its own clock, and the
+    Intel adapter (peripheral on both) serves one event at a time. With equal intervals the two links' events
+    drift into each other and stay overlapped for minutes, and one link starves (10 Nov 2026: 0.3-1.3 s pings,
+    1000 B pings 2-8 s, then the links swapped). With 15 / 18.75 ms they overlap briefly and often instead.
+    7.5 ms is fastest for one link alone (143 kbit/s down) but leaves no room for a second."""
+    return 15 + 3.75 * (k - 1)
 SUPERVISION_MS = 420     # kept as negotiated at connect
 MAX_WAIT = 1.0        # s of bulk data queued at the shaped rate (about 4 full packets); beyond that, drop
 TUN_QLEN = 64         # packets in the tun's ring (the reader thread drains it at once)
@@ -285,10 +290,9 @@ def hci_index(addr):
     return None
 
 
-def set_interval(sock, local, name, ms=None):
+def set_interval(sock, local, name, ms):
     """UE (LE central): ask for a ms connection interval on the link under this L2CAP socket (HCI LE Connection
     Update), and log what the controllers agreed on. Per connection: run after every (re)connect."""
-    ms = CONN_INTERVAL_MS if ms is None else ms
     if not ms:
         return
     try:
@@ -396,7 +400,7 @@ def connect(args):
             if s.recv(16) != HELLO + bytes([k]):
                 raise OSError("no hello from the access point")
             s.settimeout(None)
-            set_interval(s, args.local, name, args.interval)
+            set_interval(s, args.local, name, conn_interval_ms(k) if args.interval is None else args.interval)
             again = tun is not None
             if not again:
                 t = tun_open(name)
@@ -432,7 +436,7 @@ def main():
     ap.add_argument("--route", action="append", help="UE: route through the link (repeatable)")
     ap.add_argument("--peer-random", action="store_true", help="the access point uses a random (static) address")
     ap.add_argument("--hci", type=int, default=0, help="access point: adapter index to advertise on (default 0)")
-    ap.add_argument("--interval", type=float, help=f"UE: LE connection interval to ask for, ms (default {CONN_INTERVAL_MS}; 0 = keep)")
+    ap.add_argument("--interval", type=float, help="UE: LE connection interval to ask for, ms (default 15 for UE 1, 18.75 for UE 2; 0 = keep 45)")
     args = ap.parse_args()
     global RATE_KBPS, RATE_BPS
     RATE_KBPS = RATE_KBPS_DOWN if args.listen else RATE_KBPS_UP

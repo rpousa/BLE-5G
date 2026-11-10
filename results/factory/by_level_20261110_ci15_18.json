@@ -1,0 +1,162 @@
+{
+ "L1": {
+  "t": 1794327370.59174,
+  "stats": {
+   "lidar": {
+    "delivered_pct": 100.0,
+    "p50": 1004.8,
+    "p90": 1503.9,
+    "n60": 59
+   },
+   "reports": {
+    "delivered_pct": 100.0,
+    "p50": 473.6,
+    "p90": 963.4,
+    "n60": 595
+   },
+   "commands": {
+    "delivered_pct": 100.0,
+    "p50": 105.6,
+    "p90": 186.7,
+    "n60": 597
+   },
+   "cam1": {
+    "delivered_pct": 100.0,
+    "p50": 195.9,
+    "p90": 437.7,
+    "n60": 30
+   },
+   "cam2": {
+    "delivered_pct": 100.0,
+    "p50": 280.2,
+    "p90": 490.6,
+    "n60": 30
+   },
+   "reaction": {
+    "p50": 581.7,
+    "p90": 1083.2,
+    "n60": 593
+   },
+   "clearance": {
+    "min_m": 2.52,
+    "agv": 4,
+    "op": "op2"
+   }
+  },
+  "ran_s": 112,
+  "nr_ul_kbps": 39.05,
+  "nr_dl_kbps": 7.2,
+  "slots_s": 42.9,
+  "ble_dl_kbps": [
+   12.39,
+   8.36
+  ]
+ },
+ "L2": {
+  "t": 1794327610.878813,
+  "stats": {
+   "lidar": {
+    "delivered_pct": null,
+    "p50": null,
+    "p90": null,
+    "n60": 0
+   },
+   "reports": {
+    "delivered_pct": 100.0,
+    "p50": 481.4,
+    "p90": 814.1,
+    "n60": 1191
+   },
+   "commands": {
+    "delivered_pct": 100.0,
+    "p50": 59.5,
+    "p90": 183.7,
+    "n60": 1206
+   },
+   "cam1": {
+    "delivered_pct": 100.0,
+    "p50": 184.6,
+    "p90": 213.6,
+    "n60": 60
+   },
+   "cam2": {
+    "delivered_pct": 100.0,
+    "p50": 254.3,
+    "p90": 280.9,
+    "n60": 60
+   },
+   "reaction": {
+    "p50": 581.6,
+    "p90": 902.6,
+    "n60": 1190
+   },
+   "clearance": {
+    "min_m": 0.21,
+    "agv": 1,
+    "op": "op1"
+   }
+  },
+  "ran_s": 240,
+  "nr_ul_kbps": 46.49,
+  "nr_dl_kbps": 15.16,
+  "slots_s": 34.9,
+  "ble_dl_kbps": [
+   21.08,
+   20.94
+  ]
+ },
+ "L3": {
+  "t": 1794327910.5211313,
+  "stats": {
+   "lidar": {
+    "delivered_pct": null,
+    "p50": null,
+    "p90": null,
+    "n60": 0
+   },
+   "reports": {
+    "delivered_pct": null,
+    "p50": null,
+    "p90": null,
+    "n60": 0
+   },
+   "commands": {
+    "delivered_pct": 100.0,
+    "p50": 109.4,
+    "p90": 198.2,
+    "n60": 1270
+   },
+   "cam1": {
+    "delivered_pct": 68.3,
+    "p50": 5402.4,
+    "p90": 5750.3,
+    "n60": 83
+   },
+   "cam2": {
+    "delivered_pct": 68.3,
+    "p50": 5362.7,
+    "p90": 5857.1,
+    "n60": 78
+   },
+   "reaction": {
+    "p50": null,
+    "p90": null,
+    "n60": 0
+   },
+   "clearance": {
+    "min_m": 0.2,
+    "agv": 3,
+    "op": "op1"
+   }
+  },
+  "ran_s": 299,
+  "nr_ul_kbps": 46.68,
+  "nr_dl_kbps": 12.23,
+  "slots_s": 39.0,
+  "ble_dl_kbps": [
+   42.42,
+   41.97
+  ]
+ },
+ "_note": "10 Nov 2026, Bluetooth links at 15 ms (BLE1) / 18.75 ms (BLE2), pacing 150 down / 50 up; L1 ran 112 s, L2 240 s, L3 299 s"
+}

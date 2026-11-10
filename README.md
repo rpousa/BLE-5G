@@ -29,9 +29,9 @@ Everything is split over two PCs, as a core site and a UE site:
 | What | Result |
 |---|---|
 | NR over the boards | about 44 kbit/s up and 90 kbit/s down clean (2 UEs); about 94 slots/s, set by the over-the-air exchange |
-| Bluetooth LE non-3GPP access | n3iwue1/2 registered and carrying traffic through the N3IWF; 20–30 kbit/s clean per link, about 32 kbit/s at saturation |
-| NR against Bluetooth, same source and sink | NR 40 up / 80 down clean, about 500 ms idle RTT; Bluetooth 30 each way clean (about 40 down unpaced), about 115 ms idle RTT |
-| Factory demo | closed loop live: LiDAR and AGV reports uplink over NR, stop/go commands downlink, camera video to operators over Bluetooth |
+| Bluetooth LE non-3GPP access | n3iwue1/2 registered and carrying traffic through the N3IWF; since 10 Nov at 15 / 18.75 ms connection intervals: 30–40 kbit/s up and 60–80 down clean per link (was 30 / 30 at 45 ms) |
+| NR against Bluetooth, same source and sink | NR 40 up / 80 down clean, about 500 ms idle RTT; Bluetooth 30–40 up / 60–80 down clean, 76–94 ms idle RTT (2M and 251 B packets: not supported by the core's Intel 8265) |
+| Factory demo | closed loop live: LiDAR and AGV reports uplink over NR, stop/go commands downlink, camera video to operators over Bluetooth (all frames through at Trials 1 and 2 since 10 Nov) |
 | hci_bb board hang under uplink load | **root cause found and fixed** (v15): a BusFault in the radio-core interrupt handler while the radio domain slept |
 
 Full numbers: [docs/RESULTS.md](docs/RESULTS.md).
