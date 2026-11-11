@@ -11,10 +11,20 @@
 #   ./nrlink.sh boards    find the boards and assign this PC's roles (boards.json); bridges must be stopped.
 #                         Without --role it uses the role of this PC's IP (UE_PC -> ue, CORE_PC -> core, else all)
 #   ./nrlink.sh flash <serial>   back up, then write the nrlink firmware to a board in bootloader mode
-#   ./nrlink.sh live start|stop|status   the live pages: core PC serves http://<core>:8090/ (factory, closed loop)
-#                         and /arch (architecture); the UE PC runs the agent feeding it. Role from this PC's IP.
-#                         "up" starts them and "down" stops them.
-#   ./nrlink.sh live enable|disable      start them at every boot (user crontab @reboot); they wait for the stack
+#   ./nrlink.sh live start|stop|status   the live experiment: core PC serves http://<core>:8090/ and /arch
+#                         (architecture); the UE PC runs its other half. Role from this PC's IP. Run it on both PCs.
+#                         "up" starts it and "down" stops it.
+#   ./nrlink.sh live enable|disable      start it at every boot (user crontab @reboot); it waits for the stack
+#     --scenario factory|agv   which experiment (saved in logs/live_scenario with the options below, so the next
+#                              start and the boot start use it again; default factory)
+#       factory  the factory floor, closed loop (5 Nov - 10 Nov 2026): 4 AGVs, pole LiDAR on nrUE1, AGV reports and
+#                commands on nrUE2, camera video to two operators over Bluetooth (n3iwue1/2); trials L1-L3
+#       agv      one AGV, the same data on NR and Bluetooth at once (11 Nov 2026): its LiDAR on nrUE1 + n3iwue1,
+#                camera detections and pose on nrUE2 + n3iwue2, checkpoint syncs back; simulated radio channel
+#     --level L1|L2|L3          starting load (both scenarios)
+#     --mode both|nr|ble        (agv) which technologies carry the data
+#     --tx-dbm 0|-10|-20|-30    (agv) simulated transmit power for the channel model
+#     --fading-drop             (agv) simulated outages also drop messages
 #
 #   --role all|core|ue   (up, down, restart, status) which PC of the split setup this is; default all
 #     all   everything on this PC (the original single-PC setup)
@@ -82,27 +92,56 @@ alive() { [ -f "$PID/$1.pid" ] && kill -0 "$(cat "$PID/$1.pid")" 2>/dev/null; }
 
 nstep() { step "$((++S))/$T $*"; }
 
-# ---- live pages (apps/factory_live2.py on the core PC, apps/factory2.py agent on the UE PC)
-LIVE_SIDECARS_CORE="fdl2-edge fdl-live-tx"
-LIVE_SIDECARS_UE="fdl2-robots fdl2-lidar fdl-live-rx-cam1 fdl-live-rx-cam2 fdl-live-rx-lidar fdl-live-rx-robots"
+# ---- live experiment: factory (apps/factory_live2.py core, apps/factory2.py agent UE) or agv (apps/agv_live.py
+# core, apps/agv.py ue UE)
+LIVE_SIDECARS_CORE="fdl2-edge fdl-live-tx agv-edge"
+LIVE_SIDECARS_UE="fdl2-robots fdl2-lidar fdl-live-rx-cam1 fdl-live-rx-cam2 fdl-live-rx-lidar fdl-live-rx-robots agv-fwd-nr1 agv-fwd-ble1 agv-fwd-nr2 agv-fwd-ble2"
 live_role() { [ "$ROLE_SET" = 1 ] && echo "$ROLE" || host_role; }
+live_scenario() {   # sets SCN and SCN_OPTS: from the command line (and saves them), else from logs/live_scenario
+  if [ -n "$SCENARIO" ]; then
+    SCN=$SCENARIO; SCN_OPTS=$LIVE_OPTS
+    mkdir -p "$LOG"; printf '%s %s\n' "$SCN" "$SCN_OPTS" > "$LOG/live_scenario"
+  elif [ -s "$LOG/live_scenario" ]; then
+    read -r SCN SCN_OPTS < "$LOG/live_scenario"
+    [ -n "$LIVE_OPTS" ] && SCN_OPTS=$LIVE_OPTS
+  else
+    SCN=factory; SCN_OPTS=$LIVE_OPTS
+  fi
+  case "$SCN" in factory | agv) ;; *) die "unknown scenario '$SCN' (factory or agv)" ;; esac
+}
+live_opt() { local o=$1; set -- $SCN_OPTS; while [ $# -gt 0 ]; do [ "$1" = "$o" ] && { echo "${2:-}"; return; }; shift; done; }
 live_start() {
-  local r; r=$(live_role)
-  step "live pages ($r PC)"
+  local r lv; r=$(live_role); live_scenario
+  lv=$(live_opt --level); lv=${lv:-L1}
+  step "live experiment: $SCN ($r PC)"
   case "$r" in
     core)
-      if alive live_server; then ok "live server already running (pid $(cat "$PID/live_server.pid"))"; return 0; fi
+      if alive live_server; then ok "live server already running (pid $(cat "$PID/live_server.pid")); live restart to change the scenario"; return 0; fi
       pkill -f "[f]actory_live2\.py" 2>/dev/null; pkill -f "[f]actory_live\.py" 2>/dev/null; pkill -f "[c]amsrc --truth" 2>/dev/null
-      mkdir -p "$LOG/factory/live2_core"
-      start_proc live_server python3 -u apps/factory_live2.py --http 8090 --level L1
+      pkill -f "[a]gv_live\.py" 2>/dev/null
+      if [ "$SCN" = agv ]; then
+        local a=(--http 8090 --level "$lv") v
+        v=$(live_opt --mode); [ -n "$v" ] && a+=(--mode "$v")
+        v=$(live_opt --tx-dbm); [ -n "$v" ] && a+=(--tx-dbm "$v")
+        [[ " $SCN_OPTS " == *" --fading-drop "* ]] && a+=(--fading-drop)
+        mkdir -p "$LOG/agv"
+        start_proc live_server python3 -u apps/agv_live.py "${a[@]}"
+      else
+        mkdir -p "$LOG/factory/live2_core"
+        start_proc live_server python3 -u apps/factory_live2.py --http 8090 --level "$lv"
+      fi
       wait_for 20 "live pages on :8090" curl -sf -o /dev/null http://127.0.0.1:8090/arch
-      ok "http://$CORE_PC:8090/  (factory floor)   http://$CORE_PC:8090/arch  (architecture)" ;;
+      ok "http://$CORE_PC:8090/  ($SCN)   http://$CORE_PC:8090/arch  (architecture)" ;;
     ue)
-      if alive live_agent; then ok "live agent already running (pid $(cat "$PID/live_agent.pid"))"; return 0; fi
-      pkill -f "[f]actory2\.py agent" 2>/dev/null; pkill -f "[f]actory_dl\.py agent" 2>/dev/null
-      mkdir -p "$LOG/factory/live2"
-      start_proc live_agent python3 -u apps/factory2.py agent --core "$CORE_PC"
-      sleep 2; alive live_agent && ok "agent feeding the core PC $CORE_PC:5300" || die "live agent exited (log $LOG/live_agent.log)" ;;
+      if alive live_agent; then ok "live agent already running (pid $(cat "$PID/live_agent.pid")); live restart to change the scenario"; return 0; fi
+      pkill -f "[f]actory2\.py agent" 2>/dev/null; pkill -f "[f]actory_dl\.py agent" 2>/dev/null; pkill -f "[a]gv\.py ue" 2>/dev/null
+      if [ "$SCN" = agv ]; then
+        start_proc live_agent python3 -u apps/agv.py ue --core "$CORE_PC" --level "$lv"
+      else
+        mkdir -p "$LOG/factory/live2"
+        start_proc live_agent python3 -u apps/factory2.py agent --core "$CORE_PC"
+      fi
+      sleep 2; alive live_agent && ok "$SCN: UE side feeding the core PC $CORE_PC:5300" || die "live agent exited (log $LOG/live_agent.log)" ;;
     *) printf '   skipped: the live pages need the two-PC split (core and UE PC)\n' ;;
   esac
 }
@@ -111,14 +150,16 @@ live_stop() {
   step "live pages ($r PC)"
   case "$r" in
     core) stop_proc live_server; pkill -f "[f]actory_live2\.py" 2>/dev/null; pkill -f "[c]amsrc --truth" 2>/dev/null
+          pkill -f "[a]gv_live\.py" 2>/dev/null
           for c in $LIVE_SIDECARS_CORE; do dk rm -f "$c" >/dev/null 2>&1; done ;;
-    ue)   stop_proc live_agent; pkill -f "[f]actory2\.py agent" 2>/dev/null
+    ue)   stop_proc live_agent; pkill -f "[f]actory2\.py agent" 2>/dev/null; pkill -f "[a]gv\.py ue" 2>/dev/null
           for c in $LIVE_SIDECARS_UE; do dk rm -f "$c" >/dev/null 2>&1; done ;;
   esac
   ok "stopped"
 }
 live_status() {
-  local r; r=$(live_role)
+  local r; r=$(live_role); live_scenario
+  printf 'scenario      %s %s\n' "$SCN" "$SCN_OPTS"
   case "$r" in
     core) alive live_server && printf 'live server   running (pid %s)  http://%s:8090/  /arch\n' "$(cat "$PID/live_server.pid")" "$CORE_PC" \
             || printf 'live server   stopped\n'; c=$LIVE_SIDECARS_CORE ;;
@@ -524,13 +565,18 @@ flash() {
 }
 
 cmd=${1:-}; shift || true
-KEEP_CORE=0; ARG=; ROLE_SET=0
+KEEP_CORE=0; ARG=; ROLE_SET=0; SCENARIO=; LIVE_OPTS=
 while [ $# -gt 0 ]; do
   case "$1" in
     --core) case "${2:-}" in oai | free5gc) CORE=$2 ;; *) die "--core takes oai or free5gc" ;; esac; shift ;;
     --role) case "${2:-}" in all | core | ue) ROLE=$2; ROLE_SET=1 ;;
               *) die "--role takes all, core or ue" ;; esac; shift ;;
     --keep-core) KEEP_CORE=1 ;;
+    --scenario) case "${2:-}" in factory | agv) SCENARIO=$2 ;; *) die "--scenario takes factory or agv" ;; esac; shift ;;
+    --level) case "${2:-}" in L1 | L2 | L3) LIVE_OPTS="$LIVE_OPTS --level $2" ;; *) die "--level takes L1, L2 or L3" ;; esac; shift ;;
+    --mode) case "${2:-}" in both | nr | ble) LIVE_OPTS="$LIVE_OPTS --mode $2" ;; *) die "--mode takes both, nr or ble" ;; esac; shift ;;
+    --tx-dbm) case "${2:-}" in 0 | -10 | -20 | -30) LIVE_OPTS="$LIVE_OPTS --tx-dbm $2" ;; *) die "--tx-dbm takes 0, -10, -20 or -30" ;; esac; shift ;;
+    --fading-drop) LIVE_OPTS="$LIVE_OPTS --fading-drop" ;;
     --transport) case "${2:-}" in ble | lan) TRANSPORT=$2 ;; *) die "--transport takes ble or lan" ;; esac; shift ;;
     *) ARG=$1 ;;
   esac
@@ -545,5 +591,5 @@ case "$cmd" in
   restart) KEEP_CORE=1; down; KEEP_CORE=0; up ;;
   status) status; [ "$ROLE" = all ] || { printf '\n'; ROLE_SET=1 live_status; } ;;
   live) live ;;
-  *) sed -n '2,29p' "$0"; exit 1 ;;
+  *) sed -n '2,39p' "$0"; exit 1 ;;
 esac

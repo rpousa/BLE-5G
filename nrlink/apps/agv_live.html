@@ -1,0 +1,612 @@
+<title>AGV Testbed</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Semi+Condensed:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+<style>
+/* Layout: a control-room sheet. Floor plan beside the head-to-head numbers, then the radio and latency traces
+   under them, NR always blue and Bluetooth always green, the same as the nrlink Two-PC Split page. */
+:root {
+  --bg: #eef1f4; --panel: #ffffff; --panel-2: #f5f7f9; --line: #d3d9e0;
+  --ink: #17202b; --ink-2: #4b5866; --ink-3: #7a8693;
+  --nr: #1f63d6; --ble: #1d8a3c; --ok: #0f7a55; --warn: #b86e00; --bad: #c4312a;
+  --rack: #c9d0d8; --rack-edge: #9aa5b1; --route: #b0b9c3; --cp: #5a3fb3; --obj: #b86e00;
+  --display: "Barlow Semi Condensed", "Arial Narrow", "Roboto Condensed", system-ui, sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+  --r: 6px;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0e141b; --panel: #151d26; --panel-2: #1b2530; --line: #2a3644; --ink: #e6ebf0; --ink-2: #a9b4bf; --ink-3: #74808c;
+    --nr: #5b93f5; --ble: #45c06a; --ok: #3dbb72; --warn: #f0a830; --bad: #f0605a;
+    --rack: #2a3644; --rack-edge: #3e4c5c; --route: #3a4756; --cp: #a08af0; --obj: #f0a830; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0e141b; --panel: #151d26; --panel-2: #1b2530; --line: #2a3644; --ink: #e6ebf0; --ink-2: #a9b4bf; --ink-3: #74808c;
+  --nr: #5b93f5; --ble: #45c06a; --ok: #3dbb72; --warn: #f0a830; --bad: #f0605a;
+  --rack: #2a3644; --rack-edge: #3e4c5c; --route: #3a4756; --cp: #a08af0; --obj: #f0a830; color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body { background: var(--bg); color: var(--ink); font: 15px/1.45 var(--display); }
+.wrap { max-width: 1440px; margin: 0 auto; padding-block: 18px 40px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
+  display: grid; gap: 14px; }
+header { display: flex; flex-wrap: wrap; gap: 10px 22px; align-items: end; justify-content: space-between; }
+h1 { font-size: 30px; line-height: 1.05; margin: 0; font-weight: 700; letter-spacing: .01em; text-wrap: balance; }
+.sub { color: var(--ink-2); margin: 4px 0 0; max-width: 90ch; }
+.pills { display: flex; flex-wrap: wrap; gap: 6px; }
+.pill { font: 500 12px/1 var(--mono); padding: 6px 8px; border: 1px solid var(--line); border-radius: 99px; background: var(--panel); color: var(--ink-2); white-space: nowrap; }
+.pill.live { color: var(--ok); border-color: var(--ok); }
+.pill.replay { color: var(--warn); border-color: var(--warn); }
+.pill.bad { color: var(--bad); border-color: var(--bad); }
+.controls { display: flex; flex-wrap: wrap; gap: 8px 18px; align-items: center; padding: 10px 12px; background: var(--panel); border: 1px solid var(--line); border-radius: var(--r); }
+.controls .grp { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.controls .lab { font: 600 11px/1 var(--mono); letter-spacing: .06em; text-transform: uppercase; color: var(--ink-3); }
+.seg { display: inline-flex; border: 1px solid var(--line); border-radius: 5px; overflow: hidden; }
+.seg button { font: 600 13px/1 var(--display); padding: 7px 10px; border: 0; border-right: 1px solid var(--line); background: var(--panel-2); color: var(--ink-2); cursor: pointer; }
+.seg button:last-child { border-right: 0; }
+.seg button[aria-pressed="true"] { background: var(--ink); color: var(--panel); }
+.seg button:disabled { cursor: default; opacity: .75; }
+.seg button:focus-visible, .chk:focus-within { outline: 2px solid var(--nr); outline-offset: 2px; }
+.chk { display: inline-flex; align-items: center; gap: 6px; font-weight: 600; color: var(--ink-2); }
+.note { font: 12px/1.4 var(--mono); color: var(--ink-3); }
+.grid { display: grid; grid-template-columns: minmax(0, 1.55fr) minmax(0, 1fr); gap: 14px; align-items: start; }
+@media (max-width: 1000px) { .grid { grid-template-columns: minmax(0, 1fr); } }
+.card { background: var(--panel); border: 1px solid var(--line); border-radius: var(--r); min-width: 0; }
+.card > .hd { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 4px 12px; align-items: baseline; padding: 10px 12px 8px; border-bottom: 1px solid var(--line); }
+.card h2 { font-size: 17px; margin: 0; font-weight: 700; text-wrap: balance; }
+.card .meta { font: 12px/1.3 var(--mono); color: var(--ink-3); }
+.card .bd { padding: 10px 12px 12px; min-width: 0; }
+canvas { display: block; width: 100%; }
+.legend { display: flex; flex-wrap: wrap; gap: 6px 14px; font: 12px/1.3 var(--mono); color: var(--ink-2); padding: 8px 12px 10px; border-top: 1px solid var(--line); }
+.legend i { display: inline-block; width: 14px; height: 0; border-top: 3px solid; vertical-align: middle; margin-right: 5px; }
+.legend i.dot { width: 8px; height: 8px; border: 0; border-radius: 50%; }
+.h2h { display: grid; gap: 12px; }
+.h2h .row { display: grid; gap: 6px; }
+.h2h .ttl { display: flex; justify-content: space-between; gap: 8px; align-items: baseline; flex-wrap: wrap; }
+.h2h .ttl b { font-size: 15px; }
+.h2h .ttl span { font: 12px/1.3 var(--mono); color: var(--ink-3); }
+.vs { display: grid; grid-template-columns: 74px minmax(0, 1fr) 118px; gap: 4px 8px; align-items: center; font: 12px/1.2 var(--mono); }
+.vs .who { font: 600 13px/1 var(--display); }
+.vs .who.nr { color: var(--nr); } .vs .who.ble { color: var(--ble); }
+.bar { position: relative; height: 16px; background: var(--panel-2); border-radius: 3px; overflow: hidden; }
+.bar > span { position: absolute; top: 0; bottom: 0; left: 0; border-radius: 3px; }
+.bar > em { position: absolute; top: 0; bottom: 0; width: 2px; background: var(--ink); opacity: .55; }
+.vs .num { text-align: right; font-variant-numeric: tabular-nums; color: var(--ink-2); white-space: nowrap; }
+.kv { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.kv div { background: var(--panel-2); border-radius: 5px; padding: 7px 9px; min-width: 0; }
+.kv span { display: block; font: 600 10.5px/1.2 var(--mono); letter-spacing: .05em; text-transform: uppercase; color: var(--ink-3); }
+.kv b { font: 600 17px/1.3 var(--mono); font-variant-numeric: tabular-nums; }
+.tbl { overflow-x: auto; }
+table { border-collapse: collapse; width: 100%; font: 12.5px/1.35 var(--mono); font-variant-numeric: tabular-nums; }
+th, td { padding: 6px 8px; border-bottom: 1px solid var(--line); text-align: right; white-space: nowrap; }
+th { font: 600 11px/1.2 var(--mono); letter-spacing: .04em; text-transform: uppercase; color: var(--ink-3); background: var(--panel-2); }
+th:first-child, td:first-child { text-align: left; }
+td.nr { color: var(--nr); font-weight: 600; } td.ble { color: var(--ble); font-weight: 600; }
+.two { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 14px; }
+@media (max-width: 1000px) { .two { grid-template-columns: minmax(0, 1fr); } }
+.log { font: 12px/1.5 var(--mono); color: var(--ink-2); max-height: 220px; overflow: auto; margin: 0; padding: 0; list-style: none; }
+.log li { padding: 2px 0; border-bottom: 1px dashed var(--line); overflow-wrap: anywhere; }
+.log time { color: var(--ink-3); margin-right: 8px; }
+.prose { max-width: 75ch; color: var(--ink-2); margin: 0; }
+.prose + .prose { margin-top: 8px; }
+.prose b { color: var(--ink); }
+.empty { color: var(--ink-3); font: 12.5px/1.4 var(--mono); padding: 6px 0; }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+
+<div class="wrap">
+  <header>
+    <div style="min-width:0">
+      <h1>AGV Testbed</h1>
+      <p class="sub">One AGV on a 48 × 30 m factory floor. Its LiDAR scans go out over <b style="color:var(--nr)">NR</b> (nrUE1, nrlink + OAI nFAPI) and <b style="color:var(--ble)">Bluetooth LE</b> (n3iwue1, through the N3IWF) at the same moment. Its camera detections and pose go out the same way on nrUE2 and n3iwue2. Each checkpoint pole carries both radios; the AGV stops there to have its position corrected, and steers on its LiDAR in between.</p>
+    </div>
+    <div class="pills" id="pills"><span class="pill" id="p-src">connecting…</span></div>
+  </header>
+
+  <div class="controls" id="controls">
+    <div class="grp"><span class="lab">Load</span><span class="seg" id="c-level"></span><span class="note" id="c-level-note"></span></div>
+    <div class="grp"><span class="lab">Carried by</span><span class="seg" id="c-mode"></span></div>
+    <div class="grp"><span class="lab">Simulated Tx power</span><span class="seg" id="c-tx"></span></div>
+    <label class="chk" for="c-fade"><input type="checkbox" id="c-fade"> Simulated fades drop messages</label>
+    <span class="note" id="c-note"></span>
+  </div>
+
+  <div class="grid">
+    <section class="card">
+      <div class="hd"><h2>Floor</h2><span class="meta" id="floor-meta">–</span></div>
+      <canvas id="map" aria-label="Floor plan with racks, checkpoints, the AGV, its LiDAR scan and detections"></canvas>
+      <div class="legend">
+        <span><i style="border-color:var(--ink)"></i>AGV, true position</span>
+        <span><i style="border-color:var(--nr)"></i>as the edge last placed it over NR</span>
+        <span><i style="border-color:var(--ble)"></i>over Bluetooth</span>
+        <span><i class="dot" style="background:var(--cp)"></i>checkpoint pole (NR cell + BLE access point)</span>
+        <span><i class="dot" style="background:var(--obj)"></i>camera detection</span>
+        <span>dots: LiDAR scan as received, colored by the copy that arrived first</span>
+      </div>
+    </section>
+
+    <section class="card">
+      <div class="hd"><h2>Head to head</h2><span class="meta" id="h2h-meta">last 60 s</span></div>
+      <div class="bd h2h" id="h2h"><div class="empty">Waiting for the first statistics (every 2 s).</div></div>
+      <div class="bd" style="border-top:1px solid var(--line)">
+        <div class="kv" id="kv"></div>
+      </div>
+    </section>
+  </div>
+
+  <div class="two">
+    <section class="card">
+      <div class="hd"><h2>Received power at the AGV</h2><span class="meta">simulated · last 60 s · dBm</span></div>
+      <div class="bd"><canvas id="pw1" aria-label="Received power, LiDAR pair"></canvas><canvas id="pw2" style="margin-top:10px" aria-label="Received power, detections pair"></canvas></div>
+      <div class="legend">
+        <span><i style="border-color:var(--nr)"></i>NR, fixed channel 2402 MHz</span>
+        <span><i style="border-color:var(--ble)"></i>Bluetooth, hops 37 channels</span>
+        <span>thin: instantaneous · thick: mean (path loss + shadowing)</span>
+        <span><i style="border-color:var(--bad);border-top-style:dashed"></i>receiver sensitivity</span>
+      </div>
+    </section>
+    <section class="card">
+      <div class="hd"><h2>One-way delay, every message</h2><span class="meta">measured · last 60 s · core clock</span></div>
+      <div class="bd"><canvas id="lat" aria-label="One-way delay of every message copy"></canvas></div>
+      <div class="legend">
+        <span><i class="dot" style="background:var(--nr)"></i>NR</span>
+        <span><i class="dot" style="background:var(--ble)"></i>Bluetooth</span>
+        <span>circle: LiDAR scan · square: detections + pose · × at the top: lost</span>
+      </div>
+    </section>
+  </div>
+
+  <section class="card">
+    <div class="hd"><h2>Radio links</h2><span class="meta" id="radio-meta">simulated channel per board</span></div>
+    <div class="tbl"><table>
+      <thead><tr><th>Link</th><th>Carries</th><th>Serving pole</th><th>Mean dBm</th><th>Now dBm</th><th>Margin dB</th><th>Out, 30 s</th><th>Longest fade</th><th>Link drops, 5 min</th><th>Handovers</th></tr></thead>
+      <tbody id="radio"><tr><td colspan="10" class="empty">Waiting for the AGV.</td></tr></tbody>
+    </table></div>
+  </section>
+
+  <section class="card">
+    <div class="hd"><h2>Comparison by setting</h2><span class="meta" id="cmp-meta">each setting after 60 s on it</span></div>
+    <div class="tbl"><table>
+      <thead><tr><th>Setting</th><th>Measured</th><th>Path</th><th>Delivered</th><th>p50 ms</th><th>p90 ms</th><th>p99 ms</th><th>First to arrive</th><th>Sync answer p50 / p90 ms</th><th>Out (sim)</th></tr></thead>
+      <tbody id="cmp"><tr><td colspan="10" class="empty">A setting appears here once it has run for 90 s.</td></tr></tbody>
+    </table></div>
+  </section>
+
+  <div class="two">
+    <section class="card">
+      <div class="hd"><h2>How it is measured</h2></div>
+      <div class="bd">
+        <p class="prose"><b>Same data, same moment.</b> The AGV simulation on the UE PC builds each message once and hands the identical bytes to two forwarders, one inside an nrUE's network namespace and one inside an n3iwue's. Each copy carries the message's sequence number and send time, so the edge in the data network sees every message twice and compares the two copies directly.</p>
+        <p class="prose"><b>Delay</b> is one way, on the core PC's clock: the UE PC's clock offset is measured every 30 s over the LAN. A copy not seen 10 s after it was sent counts as lost. <b>Sync answer</b> is the time from the AGV stopping at a checkpoint to the edge's position fix arriving back over that path; the AGV drives on with the first one.</p>
+        <p class="prose"><b>The radio channel is simulated</b> from the AGV's position, and the delays and losses are measured on the real boards, which sit on a bench. With “Simulated fades drop messages” on, a copy is not sent while its simulated link is out.</p>
+      </div>
+    </section>
+    <section class="card">
+      <div class="hd"><h2>Channel model</h2><span class="meta">assumed values</span></div>
+      <div class="tbl"><table><tbody id="model"></tbody></table></div>
+    </section>
+  </div>
+
+  <section class="card">
+    <div class="hd"><h2>Events</h2><span class="meta" id="log-meta"></span></div>
+    <div class="bd"><ul class="log" id="log"></ul></div>
+  </section>
+</div>
+
+<script>
+(() => {
+  const $ = (id) => document.getElementById(id);
+  const css = (n) => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+  const PN = ["nr1", "ble1", "nr2", "ble2"];
+  const TECH = (p) => (p.startsWith("nr") ? "nr" : "ble");
+  const LABEL = { nr1: "NR · nrUE1", ble1: "BLE · n3iwue1", nr2: "NR · nrUE2", ble2: "BLE · n3iwue2" };
+  const S = { meta: null, cfg: null, truth: null, stats: null, bycfg: {}, pts: [], lost: [], pw: { nr1: [], ble1: [], nr2: [], ble2: [] },
+    ghost: {}, scan: null, dets: null, now: 0, offset: 0, live: false, log: [] };
+
+  // ------------------------------------------------------------------------------------------- events
+  function onEvent(m) {
+    const k = m.k;
+    if (k === "hello") {
+      S.meta = m.meta || S.meta; S.cfg = m.cfg || S.cfg; S.truth = m.truth || S.truth; S.bycfg = m.bycfg || S.bycfg;
+      if (m.offset_ms != null) { S.offset = m.offset_ms / 1000; S.offKnown = true; }
+      if (m.pts) S.pts = m.pts.map((p) => ({ t: p[0], p: p[1], f: p[2], d: p[3] }));
+      if (m.log) m.log.forEach((e) => addLog(e.t, e.line));
+      S.now = Math.max(S.now, m.now || 0);
+      buildControls(); model(); cmp();
+    } else if (k === "truth") {
+      S.truth = m;   // t is on the UE PC's clock: placed on the core clock once the offset is known
+      if (m.cfg) { S.cfg = Object.assign({}, S.cfg || {}, m.cfg); syncControls(); }
+      if (S.offKnown) {
+        S.now = Math.max(S.now, m.t + S.offset);
+        for (const p of PN) { const c = m.ch && m.ch[p]; if (c) S.pw[p].push({ t: m.t + S.offset, i: c.inst, m: c.mean, ok: c.ok }); }
+      }
+      if (m.chsum) S.chsum = m.chsum;
+    } else if (k === "rx") {
+      const p = PN[m.p];
+      S.ghost[p] = { x: m.x, y: m.y, hd: m.hd, t: m.tr };
+      if (m.pts) S.scan = { pts: m.pts, p, t: m.tr };
+      if (m.dets) S.dets = { dets: m.dets, p, t: m.tr };
+      S.now = Math.max(S.now, m.tr);
+    } else if (k === "stats") {
+      S.stats = m; S.now = Math.max(S.now, m.t);
+      if (m.offset_ms != null) { S.offset = m.offset_ms / 1000; S.offKnown = true; }
+      for (const q of m.pts || []) S.pts.push({ t: q[0], p: q[1], f: q[2], d: q[3] });
+      for (const q of m.lostpts || []) S.lost.push({ t: q[0], p: q[1], f: q[2] });
+      if (m.chsum) S.chsum = m.chsum;
+      if (m.bycfg) S.bycfg = m.bycfg;
+      if (m.cfg) { S.cfg = m.cfg; syncControls(); }
+      h2h(); radio(); cmp(); pills();
+    } else if (k === "sync") {
+      const cp = S.meta ? S.meta.checkpoints[m.cp][0] : m.cp;
+      addLog(m.t, `checkpoint ${cp}: position fix first over ${LABEL[m.p]}, ${m.ms} ms after stopping`);
+    } else if (k === "log") {
+      addLog(m.t, m.line);
+    } else if (k === "cfg") {
+      S.cfg = m.cfg; syncControls();
+    }
+    const cut = S.now - 70;
+    for (const p of PN) { const a = S.pw[p]; while (a.length && a[0].t < cut) a.shift(); }
+    while (S.pts.length && S.pts[0].t < cut) S.pts.shift();
+    while (S.lost.length && S.lost[0].t < cut) S.lost.shift();
+  }
+
+  function addLog(t, line) {
+    S.log.push({ t, line }); if (S.log.length > 80) S.log.shift();
+    const ul = $("log");
+    const li = document.createElement("li");
+    const tm = document.createElement("time");
+    tm.textContent = new Date(t * 1000).toLocaleTimeString([], { hour12: false });
+    li.append(tm, document.createTextNode(line));
+    ul.prepend(li);
+    while (ul.children.length > 80) ul.lastChild.remove();
+  }
+
+  // ------------------------------------------------------------------------------------------- controls
+  function seg(el, items, cur, onPick) {
+    el.textContent = "";
+    for (const [val, lab] of items) {
+      const b = document.createElement("button");
+      b.type = "button"; b.textContent = lab; b.dataset.v = JSON.stringify(val);
+      b.setAttribute("aria-pressed", String(JSON.stringify(cur) === JSON.stringify(val)));
+      b.disabled = !S.live;
+      b.addEventListener("click", () => onPick(val));
+      el.append(b);
+    }
+  }
+  function post(body) {
+    fetch("/cfg", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) })
+      .then((r) => r.json()).then((c) => { if (c && !c.error) { S.cfg = c; syncControls(); } else if (c) $("c-note").textContent = c.error; })
+      .catch(() => { $("c-note").textContent = "The server did not answer; the setting is unchanged."; });
+  }
+  function buildControls() {
+    if (!S.meta || !S.cfg) return;
+    const L = S.meta.levels;
+    seg($("c-level"), Object.keys(L).map((k) => [k, k]), S.cfg.level, (v) => post({ level: v }));
+    seg($("c-mode"), [["both", "Both"], ["nr", "NR only"], ["ble", "Bluetooth only"]], S.cfg.mode, (v) => post({ mode: v }));
+    seg($("c-tx"), S.meta.tx_steps.map((v) => [v, `${v} dBm`]), S.cfg.tx, (v) => post({ tx: v }));
+    const f = $("c-fade"); f.checked = !!S.cfg.fade; f.disabled = !S.live;
+    f.onchange = () => post({ fade: f.checked });
+    $("c-note").textContent = S.live ? "Each change is measured on its own: the table below fills in after 90 s on a setting."
+      : "Recorded run: the settings show what it ran with.";
+    syncControls();
+  }
+  function syncControls() {
+    if (!S.cfg) return;
+    for (const [id, key] of [["c-level", "level"], ["c-mode", "mode"], ["c-tx", "tx"]])
+      for (const b of $(id).children) b.setAttribute("aria-pressed", String(b.dataset.v === JSON.stringify(S.cfg[key])));
+    $("c-fade").checked = !!S.cfg.fade;
+    if (S.meta) {
+      const l = S.meta.levels[S.cfg.level];
+      $("c-level-note").textContent = l ? `LiDAR ${l.lidar_hz} Hz · detections ${l.det_hz} Hz` : "";
+    }
+  }
+  function pills() {
+    const el = $("pills"); el.textContent = "";
+    const add = (txt, cls) => { const s = document.createElement("span"); s.className = "pill " + (cls || ""); s.textContent = txt; el.append(s); };
+    add(S.live ? "live" : `recorded ${S.recorded || ""}`.trim(), S.live ? "live" : "replay");
+    const st = S.stats;
+    if (st) {
+      if (st.offset_ms != null) {
+        const o = st.offset_ms, h = Math.abs(o) / 36e5;
+        add(h >= 1 ? `UE PC clock ${o < 0 ? "ahead" : "behind"} ${h.toFixed(1)} h (corrected)` : `UE PC clock ${o > 0 ? "+" : ""}${o} ms (corrected)`);
+      }
+      if (st.cfg_age != null) add(`setting for ${fmtDur(st.cfg_age)}`);
+    }
+  }
+  const fmtDur = (s) => (s < 120 ? `${Math.round(s)} s` : `${Math.round(s / 60)} min`);
+
+  // ------------------------------------------------------------------------------------------- head to head
+  function h2h() {
+    const st = S.stats; if (!st) return;
+    const el = $("h2h"); el.textContent = "";
+    const rows = [
+      ["LiDAR scan", "nr1", "ble1", "lidar", `${S.meta && S.cfg ? S.meta.levels[S.cfg.level].lidar_hz + " Hz, 752 B" : ""}`],
+      ["Detections + pose", "nr2", "ble2", "det", `${S.meta && S.cfg ? S.meta.levels[S.cfg.level].det_hz + " Hz, 36–80 B" : ""}`],
+    ];
+    let mx = 1;
+    for (const p of PN) { const a = st.paths[p]; if (a && a.p90 != null) mx = Math.max(mx, a.p90); }
+    mx = niceMax(mx);
+    for (const [name, a, b, flow, note] of rows) {
+      const race = st.race[flow] || { n: 0, wins: {} };
+      const row = document.createElement("div"); row.className = "row";
+      row.innerHTML = `<div class="ttl"><b>${name}</b><span>${note} · p50 ▮ to p90 ▏ · scale ${mx} ms</span></div>`;
+      const vs = document.createElement("div"); vs.className = "vs";
+      for (const p of [a, b]) {
+        const s = st.paths[p] || {};
+        const w = race.wins[p] || 0;
+        const tech = TECH(p);
+        const deliv = delivered(s, 0);
+        vs.insertAdjacentHTML("beforeend",
+          `<span class="who ${tech}">${tech === "nr" ? "NR" : "Bluetooth"}</span>
+           <span class="bar" title="${LABEL[p]}: p50 ${s.p50 ?? "–"} ms, p90 ${s.p90 ?? "–"} ms">
+             <span style="width:${s.p50 == null ? 0 : Math.min(100, (100 * s.p50) / mx)}%;background:var(--${tech})"></span>
+             <em style="left:calc(${s.p90 == null ? 0 : Math.min(100, (100 * s.p90) / mx)}% - 2px)"></em></span>
+           <span class="num">${s.p50 ?? "–"} / ${s.p90 ?? "–"} ms</span>
+           <span></span><span class="num" style="text-align:left">delivered ${deliv}${s.faded ? ` · ${s.faded} not sent (fade)` : ""}</span>
+           <span class="num">first ${race.n ? Math.round((100 * w) / race.n) : "–"} %</span>`);
+      }
+      row.append(vs); el.append(row);
+    }
+    // sync
+    const sy = st.sync || {};
+    const row = document.createElement("div"); row.className = "row";
+    row.innerHTML = `<div class="ttl"><b>Checkpoint position fix</b><span>stop → answer back on the same path · p50 / p90</span></div>`;
+    const vs = document.createElement("div"); vs.className = "vs";
+    let smx = 1; for (const p of ["nr2", "ble2"]) if (sy[p] && sy[p].p90) smx = Math.max(smx, sy[p].p90);
+    smx = niceMax(smx);
+    for (const p of ["nr2", "ble2"]) {
+      const s = sy[p] || {}; const tech = TECH(p);
+      vs.insertAdjacentHTML("beforeend",
+        `<span class="who ${tech}">${tech === "nr" ? "NR" : "Bluetooth"}</span>
+         <span class="bar"><span style="width:${s.p50 == null ? 0 : Math.min(100, (100 * s.p50) / smx)}%;background:var(--${tech})"></span>
+           <em style="left:calc(${s.p90 == null ? 0 : Math.min(100, (100 * s.p90) / smx)}% - 2px)"></em></span>
+         <span class="num">${s.p50 ?? "–"} / ${s.p90 ?? "–"} ms</span>
+         <span></span><span class="num" style="text-align:left">${s.n || 0} fixes · scale ${smx} ms</span>
+         <span class="num">first ${s.n ? Math.round((100 * s.first) / s.n) : "–"} %</span>`);
+    }
+    row.append(vs); el.append(row);
+    $("h2h-meta").textContent = `last ${st.win} s · ${S.cfg ? cfgName(S.cfg) : ""}`;
+    // key values
+    const t = S.truth;
+    const kv = [["Position error", t ? `${(t.err_m * 100).toFixed(0)} cm` : "–"], ["LiDAR match", t ? `${Math.round(t.lidar_q * 100)} %` : "–"],
+      ["Speed", t ? `${t.v.toFixed(1)} m/s` : "–"]];
+    $("kv").innerHTML = kv.map(([a, b]) => `<div><span>${a}</span><b>${b}</b></div>`).join("");
+  }
+  // share of the messages made that reached the edge: lost copies and copies a simulated fade kept from being sent
+  const delivered = (s, dp) => { const n = (s.rx || 0) + (s.lost || 0) + (s.faded || 0); return n ? (100 * s.rx / n).toFixed(dp) + " %" : "–"; };
+  const niceMax = (v) => { const s = [100, 200, 250, 500, 1000, 1500, 2000, 3000, 5000, 10000, 20000]; return s.find((x) => x >= v * 1.05) || Math.ceil(v / 1000) * 1000; };
+  const cfgName = (c) => `${{ both: "both", nr: "NR only", ble: "Bluetooth only" }[c.mode]} · ${c.level} · ${c.tx} dBm${c.fade ? " · fades drop" : ""}`;
+
+  // ------------------------------------------------------------------------------------------- tables
+  function radio() {
+    const c = S.chsum; if (!c || !S.meta) return;
+    const sens = S.meta.radio.sens_dbm;
+    $("radio").innerHTML = PN.map((p) => {
+      const s = c[p]; if (!s) return "";
+      const m = s.inst - sens;
+      return `<tr><td class="${TECH(p)}">${LABEL[p]}</td><td>${p.endsWith("1") ? "LiDAR" : "detections + pose"}</td><td>${S.meta.checkpoints[s.cp][0]}${s.los ? "" : " (NLOS)"}</td>
+        <td>${s.mean.toFixed(1)}</td><td>${s.inst.toFixed(1)}</td><td style="color:var(--${m < 0 ? "bad" : m < 6 ? "warn" : "ink-2"})">${m.toFixed(1)}</td>
+        <td>${s.out_pct} %</td><td>${s.longest_ms} ms</td><td>${s.drops_5min}</td><td>${s.handovers}</td></tr>`;
+    }).join("");
+    $("radio-meta").textContent = `simulated channel per board · margin over ${sens} dBm sensitivity · a drop is an outage longer than ${S.meta.radio.ble_sup_ms} ms (BLE supervision timeout) or ${S.meta.radio.nr_fail_ms} ms (NR radio link failure)`;
+  }
+  function cmp() {
+    const keys = Object.keys(S.bycfg || {}); if (!keys.length) return;
+    keys.sort((a, b) => S.bycfg[a].t - S.bycfg[b].t);
+    const rows = [];
+    for (const k of keys) {
+      const r = S.bycfg[k];
+      PN.forEach((p, i) => {
+        const s = r.paths[p]; if (!s || (!s.rx && !s.lost && !s.faded)) return;
+        const flow = i < 2 ? "lidar" : "det";
+        const race = r.race[flow] || { n: 0, wins: {} };
+        const sy = r.sync && r.sync[p];
+        const ch = r.chsum && r.chsum[p];
+        const n = rows.filter((x) => x.k === k).length;
+        rows.push({ k, html: `<tr><td>${n ? "" : cfgName(r.cfg)}</td><td>${n ? "" : fmtDur(r.secs)}</td><td class="${TECH(p)}">${LABEL[p]}</td>
+          <td>${delivered(s, 1)}${s.faded ? ` (${s.faded} not sent)` : ""}</td><td>${s.p50 ?? "–"}</td><td>${s.p90 ?? "–"}</td><td>${s.p99 ?? "–"}</td>
+          <td>${race.n ? Math.round((100 * (race.wins[p] || 0)) / race.n) + " %" : "–"}</td>
+          <td>${sy && sy.n ? `${sy.p50} / ${sy.p90}` : ""}</td><td>${ch ? ch.out_pct + " %" : ""}</td></tr>` });
+      });
+    }
+    $("cmp").innerHTML = rows.map((r) => r.html).join("");
+  }
+  function model() {
+    if (!S.meta) return;
+    const r = S.meta.radio;
+    const rows = [["Band", `${r.freq_mhz / 1000} GHz ISM, 1 Mbit/s GFSK on both (FRDM-MCXW72 front end)`],
+      ["NR channel", "fixed, 2402 MHz: one fading process, frozen while the AGV stands"],
+      ["Bluetooth channel", `hops over 37 data channels, a new one every ${r.ble_ci_ms} ms event: independent fading per event`],
+      ["Path loss", `${r.model}; LOS unless a rack is in the way`],
+      ["Shadowing", `${r.sf_los_db} dB LOS, ${r.sf_nlos_db} dB NLOS, decorrelates over ${r.shadow_m} m`],
+      ["Fast fading", `Rician K = ${r.k_los_db} dB in LOS, Rayleigh behind racks; Doppler from the AGV's speed`],
+      ["Transmit / antennas", `${S.cfg ? S.cfg.tx : r.tx_dbm} dBm (page setting) · ${r.ant_dbi} dBi each end · poles ${3} m, AGV ${0.5} m`],
+      ["Sensitivity", `${r.sens_dbm} dBm`], ["Serving pole", `strongest mean, ${r.hyst_db} dB hysteresis`]];
+    $("model").innerHTML = rows.map(([a, b]) => `<tr><td style="text-align:left;white-space:normal">${a}</td><td style="text-align:left;white-space:normal;color:var(--ink-2)">${b}</td></tr>`).join("");
+  }
+
+  // ------------------------------------------------------------------------------------------- canvases
+  function fit(cv, aspect) {
+    const w = cv.clientWidth || cv.parentElement.clientWidth; const h = Math.round(w * aspect);
+    const dpr = window.devicePixelRatio || 1;
+    if (cv.width !== Math.round(w * dpr) || cv.height !== Math.round(h * dpr)) { cv.width = Math.round(w * dpr); cv.height = Math.round(h * dpr); cv.style.height = h + "px"; }
+    const g = cv.getContext("2d"); g.setTransform(dpr, 0, 0, dpr, 0, 0); return [g, w, h];
+  }
+  function drawMap() {
+    const m = S.meta; const cv = $("map"); if (!m) return;
+    const [g, w, h] = fit(cv, (m.h + 2) / (m.w + 2));
+    const sc = w / (m.w + 2); const X = (x) => (x + 1) * sc; const Y = (y) => (y + 1) * sc;
+    g.clearRect(0, 0, w, h);
+    g.fillStyle = css("--panel-2"); g.fillRect(X(0), Y(0), m.w * sc, m.h * sc);
+    g.strokeStyle = css("--line"); g.lineWidth = 1;
+    for (let x = 0; x <= m.w; x += 4) { g.beginPath(); g.moveTo(X(x), Y(0)); g.lineTo(X(x), Y(m.h)); g.stroke(); }
+    for (let y = 0; y <= m.h; y += 4) { g.beginPath(); g.moveTo(X(0), Y(y)); g.lineTo(X(m.w), Y(y)); g.stroke(); }
+    g.strokeStyle = css("--ink-3"); g.lineWidth = 2; g.strokeRect(X(0), Y(0), m.w * sc, m.h * sc);
+    // route
+    g.setLineDash([2, 6]); g.lineCap = "round"; g.strokeStyle = css("--route"); g.lineWidth = Math.max(2, 0.25 * sc);
+    g.beginPath(); m.route.forEach(([x, y], i) => (i ? g.lineTo(X(x), Y(y)) : g.moveTo(X(x), Y(y)))); g.closePath(); g.stroke(); g.setLineDash([]); g.lineCap = "butt";
+    // racks
+    for (const [x0, y0, x1, y1] of m.racks) { g.fillStyle = css("--rack"); g.fillRect(X(x0), Y(y0), (x1 - x0) * sc, (y1 - y0) * sc); g.strokeStyle = css("--rack-edge"); g.strokeRect(X(x0), Y(y0), (x1 - x0) * sc, (y1 - y0) * sc); }
+    for (const [x0, y0, x1, y1] of m.pallets) { g.fillStyle = css("--rack-edge"); g.fillRect(X(x0), Y(y0), (x1 - x0) * sc, (y1 - y0) * sc); }
+    const t = S.truth;
+    // links to the serving poles
+    if (t && t.ch) {
+      for (const p of ["nr1", "ble1"]) {
+        const c = t.ch[p]; if (!c) continue; const cp = m.checkpoints[c.cp];
+        const off = p === "nr1" ? -0.25 : 0.25;
+        g.strokeStyle = css(TECH(p) === "nr" ? "--nr" : "--ble"); g.globalAlpha = c.ok ? 0.75 : 0.25; g.lineWidth = 2;
+        g.setLineDash(c.ok ? [] : [3, 4]);
+        g.beginPath(); g.moveTo(X(t.x + off), Y(t.y + off)); g.lineTo(X(cp[1] + off), Y(cp[2] + off)); g.stroke();
+        g.setLineDash([]); g.globalAlpha = 1;
+      }
+    }
+    // checkpoints
+    g.font = `600 ${Math.max(11, sc * 0.75)}px ${css("--display")}`; g.textBaseline = "middle";
+    m.checkpoints.forEach(([name, x, y], i) => {
+      const next = t && t.next_cp === i;
+      g.fillStyle = css("--cp"); g.beginPath(); g.arc(X(x), Y(y), Math.max(5, sc * 0.45), 0, 7); g.fill();
+      if (next) { g.strokeStyle = css("--cp"); g.lineWidth = 2; g.beginPath(); g.arc(X(x), Y(y), Math.max(10, sc * 0.95), 0, 7); g.stroke(); }
+      g.fillStyle = css("--ink"); const right = x < m.w - 6;
+      g.textAlign = right ? "left" : "right"; g.fillText(name, X(x) + (right ? 1 : -1) * Math.max(9, sc * 0.8), Y(y) - Math.max(9, sc * 0.8));
+    });
+    g.textAlign = "left";
+    // LiDAR points
+    if (S.scan && S.now - S.scan.t < 6) {
+      g.fillStyle = css(TECH(S.scan.p) === "nr" ? "--nr" : "--ble"); g.globalAlpha = Math.max(0.25, 1 - (S.now - S.scan.t) / 6);
+      for (const [x, y] of S.scan.pts) g.fillRect(X(x) - 1.5, Y(y) - 1.5, 3, 3);
+      g.globalAlpha = 1;
+    }
+    // people / forklift (truth, faint)
+    if (t) {
+      g.globalAlpha = 0.4; g.fillStyle = css("--ink-2");
+      for (const [x, y] of t.people || []) { g.beginPath(); g.arc(X(x), Y(y), Math.max(3, 0.3 * sc), 0, 7); g.fill(); }
+      if (t.forklift) { const [x, y] = t.forklift; g.fillRect(X(x - 1.2), Y(y - 0.6), 2.4 * sc, 1.2 * sc); }
+      g.globalAlpha = 1;
+    }
+    // detections
+    if (S.dets && S.now - S.dets.t < 3) {
+      g.strokeStyle = css("--obj"); g.fillStyle = css("--obj"); g.lineWidth = 2; g.font = `500 ${Math.max(10, sc * 0.6)}px ${css("--mono")}`;
+      for (const [cls, conf, x, y, size] of S.dets.dets) {
+        const r = Math.max(5, (size / 2) * sc);
+        g.strokeRect(X(x) - r, Y(y) - r, 2 * r, 2 * r);
+        g.fillText(`${cls} ${Math.round(conf * 100)}`, X(x) - r, Y(y) - r - 7);
+      }
+    }
+    // ghosts: where each technology last placed the AGV
+    for (const [p, tok] of [["nr2", "--nr"], ["ble2", "--ble"], ["nr1", "--nr"], ["ble1", "--ble"]]) {
+      const gh = S.ghost[p]; if (!gh || S.now - gh.t > 8) continue;
+      agvShape(g, X(gh.x), Y(gh.y), gh.hd, sc, null, css(tok));
+    }
+    if (t) {
+      // camera field of view
+      g.fillStyle = css("--obj"); g.globalAlpha = 0.08;
+      g.beginPath(); g.moveTo(X(t.x), Y(t.y)); g.arc(X(t.x), Y(t.y), m.cam_range * sc, t.hd - Math.PI / 4, t.hd + Math.PI / 4); g.closePath(); g.fill(); g.globalAlpha = 1;
+      agvShape(g, X(t.x), Y(t.y), t.hd, sc, css("--ink"), css("--panel"));
+      $("floor-meta").textContent = `${t.state === "dwell" ? `at ${m.checkpoints[t.next_cp][0]}, waiting for its position fix` : `driving to ${m.checkpoints[t.next_cp][0]}`} · visit ${t.visit}`;
+    }
+  }
+  function agvShape(g, x, y, hd, sc, fill, stroke) {
+    g.save(); g.translate(x, y); g.rotate(hd);
+    const L = Math.max(14, 1.1 * sc), W = Math.max(10, 0.75 * sc);
+    g.beginPath(); g.moveTo(L / 2, 0); g.lineTo(L / 2 - W * 0.35, -W / 2); g.lineTo(-L / 2, -W / 2); g.lineTo(-L / 2, W / 2); g.lineTo(L / 2 - W * 0.35, W / 2); g.closePath();
+    if (fill) { g.fillStyle = fill; g.fill(); g.strokeStyle = stroke; g.lineWidth = 1.5; g.stroke(); }
+    else { g.strokeStyle = stroke; g.lineWidth = 2; g.stroke(); }
+    g.restore();
+  }
+  function axes(g, w, h, L, B, T, R, ymin, ymax, yfmt, ticks) {
+    g.strokeStyle = css("--line"); g.fillStyle = css("--ink-3"); g.font = `11px ${css("--mono")}`; g.lineWidth = 1; g.textAlign = "right"; g.textBaseline = "middle";
+    for (const v of ticks) { const y = T + (h - T - B) * (1 - (v - ymin) / (ymax - ymin)); g.beginPath(); g.moveTo(L, y); g.lineTo(w - R, y); g.stroke(); g.fillText(yfmt(v), L - 5, y); }
+    g.textAlign = "center"; g.textBaseline = "top";
+    for (let s = 0; s <= 60; s += 15) { const x = L + (w - L - R) * (1 - s / 60); g.fillText(s ? `−${s} s` : "now", x, h - B + 5); }
+  }
+  function drawPower(id, pair, title) {
+    const cv = $(id); const [g, w, h] = fit(cv, 0.36);
+    g.clearRect(0, 0, w, h);
+    const L = 44, B = 20, T = 18, R = 8, lo = -110, hi = -30;
+    axes(g, w, h, L, B, T, R, lo, hi, (v) => v, [-110, -95, -80, -65, -50, -35].filter((v) => v >= lo));
+    const X = (t) => L + (w - L - R) * (1 - (S.now - t) / 60), Y = (v) => T + (h - T - B) * (1 - (Math.max(lo, Math.min(hi, v)) - lo) / (hi - lo));
+    g.fillStyle = css("--ink-2"); g.textAlign = "left"; g.textBaseline = "top"; g.font = `600 12px ${css("--display")}`; g.fillText(title, L, 1);
+    if (S.meta) {
+      const sy = Y(S.meta.radio.sens_dbm); g.strokeStyle = css("--bad"); g.setLineDash([5, 4]); g.beginPath(); g.moveTo(L, sy); g.lineTo(w - R, sy); g.stroke(); g.setLineDash([]);
+    }
+    g.save(); g.beginPath(); g.rect(L, T, w - L - R, h - T - B); g.clip();
+    for (const p of pair) {
+      const a = S.pw[p]; if (!a.length) continue; const col = css(TECH(p) === "nr" ? "--nr" : "--ble");
+      g.strokeStyle = col; g.globalAlpha = 0.55; g.lineWidth = 1; g.beginPath();
+      a.forEach((q, i) => (i ? g.lineTo(X(q.t), Y(q.i)) : g.moveTo(X(q.t), Y(q.i)))); g.stroke();
+      g.globalAlpha = 1; g.lineWidth = 2.5; g.beginPath(); a.forEach((q, i) => (i ? g.lineTo(X(q.t), Y(q.m)) : g.moveTo(X(q.t), Y(q.m)))); g.stroke();
+      g.fillStyle = css("--bad");
+      for (const q of a) if (!q.ok) g.fillRect(X(q.t) - 1, h - B - (p.startsWith("nr") ? 6 : 3), 2.5, 3);
+    }
+    g.restore();
+  }
+  function drawLat() {
+    const cv = $("lat"); const [g, w, h] = fit(cv, 0.74);
+    g.clearRect(0, 0, w, h);
+    let mx = 200; for (const q of S.pts) if (S.now - q.t <= 60) mx = Math.max(mx, q.d);
+    mx = niceMax(Math.min(mx, 20000));
+    const L = 50, B = 20, T = 18, R = 8;
+    const ticks = [0, 0.25, 0.5, 0.75, 1].map((f) => Math.round(f * mx));
+    axes(g, w, h, L, B, T, R, 0, mx, (v) => (v >= 1000 ? (v / 1000).toFixed(v % 1000 ? 1 : 0) + " s" : v + " ms"), ticks);
+    const X = (t) => L + (w - L - R) * (1 - (S.now - t) / 60), Y = (v) => T + (h - T - B) * (1 - Math.min(v, mx) / mx);
+    g.save(); g.beginPath(); g.rect(L, 0, w - L - R, h - B); g.clip();
+    for (const q of S.pts) {
+      if (S.now - q.t > 60) continue;
+      const tech = TECH(PN[q.p]); g.fillStyle = css(tech === "nr" ? "--nr" : "--ble"); g.globalAlpha = 0.8;
+      if (q.f === 0) { g.beginPath(); g.arc(X(q.t), Y(q.d), 3.2, 0, 7); g.fill(); } else g.fillRect(X(q.t) - 2, Y(q.d) - 2, 4, 4);
+    }
+    g.globalAlpha = 1; g.lineWidth = 2;
+    for (const q of S.lost) {
+      if (S.now - q.t > 60) continue;
+      const x = X(q.t), y = T - 8; g.strokeStyle = css(TECH(PN[q.p]) === "nr" ? "--nr" : "--ble");
+      g.beginPath(); g.moveTo(x - 3, y - 3); g.lineTo(x + 3, y + 3); g.moveTo(x + 3, y - 3); g.lineTo(x - 3, y + 3); g.stroke();
+    }
+    g.restore();
+  }
+  let lastDraw = 0;
+  function frame(ts) {
+    if (ts - lastDraw > 120) {
+      lastDraw = ts;
+      if (!S.live && S.replayClock) S.now = S.replayClock();
+      drawMap(); drawPower("pw1", ["nr1", "ble1"], "LiDAR pair · nrUE1 and n3iwue1 boards"); drawPower("pw2", ["nr2", "ble2"], "Detections pair · nrUE2 and n3iwue2 boards"); drawLat();
+    }
+    requestAnimationFrame(frame);
+  }
+
+  // ------------------------------------------------------------------------------------------- sources
+  function replay() {
+    const el = document.getElementById("replay"); if (!el) return false;
+    let data; try { data = JSON.parse(el.textContent); } catch (e) { return false; }
+    S.live = false; S.recorded = data.recorded || "";
+    const ev = data.events; if (!ev || !ev.length) return false;
+    const evT = (e) => e.tc ?? e.t ?? e.tr ?? e.now ?? 0;   // tc: the core-clock time the recorder stored
+    const t0 = data.t0 ?? evT(ev[0]);
+    let i = 0, start = performance.now(), base = t0;
+    onEvent(Object.assign({}, data.hello, { k: "hello" }));
+    S.replayClock = () => base + (performance.now() - start) / 1000;
+    (function pump() {
+      const now = S.replayClock();
+      while (i < ev.length && evT(ev[i]) <= now) onEvent(ev[i++]);
+      if (i >= ev.length) {      // loop the recording
+        i = 0; start = performance.now(); base = t0;
+        for (const p of PN) S.pw[p] = []; S.pts = []; S.lost = []; S.now = t0;
+      }
+      setTimeout(pump, 50);
+    })();
+    pills(); return true;
+  }
+  function live() {
+    S.live = true;
+    const es = new EventSource("/events");
+    es.onmessage = (e) => { try { onEvent(JSON.parse(e.data)); } catch (err) { console.error("event", err); } };
+    es.onerror = () => { $("p-src").textContent = "reconnecting…"; };
+    es.onopen = () => pills();
+  }
+  if (!replay()) {
+    if (location.protocol.startsWith("http") && !location.hostname.endsWith("claude.ai") && !location.hostname.endsWith("claudeusercontent.com")) live();
+    else $("p-src").textContent = "no data";
+  }
+  requestAnimationFrame(frame);
+})();
+</script>
