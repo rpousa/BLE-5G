@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>BLE-5G Pages</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Semi+Condensed:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+<style>
+:root {
+  --bg: #eef1f4; --panel: #ffffff; --line: #d3d9e0; --ink: #17202b; --ink-2: #4b5866; --ink-3: #7a8693;
+  --signal: #b86e00; --ok: #0f7a55; --r: 6px; color-scheme: light;
+  --display: "Barlow Semi Condensed", "Arial Narrow", "Roboto Condensed", system-ui, sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root { --bg: #0e141b; --panel: #151d26; --line: #2a3644; --ink: #e6ebf0; --ink-2: #a9b4bf; --ink-3: #74808c;
+          --signal: #f0a830; --ok: #3dbb72; color-scheme: dark; }
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--ink); font: 15px/1.4 var(--display); }
+.wrap { max-width: 1480px; margin: 0 auto; padding: 22px 16px 40px; }
+header { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 18px; margin-bottom: 18px; }
+h1 { margin: 0; font-size: 1.7rem; font-weight: 600; }
+header p { margin: 0; color: var(--ink-2); max-width: 80ch; }
+header .built { margin-left: auto; font: 12px var(--mono); color: var(--ink-3); }
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 340px), 1fr)); gap: 16px; }
+.card { display: grid; grid-template-rows: auto 1fr; background: var(--panel); border: 1px solid var(--line);
+        border-radius: var(--r); overflow: hidden; color: inherit; text-decoration: none;
+        transition: border-color .15s, transform .15s; }
+.card:hover, .card:focus-visible { border-color: var(--signal); transform: translateY(-2px); outline: none; }
+.card img { display: block; width: 100%; height: auto; aspect-ratio: 16 / 10; object-fit: cover; object-position: top;
+            border-bottom: 1px solid var(--line); background: var(--bg); }
+.txt { display: grid; gap: 4px; padding: 11px 14px 13px; align-content: start; }
+.t { font-size: 1.15rem; font-weight: 600; }
+.a { color: var(--ink-2); font-size: .9rem; }
+.m { font: 11.5px var(--mono); color: var(--ink-3); display: inline-flex; align-items: center; gap: 6px; margin-top: 2px; }
+.dot { width: 8px; height: 8px; border-radius: 50%; background: var(--ok); animation: pulse 1.6s ease-in-out infinite; }
+@keyframes pulse { 50% { opacity: .3; } }
+@media (prefers-reduced-motion: reduce) { .dot { animation: none; } .card { transition: none; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>BLE-5G Pages</h1>
+    <p>5G NR over nrlink and Bluetooth LE non-3GPP access on FRDM-MCXW72 boards, free5GC and OpenAirInterface: every page of the testbed, served from the core PC.</p>
+    <span class="built">built 11 Nov 2026, 12:15</span>
+  </header>
+  <main class="grid">
+    <a class="card" href="http://192.168.10.223:8090/" data-port="8090">
+      <picture>
+        <source srcset="thumbs/agv-live-dark.jpg" media="(prefers-color-scheme: dark)">
+        <img src="thumbs/agv-live-light.jpg" alt="" width="640" height="400" loading="lazy">
+      </picture>
+      <span class="txt"><span class="t">AGV Testbed, live</span>
+        <span class="a">The running testbed: change the load, mode and radio power, and watch both paths as it happens.</span>
+        <span class="m"><span class="dot"></span>live · port 8090</span></span>
+    </a>
+    <a class="card" href="nrlink-two-pc-split.html">
+      <picture>
+        <source srcset="thumbs/nrlink-two-pc-split-dark.jpg" media="(prefers-color-scheme: dark)">
+        <img src="thumbs/nrlink-two-pc-split-light.jpg" alt="" width="640" height="400" loading="lazy">
+      </picture>
+      <span class="txt"><span class="t">nrlink Two-PC Split</span>
+        <span class="a">The whole setup over two PCs: architecture, who is connected where, latency per hop, slot schemes, packet sequences, stress tests and the NR against Bluetooth comparison.</span>
+        <span class="m">updated 11 Nov 2026</span></span>
+    </a>
+    <a class="card" href="agv-testbed.html">
+      <picture>
+        <source srcset="thumbs/agv-testbed-dark.jpg" media="(prefers-color-scheme: dark)">
+        <img src="thumbs/agv-testbed-light.jpg" alt="" width="640" height="400" loading="lazy">
+      </picture>
+      <span class="txt"><span class="t">AGV Testbed</span>
+        <span class="a">LiDAR scans over NR and detections over Bluetooth at once: campaign results by load, mode, power and fade, with a replay of the tuned run.</span>
+        <span class="m">updated 11 Nov 2026</span></span>
+    </a>
+    <a class="card" href="nr-tuning.html">
+      <picture>
+        <source srcset="thumbs/nr-tuning-dark.jpg" media="(prefers-color-scheme: dark)">
+        <img src="thumbs/nr-tuning-light.jpg" alt="" width="640" height="400" loading="lazy">
+      </picture>
+      <span class="txt"><span class="t">nrlink NR Tuning</span>
+        <span class="a">Each NR optimisation step measured on its own: slot rate and one-way delays, from 643 ms to 144 ms for a LiDAR scan.</span>
+        <span class="m">updated 11 Nov 2026</span></span>
+    </a>
+    <a class="card" href="factory-floor-downlink.html">
+      <picture>
+        <source srcset="thumbs/factory-floor-downlink-dark.jpg" media="(prefers-color-scheme: dark)">
+        <img src="thumbs/factory-floor-downlink-light.jpg" alt="" width="640" height="400" loading="lazy">
+      </picture>
+      <span class="txt"><span class="t">Factory Floor Downlink</span>
+        <span class="a">The factory demo: downlink traffic classes to the UEs and their one-way delays.</span>
+        <span class="m">updated 9 Nov 2026</span></span>
+    </a>
+    <a class="card" href="mcxw72-hci-flow-control-wiring.html">
+      <picture>
+        <source srcset="thumbs/mcxw72-hci-flow-control-wiring-dark.jpg" media="(prefers-color-scheme: dark)">
+        <img src="thumbs/mcxw72-hci-flow-control-wiring-light.jpg" alt="" width="640" height="400" loading="lazy">
+      </picture>
+      <span class="txt"><span class="t">MCXW72 HCI Flow-Control Wiring</span>
+        <span class="a">How each Bluetooth board&#x27;s HCI UART is wired through a Raspberry Pi Pico with RTS/CTS flow control.</span>
+        <span class="m">updated 9 Nov 2026</span></span>
+    </a>
+  </main>
+</div>
+<script>
+// The live page runs on its own port: point it at whatever host this page was opened from (LAN or Tailscale).
+for (const a of document.querySelectorAll("a[data-port]")) {
+  a.href = location.protocol + "//" + location.hostname + ":" + a.dataset.port + "/";
+}
+</script>
+</body>
+</html>

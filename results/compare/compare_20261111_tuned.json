@@ -1,0 +1,915 @@
+{
+ "_meta": {
+  "sink": "192.168.70.132",
+  "udp_len": 500,
+  "tcp_win": "32K",
+  "rates_kbps": [
+   10,
+   20,
+   30,
+   40,
+   50,
+   60,
+   80,
+   100,
+   120,
+   150,
+   200
+  ],
+  "udp_s": 15,
+  "tcp_s": 30,
+  "tests": [
+   "udp_ul",
+   "udp_dl",
+   "tcp_ul",
+   "tcp_dl"
+  ],
+  "note": "one UE at a time; all other UEs registered but idle; live factory stopped"
+ },
+ "nrUE1": {
+  "class": "eMBB",
+  "t0": 1794450479.9165463,
+  "ping": {
+   "56": {
+    "sent": 30,
+    "size": 56,
+    "recv": 30,
+    "loss_pct": 0.0,
+    "min": 55.239,
+    "avg": 67.733,
+    "max": 80.824,
+    "mdev": 7.028
+   },
+   "472": {
+    "sent": 30,
+    "size": 472,
+    "recv": 30,
+    "loss_pct": 0.0,
+    "min": 86.996,
+    "avg": 129.352,
+    "max": 162.27,
+    "mdev": 15.92
+   },
+   "1372": {
+    "sent": 30,
+    "size": 1372,
+    "recv": 30,
+    "loss_pct": 0.0,
+    "min": 150.446,
+    "avg": 227.782,
+    "max": 301.555,
+    "mdev": 37.045
+   }
+  },
+  "udp_ul": [
+   {
+    "offered_kbps": 10,
+    "kbps": 10.0,
+    "loss_pct": 0,
+    "jitter_ms": 19.0,
+    "drain_s": 0.7
+   },
+   {
+    "offered_kbps": 20,
+    "kbps": 19.9,
+    "loss_pct": 0,
+    "jitter_ms": 13.4,
+    "drain_s": 0.7
+   },
+   {
+    "offered_kbps": 30,
+    "kbps": 29.9,
+    "loss_pct": 0,
+    "jitter_ms": 21.5,
+    "drain_s": 0.7
+   },
+   {
+    "offered_kbps": 40,
+    "kbps": 39.8,
+    "loss_pct": 0,
+    "jitter_ms": 66.4,
+    "drain_s": 0.7
+   },
+   {
+    "offered_kbps": 50,
+    "kbps": 49.7,
+    "loss_pct": 0,
+    "jitter_ms": 40.4,
+    "drain_s": 0.6
+   },
+   {
+    "offered_kbps": 60,
+    "kbps": 59.8,
+    "loss_pct": 0,
+    "jitter_ms": 38.1,
+    "drain_s": 0.6
+   },
+   {
+    "offered_kbps": 80,
+    "kbps": 79.4,
+    "loss_pct": 0,
+    "jitter_ms": 29.4,
+    "drain_s": 0.7
+   },
+   {
+    "offered_kbps": 100,
+    "kbps": 90.9,
+    "loss_pct": 0,
+    "jitter_ms": 30.9,
+    "drain_s": 0.7
+   },
+   {
+    "offered_kbps": 120,
+    "kbps": 90.6,
+    "loss_pct": 0,
+    "jitter_ms": 23.9,
+    "drain_s": 0.7
+   },
+   {
+    "offered_kbps": 150,
+    "kbps": 90.7,
+    "loss_pct": 0,
+    "jitter_ms": 26.9,
+    "drain_s": 0.7
+   },
+   {
+    "offered_kbps": 200,
+    "kbps": 108.8,
+    "loss_pct": 0,
+    "jitter_ms": 24.7,
+    "drain_s": 0.6
+   }
+  ],
+  "udp_dl": [
+   {
+    "offered_kbps": 10,
+    "kbps": 10.1,
+    "loss_pct": 0,
+    "jitter_ms": 10.6,
+    "drain_s": 0.6
+   },
+   {
+    "offered_kbps": 20,
+    "kbps": 20.3,
+    "loss_pct": 0,
+    "jitter_ms": 12.6,
+    "drain_s": 0.7
+   },
+   {
+    "offered_kbps": 30,
+    "kbps": 30.1,
+    "loss_pct": 0,
+    "jitter_ms": 2.8,
+    "drain_s": 0.7
+   },
+   {
+    "offered_kbps": 40,
+    "kbps": 40.3,
+    "loss_pct": 0,
+    "jitter_ms": 7.6,
+    "drain_s": 0.7
+   },
+   {
+    "offered_kbps": 50,
+    "kbps": 50.1,
+    "loss_pct": 0,
+    "jitter_ms": 10.1,
+    "drain_s": 0.6
+   },
+   {
+    "offered_kbps": 60,
+    "kbps": 60.3,
+    "loss_pct": 0,
+    "jitter_ms": 9.3,
+    "drain_s": 0.7
+   },
+   {
+    "offered_kbps": 80,
+    "kbps": 80.3,
+    "loss_pct": 0,
+    "jitter_ms": 11.1,
+    "drain_s": 0.6
+   },
+   {
+    "offered_kbps": 100,
+    "kbps": 100.3,
+    "loss_pct": 0,
+    "jitter_ms": 11.6,
+    "drain_s": 0.7
+   },
+   {
+    "offered_kbps": 120,
+    "kbps": 120.0,
+    "loss_pct": 0,
+    "jitter_ms": 10.5,
+    "drain_s": 0.7
+   },
+   {
+    "offered_kbps": 150,
+    "kbps": 150.1,
+    "loss_pct": 0,
+    "jitter_ms": 21.7,
+    "drain_s": 0.7
+   },
+   {
+    "offered_kbps": 200,
+    "kbps": 192.5,
+    "loss_pct": 0,
+    "jitter_ms": 12.6,
+    "drain_s": 0.6
+   }
+  ],
+  "tcp_ul": {
+   "kbps": 91.1,
+   "bytes": 362000,
+   "secs": 31.8,
+   "retransmits": 0,
+   "rtt_loaded": {
+    "sent": 52,
+    "recv": 52,
+    "loss_pct": 0.0,
+    "min": 1753.429,
+    "avg": 2117.267,
+    "max": 2424.828,
+    "mdev": 155.264
+   }
+  },
+  "tcp_dl": {
+   "kbps": 139.8,
+   "bytes": 524288,
+   "secs": 30.0,
+   "retransmits": 15,
+   "rtt_loaded": {
+    "sent": 52,
+    "recv": 52,
+    "loss_pct": 0.0,
+    "min": 1355.365,
+    "avg": 1700.078,
+    "max": 1905.373,
+    "mdev": 128.196
+   }
+  },
+  "t1": 1794450981.932719
+ },
+ "nrUE2": {
+  "class": "URLLC",
+  "t0": 1794450981.9881864,
+  "ping": {
+   "56": {
+    "sent": 30,
+    "size": 56,
+    "recv": 30,
+    "loss_pct": 0.0,
+    "min": 56.513,
+    "avg": 94.65,
+    "max": 118.088,
+    "mdev": 13.386
+   },
+   "472": {
+    "sent": 30,
+    "size": 472,
+    "recv": 30,
+    "loss_pct": 0.0,
+    "min": 107.41,
+    "avg": 157.867,
+    "max": 199.853,
+    "mdev": 25.991
+   },
+   "1372": {
+    "sent": 30,
+    "size": 1372,
+    "recv": 30,
+    "loss_pct": 0.0,
+    "min": 170.344,
+    "avg": 241.938,
+    "max": 310.205,
+    "mdev": 39.942
+   }
+  },
+  "udp_ul": [
+   {
+    "offered_kbps": 10,
+    "kbps": 10.1,
+    "loss_pct": 0,
+    "jitter_ms": 13.0,
+    "drain_s": 0.7
+   },
+   {
+    "offered_kbps": 20,
+    "kbps": 19.9,
+    "loss_pct": 0,
+    "jitter_ms": 29.7,
+    "drain_s": 0.7
+   },
+   {
+    "offered_kbps": 30,
+    "kbps": 30.0,
+    "loss_pct": 0,
+    "jitter_ms": 19.8,
+    "drain_s": 0.7
+   },
+   {
+    "offered_kbps": 40,
+    "kbps": 39.8,
+    "loss_pct": 0,
+    "jitter_ms": 75.3,
+    "drain_s": 0.7
+   },
+   {
+    "offered_kbps": 50,
+    "kbps": 49.9,
+    "loss_pct": 0,
+    "jitter_ms": 48.7,
+    "drain_s": 0.7
+   },
+   {
+    "offered_kbps": 60,
+    "kbps": 59.8,
+    "loss_pct": 0,
+    "jitter_ms": 40.0,
+    "drain_s": 0.7
+   },
+   {
+    "offered_kbps": 80,
+    "kbps": 79.6,
+    "loss_pct": 0,
+    "jitter_ms": 31.9,
+    "drain_s": 0.7
+   },
+   {
+    "offered_kbps": 100,
+    "kbps": 99.4,
+    "loss_pct": 0,
+    "jitter_ms": 21.3,
+    "drain_s": 0.6
+   },
+   {
+    "offered_kbps": 120,
+    "kbps": 109.2,
+    "loss_pct": 0,
+    "jitter_ms": 25.4,
+    "drain_s": 0.7
+   },
+   {
+    "offered_kbps": 150,
+    "kbps": 95.8,
+    "loss_pct": 0,
+    "jitter_ms": 24.9,
+    "drain_s": 0.6
+   },
+   {
+    "offered_kbps": 200,
+    "kbps": 91.2,
+    "loss_pct": 0,
+    "jitter_ms": 29.4,
+    "drain_s": 0.7
+   }
+  ],
+  "udp_dl": [
+   {
+    "offered_kbps": 10,
+    "kbps": 10.1,
+    "loss_pct": 0,
+    "jitter_ms": 10.3,
+    "drain_s": 0.7
+   },
+   {
+    "offered_kbps": 20,
+    "kbps": 20.0,
+    "loss_pct": 0,
+    "jitter_ms": 11.6,
+    "drain_s": 0.7
+   },
+   {
+    "offered_kbps": 30,
+    "kbps": 30.1,
+    "loss_pct": 0,
+    "jitter_ms": 11.5,
+    "drain_s": 0.7
+   },
+   {
+    "offered_kbps": 40,
+    "kbps": 40.3,
+    "loss_pct": 0,
+    "jitter_ms": 10.2,
+    "drain_s": 0.6
+   },
+   {
+    "offered_kbps": 50,
+    "kbps": 50.1,
+    "loss_pct": 0,
+    "jitter_ms": 11.2,
+    "drain_s": 0.7
+   },
+   {
+    "offered_kbps": 60,
+    "kbps": 60.0,
+    "loss_pct": 0,
+    "jitter_ms": 10.7,
+    "drain_s": 0.7
+   },
+   {
+    "offered_kbps": 80,
+    "kbps": 80.0,
+    "loss_pct": 0,
+    "jitter_ms": 5.3,
+    "drain_s": 0.7
+   },
+   {
+    "offered_kbps": 100,
+    "kbps": 100.0,
+    "loss_pct": 0,
+    "jitter_ms": 11.3,
+    "drain_s": 0.7
+   },
+   {
+    "offered_kbps": 120,
+    "kbps": 120.3,
+    "loss_pct": 0,
+    "jitter_ms": 18.6,
+    "drain_s": 0.7
+   },
+   {
+    "offered_kbps": 150,
+    "kbps": 149.9,
+    "loss_pct": 0,
+    "jitter_ms": 19.8,
+    "drain_s": 0.6
+   },
+   {
+    "offered_kbps": 200,
+    "kbps": 192.5,
+    "loss_pct": 0,
+    "jitter_ms": 12.8,
+    "drain_s": 0.7
+   }
+  ],
+  "tcp_ul": {
+   "kbps": 86.3,
+   "bytes": 347520,
+   "secs": 32.2,
+   "retransmits": 0,
+   "rtt_loaded": {
+    "sent": 52,
+    "recv": 52,
+    "loss_pct": 0.0,
+    "min": 1886.339,
+    "avg": 2234.007,
+    "max": 2464.448,
+    "mdev": 107.749
+   }
+  },
+  "tcp_dl": {
+   "kbps": 139.8,
+   "bytes": 524288,
+   "secs": 30.0,
+   "retransmits": 15,
+   "rtt_loaded": {
+    "sent": 52,
+    "recv": 52,
+    "loss_pct": 0.0,
+    "min": 1411.452,
+    "avg": 1726.169,
+    "max": 1954.029,
+    "mdev": 119.778
+   }
+  },
+  "t1": 1794451485.1315634
+ },
+ "n3iwue1": {
+  "class": "non-3GPP",
+  "t0": 1794451485.1945684,
+  "ping": {
+   "56": {
+    "sent": 30,
+    "size": 56,
+    "recv": 30,
+    "loss_pct": 0.0,
+    "min": 56.371,
+    "avg": 77.708,
+    "max": 104.019,
+    "mdev": 14.329
+   },
+   "472": {
+    "sent": 30,
+    "size": 472,
+    "recv": 30,
+    "loss_pct": 0.0,
+    "min": 145.144,
+    "avg": 185.169,
+    "max": 219.236,
+    "mdev": 17.354
+   },
+   "1372": {
+    "sent": 30,
+    "size": 1372,
+    "recv": 30,
+    "loss_pct": 0.0,
+    "min": 381.528,
+    "avg": 416.413,
+    "max": 469.107,
+    "mdev": 23.765
+   }
+  },
+  "udp_ul": [
+   {
+    "offered_kbps": 10,
+    "kbps": 10.1,
+    "loss_pct": 0,
+    "jitter_ms": 25.6,
+    "drain_s": 0.7
+   },
+   {
+    "offered_kbps": 20,
+    "kbps": 19.8,
+    "loss_pct": 0,
+    "jitter_ms": 20.2,
+    "drain_s": 0.7
+   },
+   {
+    "offered_kbps": 30,
+    "kbps": 30.0,
+    "loss_pct": 0,
+    "jitter_ms": 19.9,
+    "drain_s": 0.7
+   },
+   {
+    "offered_kbps": 40,
+    "kbps": 37.3,
+    "loss_pct": 0,
+    "jitter_ms": 14.7,
+    "drain_s": 0.7
+   },
+   {
+    "offered_kbps": 50,
+    "kbps": 40.3,
+    "loss_pct": 10.1,
+    "jitter_ms": 29.6,
+    "drain_s": 0.6
+   },
+   {
+    "offered_kbps": 60,
+    "kbps": 40.5,
+    "loss_pct": 24,
+    "jitter_ms": 37.7,
+    "drain_s": 0.7
+   },
+   {
+    "offered_kbps": 80,
+    "kbps": 38.7,
+    "loss_pct": 42,
+    "jitter_ms": 32.0,
+    "drain_s": 0.7
+   },
+   {
+    "offered_kbps": 100,
+    "kbps": 38.9,
+    "loss_pct": 52,
+    "jitter_ms": 17.4,
+    "drain_s": 0.7
+   },
+   {
+    "offered_kbps": 120,
+    "kbps": 39.7,
+    "loss_pct": 58.7,
+    "jitter_ms": 17.4,
+    "drain_s": 0.7
+   },
+   {
+    "offered_kbps": 150,
+    "kbps": 37.2,
+    "loss_pct": 64.7,
+    "jitter_ms": 23.8,
+    "drain_s": 0.7
+   }
+  ],
+  "udp_dl": [
+   {
+    "offered_kbps": 10,
+    "kbps": 10.1,
+    "loss_pct": 0,
+    "jitter_ms": 22.8,
+    "drain_s": 0.6
+   },
+   {
+    "offered_kbps": 20,
+    "kbps": 20.0,
+    "loss_pct": 0,
+    "jitter_ms": 27.3,
+    "drain_s": 0.6
+   },
+   {
+    "offered_kbps": 30,
+    "kbps": 30.1,
+    "loss_pct": 0,
+    "jitter_ms": 14.4,
+    "drain_s": 0.6
+   },
+   {
+    "offered_kbps": 40,
+    "kbps": 40.0,
+    "loss_pct": 0,
+    "jitter_ms": 23.4,
+    "drain_s": 0.7
+   },
+   {
+    "offered_kbps": 50,
+    "kbps": 50.1,
+    "loss_pct": 0,
+    "jitter_ms": 11.6,
+    "drain_s": 0.6
+   },
+   {
+    "offered_kbps": 60,
+    "kbps": 60.3,
+    "loss_pct": 0,
+    "jitter_ms": 12.9,
+    "drain_s": 0.6
+   },
+   {
+    "offered_kbps": 80,
+    "kbps": 79.7,
+    "loss_pct": 0,
+    "jitter_ms": 13.5,
+    "drain_s": 0.7
+   },
+   {
+    "offered_kbps": 100,
+    "kbps": 84.5,
+    "loss_pct": 3.4,
+    "jitter_ms": 21.8,
+    "drain_s": 0.6
+   },
+   {
+    "offered_kbps": 120,
+    "kbps": 86.1,
+    "loss_pct": 15.2,
+    "jitter_ms": 16.9,
+    "drain_s": 0.6
+   },
+   {
+    "offered_kbps": 150,
+    "kbps": 88.5,
+    "loss_pct": 28.1,
+    "jitter_ms": 12.7,
+    "drain_s": 0.7
+   },
+   {
+    "offered_kbps": 200,
+    "kbps": 90.9,
+    "loss_pct": 41.9,
+    "jitter_ms": 13.5,
+    "drain_s": 0.7
+   }
+  ],
+  "tcp_ul": {
+   "kbps": 33.4,
+   "bytes": 127764,
+   "secs": 30.6,
+   "retransmits": 27,
+   "rtt_loaded": {
+    "sent": 52,
+    "recv": 52,
+    "loss_pct": 0.0,
+    "min": 123.707,
+    "avg": 458.909,
+    "max": 681.687,
+    "mdev": 182.987
+   }
+  },
+  "tcp_dl": {
+   "kbps": 41.0,
+   "bytes": 153846,
+   "secs": 30.0,
+   "retransmits": 46,
+   "rtt_loaded": {
+    "sent": 52,
+    "recv": 52,
+    "loss_pct": 0.0,
+    "min": 76.43,
+    "avg": 381.051,
+    "max": 763.967,
+    "mdev": 200.661
+   }
+  },
+  "t1": 1794451962.5249789
+ },
+ "n3iwue2": {
+  "class": "non-3GPP",
+  "t0": 1794451962.5990894,
+  "ping": {
+   "56": {
+    "sent": 30,
+    "size": 56,
+    "recv": 30,
+    "loss_pct": 0.0,
+    "min": 58.127,
+    "avg": 76.99,
+    "max": 103.591,
+    "mdev": 11.506
+   },
+   "472": {
+    "sent": 30,
+    "size": 472,
+    "recv": 30,
+    "loss_pct": 0.0,
+    "min": 152.144,
+    "avg": 177.739,
+    "max": 218.423,
+    "mdev": 16.779
+   },
+   "1372": {
+    "sent": 30,
+    "size": 1372,
+    "recv": 30,
+    "loss_pct": 0.0,
+    "min": 358.619,
+    "avg": 391.291,
+    "max": 429.896,
+    "mdev": 17.725
+   }
+  },
+  "udp_ul": [
+   {
+    "offered_kbps": 10,
+    "kbps": 10.1,
+    "loss_pct": 0,
+    "jitter_ms": 17.6,
+    "drain_s": 0.7
+   },
+   {
+    "offered_kbps": 20,
+    "kbps": 19.9,
+    "loss_pct": 0,
+    "jitter_ms": 27.8,
+    "drain_s": 0.7
+   },
+   {
+    "offered_kbps": 30,
+    "kbps": 29.9,
+    "loss_pct": 0,
+    "jitter_ms": 15.2,
+    "drain_s": 0.7
+   },
+   {
+    "offered_kbps": 40,
+    "kbps": 34.9,
+    "loss_pct": 2,
+    "jitter_ms": 35.1,
+    "drain_s": 0.7
+   },
+   {
+    "offered_kbps": 50,
+    "kbps": 34.9,
+    "loss_pct": 18.6,
+    "jitter_ms": 50.0,
+    "drain_s": 0.6
+   },
+   {
+    "offered_kbps": 60,
+    "kbps": 34.9,
+    "loss_pct": 31.1,
+    "jitter_ms": 33.0,
+    "drain_s": 0.7
+   },
+   {
+    "offered_kbps": 80,
+    "kbps": 34.2,
+    "loss_pct": 47,
+    "jitter_ms": 30.7,
+    "drain_s": 0.7
+   },
+   {
+    "offered_kbps": 100,
+    "kbps": 40.4,
+    "loss_pct": 50.7,
+    "jitter_ms": 29.9,
+    "drain_s": 0.6
+   },
+   {
+    "offered_kbps": 120,
+    "kbps": 39.9,
+    "loss_pct": 57.8,
+    "jitter_ms": 18.2,
+    "drain_s": 0.6
+   },
+   {
+    "offered_kbps": 150,
+    "kbps": 40.4,
+    "loss_pct": 64.5,
+    "jitter_ms": 21.9,
+    "drain_s": 0.6
+   }
+  ],
+  "udp_dl": [
+   {
+    "offered_kbps": 10,
+    "kbps": 10.1,
+    "loss_pct": 0,
+    "jitter_ms": 8.8,
+    "drain_s": 0.7
+   },
+   {
+    "offered_kbps": 20,
+    "kbps": 20.0,
+    "loss_pct": 0,
+    "jitter_ms": 11.3,
+    "drain_s": 0.6
+   },
+   {
+    "offered_kbps": 30,
+    "kbps": 30.1,
+    "loss_pct": 0,
+    "jitter_ms": 12.2,
+    "drain_s": 0.6
+   },
+   {
+    "offered_kbps": 40,
+    "kbps": 40.0,
+    "loss_pct": 0,
+    "jitter_ms": 30.2,
+    "drain_s": 0.7
+   },
+   {
+    "offered_kbps": 50,
+    "kbps": 50.1,
+    "loss_pct": 0,
+    "jitter_ms": 8.9,
+    "drain_s": 0.6
+   },
+   {
+    "offered_kbps": 60,
+    "kbps": 60.0,
+    "loss_pct": 0,
+    "jitter_ms": 10.0,
+    "drain_s": 0.7
+   },
+   {
+    "offered_kbps": 80,
+    "kbps": 68.5,
+    "loss_pct": 0,
+    "jitter_ms": 13.3,
+    "drain_s": 0.7
+   },
+   {
+    "offered_kbps": 100,
+    "kbps": 65.6,
+    "loss_pct": 18.5,
+    "jitter_ms": 23.9,
+    "drain_s": 0.7
+   },
+   {
+    "offered_kbps": 120,
+    "kbps": 64.8,
+    "loss_pct": 28.4,
+    "jitter_ms": 14.5,
+    "drain_s": 0.7
+   },
+   {
+    "offered_kbps": 150,
+    "kbps": 64.0,
+    "loss_pct": 40.1,
+    "jitter_ms": 18.7,
+    "drain_s": 0.6
+   },
+   {
+    "offered_kbps": 200,
+    "kbps": 79.5,
+    "loss_pct": 46.9,
+    "jitter_ms": 12.2,
+    "drain_s": 0.7
+   }
+  ],
+  "tcp_ul": {
+   "kbps": 35.5,
+   "bytes": 135912,
+   "secs": 30.6,
+   "retransmits": 27,
+   "rtt_loaded": {
+    "sent": 52,
+    "recv": 52,
+    "loss_pct": 0.0,
+    "min": 104.004,
+    "avg": 459.046,
+    "max": 648.569,
+    "mdev": 169.237
+   }
+  },
+  "tcp_dl": {
+   "kbps": 46.9,
+   "bytes": 176022,
+   "secs": 30.0,
+   "retransmits": 48,
+   "rtt_loaded": {
+    "sent": 52,
+    "recv": 52,
+    "loss_pct": 0.0,
+    "min": 105.835,
+    "avg": 314.467,
+    "max": 741.473,
+    "mdev": 139.52
+   }
+  },
+  "t1": 1794452445.6921737
+ }
+}
