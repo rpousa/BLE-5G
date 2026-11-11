@@ -23,6 +23,7 @@ from nrlink import (AIR_DL, AIR_POLL, AIR_UL, Board, Reassembler, fragments, ite
 
 class GnbBridge:
     def __init__(self, args):
+        self.ues = [int(u) for u in args.ues.split(",") if u] or list(config.UES)
         self.args = args
         self.board = Board(config.GNB_BOARD)
         print("gNB board:", self.board.ping(), flush=True)
@@ -38,6 +39,7 @@ class GnbBridge:
         self.recent = {}      # ue_id -> last time it was served
         self.rr = 0
         self.stats = dict(slots=0, dl_bytes=0, ul_bytes=0, polls=0, poll_timeouts=0, air_pkts=0)
+        self.slot_ms = {0: [0.0, 0], 1: [0.0, 0]}   # time in handle_slot, DL-only slots (0) and slots with UL (1)
         self.t_stats = time.time()
         self.tele = self.new_tele()
         self.t_tele = self.t_led = time.time()
@@ -114,6 +116,7 @@ class GnbBridge:
             telemetry(k="led", ue=ue if self.led[0] != OFF else 0, ul=bool(self.led[1]))
 
     def handle_slot(self, msg, addr):
+        t_in = time.perf_counter()
         _m, _t, sfn, slot, flags, _r, _n = MSG_HDR.unpack_from(msg)
         served_dl, served_ul = {}, {}
         for t, body in items(msg):
@@ -137,11 +140,17 @@ class GnbBridge:
         for u in served_ul:
             tl["ue"][u]["ul_slots"] += 1
 
-        self.air_send(fragments(AIR_DL, 0, sfn, slot, msg))
+        if self.args.skip_empty and not flags & 1 and not _n:
+            # dynamic slotting: a downlink-only slot with nothing in it (no SSB, DCI or TB) is not sent over the
+            # air. The nrUE runs the slots it did not hear when the next DL_SLOT arrives (nrlink_ue.c catches up
+            # to 40 slots), so it stays in step; the PNF still gets its UL_RESULT below.
+            self.stats["skipped"] = self.stats.get("skipped", 0) + 1
+        else:
+            self.air_send(fragments(AIR_DL, 0, sfn, slot, msg))
 
         result_items, n_items = b"", 0
         if flags & 1:
-            for ue_id in config.UES:
+            for ue_id in self.ues:
                 # every UE is polled every UL slot: a skipped UE looks like PUSCH/PUCCH DTX to the
                 # scheduler, which declares UL failure after a few of them. One retry on timeout.
                 ul = self.poll(ue_id, sfn, slot)
@@ -165,6 +174,18 @@ class GnbBridge:
         out = MSG_HDR.pack(NRLINK_MAGIC, NRLINK_UL_RESULT, sfn, slot, 0, 0, n_items) + result_items
         self.sock.sendto(out, addr)
         self.stats["slots"] += 1
+        acc = self.slot_ms[flags & 1]
+        acc[0] += (time.perf_counter() - t_in) * 1e3
+        acc[1] += 1
+
+    def timing(self, dt):
+        """'slot ms DL x UL y rest z': bridge time per DL-only slot and per slot with UL, and the rest of each
+        slot's wall time (PNF, VNF, UDP) on average; resets the counters."""
+        (d, nd), (u, nu) = self.slot_ms[0], self.slot_ms[1]
+        n = nd + nu
+        rest = (dt * 1e3 - d - u) / n if n else 0.0
+        self.slot_ms = {0: [0.0, 0], 1: [0.0, 0]}
+        return f"slot ms DL {d / max(1, nd):.1f} UL {u / max(1, nu):.1f} rest {rest:.1f}"
 
     def print_stats(self):
         now = time.time()
@@ -174,7 +195,7 @@ class GnbBridge:
         s = self.stats
         print(f"[gnb] {s['slots'] / dt:5.1f} slots/s  DL {s['dl_bytes'] * 8 / dt / 1e3:6.1f} kb/s  "
               f"UL {s['ul_bytes'] * 8 / dt / 1e3:6.1f} kb/s  air {s['air_pkts'] / dt:5.0f} pkt/s  "
-              f"polls {s['polls']} (timeouts {s['poll_timeouts']})  rnti->ue {self.rnti_ue}", flush=True)
+              f"polls {s['polls']} (timeouts {s['poll_timeouts']})  {self.timing(dt)}  skipped {s.get('skipped', 0)}  rnti->ue {self.rnti_ue}", flush=True)
         self.stats = {k: 0 for k in s}
         self.t_stats = now
 
@@ -201,4 +222,8 @@ if __name__ == "__main__":
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--poll-timeout", type=float, default=0.025, help="seconds to wait for a UE's answer")
     ap.add_argument("--stats", type=float, default=5.0, help="statistics period in seconds")
+    ap.add_argument("--skip-empty", action="store_true", help="dynamic slotting: do not broadcast empty "
+                    "downlink-only slots; the nrUEs fill them in themselves")
+    ap.add_argument("--ues", default="", help="UE ids to poll, e.g. 1,2 (default: every UE in config.UES). A UE that is "
+                    "not on the air costs two poll timeouts every UL slot")
     GnbBridge(ap.parse_args()).run()

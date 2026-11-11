@@ -1,0 +1,954 @@
+{
+ "both \u00b7 L1 \u00b7 0 dBm": {
+  "cfg": {
+   "level": "L1",
+   "mode": "both",
+   "fade": false,
+   "tx": 0
+  },
+  "t": 1794412577.7972248,
+  "secs": 149,
+  "chsum": {
+   "nr1": {
+    "cp": 1,
+    "mean": -61.4,
+    "inst": -71.2,
+    "los": false,
+    "out_pct": 0.2,
+    "down_ms": 0,
+    "longest_ms": 687,
+    "drops_5min": 0,
+    "handovers": 1419
+   },
+   "ble1": {
+    "cp": 5,
+    "mean": -59.8,
+    "inst": -62.1,
+    "los": true,
+    "out_pct": 0.0,
+    "down_ms": 0,
+    "longest_ms": 401,
+    "drops_5min": 0,
+    "handovers": 1417
+   },
+   "nr2": {
+    "cp": 1,
+    "mean": -63.9,
+    "inst": -66.7,
+    "los": false,
+    "out_pct": 0.0,
+    "down_ms": 0,
+    "longest_ms": 692,
+    "drops_5min": 0,
+    "handovers": 1431
+   },
+   "ble2": {
+    "cp": 5,
+    "mean": -60.1,
+    "inst": -65.4,
+    "los": true,
+    "out_pct": 0.0,
+    "down_ms": 0,
+    "longest_ms": 100,
+    "drops_5min": 0,
+    "handovers": 1457
+   }
+  },
+  "paths": {
+   "nr1": {
+    "flow": "lidar",
+    "rx": 149,
+    "lost": 0,
+    "faded": 0,
+    "loss_pct": 0.0,
+    "p50": 143.4,
+    "p90": 173.8,
+    "p99": 189.2,
+    "kbps": 6.0
+   },
+   "ble1": {
+    "flow": "lidar",
+    "rx": 149,
+    "lost": 0,
+    "faded": 0,
+    "loss_pct": 0.0,
+    "p50": 172.3,
+    "p90": 195.7,
+    "p99": 227.1,
+    "kbps": 6.0
+   },
+   "nr2": {
+    "flow": "det",
+    "rx": 744,
+    "lost": 0,
+    "faded": 0,
+    "loss_pct": 0.0,
+    "p50": 58.6,
+    "p90": 82.8,
+    "p99": 124.8,
+    "kbps": 1.5
+   },
+   "ble2": {
+    "flow": "det",
+    "rx": 744,
+    "lost": 0,
+    "faded": 0,
+    "loss_pct": 0.0,
+    "p50": 50.2,
+    "p90": 70.7,
+    "p99": 91.2,
+    "kbps": 1.5
+   }
+  },
+  "race": {
+   "lidar": {
+    "n": 149,
+    "wins": {
+     "nr1": 122,
+     "ble1": 27
+    },
+    "margin_p50": 32.5,
+    "margin_p90": 74.6
+   },
+   "det": {
+    "n": 744,
+    "wins": {
+     "nr2": 270,
+     "ble2": 474
+    },
+    "margin_p50": 15.3,
+    "margin_p90": 36.4
+   }
+  },
+  "sync": {
+   "nr2": {
+    "n": 7,
+    "first": 2,
+    "p50": 232.5,
+    "p90": 290.0
+   },
+   "ble2": {
+    "n": 7,
+    "first": 5,
+    "p50": 229.0,
+    "p90": 258.1
+   }
+  }
+ },
+ "both \u00b7 L2 \u00b7 0 dBm": {
+  "cfg": {
+   "level": "L2",
+   "mode": "both",
+   "fade": false,
+   "tx": 0
+  },
+  "t": 1794412788.9976745,
+  "secs": 150,
+  "chsum": {
+   "nr1": {
+    "cp": 4,
+    "mean": -58.7,
+    "inst": -59.1,
+    "los": true,
+    "out_pct": 0.0,
+    "down_ms": 0,
+    "longest_ms": 687,
+    "drops_5min": 0,
+    "handovers": 1439
+   },
+   "ble1": {
+    "cp": 4,
+    "mean": -53.8,
+    "inst": -63.7,
+    "los": true,
+    "out_pct": 0.0,
+    "down_ms": 0,
+    "longest_ms": 401,
+    "drops_5min": 0,
+    "handovers": 1433
+   },
+   "nr2": {
+    "cp": 4,
+    "mean": -55.5,
+    "inst": -54.1,
+    "los": true,
+    "out_pct": 0.0,
+    "down_ms": 0,
+    "longest_ms": 692,
+    "drops_5min": 0,
+    "handovers": 1446
+   },
+   "ble2": {
+    "cp": 4,
+    "mean": -50.2,
+    "inst": -46.8,
+    "los": true,
+    "out_pct": 0.0,
+    "down_ms": 0,
+    "longest_ms": 100,
+    "drops_5min": 0,
+    "handovers": 1475
+   }
+  },
+  "paths": {
+   "nr1": {
+    "flow": "lidar",
+    "rx": 300,
+    "lost": 0,
+    "faded": 0,
+    "loss_pct": 0.0,
+    "p50": 142.2,
+    "p90": 180.0,
+    "p99": 190.4,
+    "kbps": 12.0
+   },
+   "ble1": {
+    "flow": "lidar",
+    "rx": 300,
+    "lost": 0,
+    "faded": 0,
+    "loss_pct": 0.0,
+    "p50": 173.4,
+    "p90": 200.1,
+    "p99": 228.0,
+    "kbps": 12.0
+   },
+   "nr2": {
+    "flow": "det",
+    "rx": 1500,
+    "lost": 0,
+    "faded": 0,
+    "loss_pct": 0.0,
+    "p50": 69.3,
+    "p90": 108.4,
+    "p99": 147.4,
+    "kbps": 3.09
+   },
+   "ble2": {
+    "flow": "det",
+    "rx": 1500,
+    "lost": 0,
+    "faded": 0,
+    "loss_pct": 0.0,
+    "p50": 51.0,
+    "p90": 69.1,
+    "p99": 85.6,
+    "kbps": 3.09
+   }
+  },
+  "race": {
+   "lidar": {
+    "n": 300,
+    "wins": {
+     "nr1": 253,
+     "ble1": 47
+    },
+    "margin_p50": 31.2,
+    "margin_p90": 64.8
+   },
+   "det": {
+    "n": 1500,
+    "wins": {
+     "nr2": 388,
+     "ble2": 1112
+    },
+    "margin_p50": 21.5,
+    "margin_p90": 57.5
+   }
+  },
+  "sync": {
+   "nr2": {
+    "n": 7,
+    "first": 3,
+    "p50": 138.0,
+    "p90": 170.1
+   },
+   "ble2": {
+    "n": 7,
+    "first": 4,
+    "p50": 105.1,
+    "p90": 145.6
+   }
+  }
+ },
+ "both \u00b7 L3 \u00b7 0 dBm": {
+  "cfg": {
+   "level": "L3",
+   "mode": "both",
+   "fade": false,
+   "tx": 0
+  },
+  "t": 1794412999.0250077,
+  "secs": 150,
+  "chsum": {
+   "nr1": {
+    "cp": 2,
+    "mean": -59.3,
+    "inst": -58.7,
+    "los": true,
+    "out_pct": 0.0,
+    "down_ms": 0,
+    "longest_ms": 687,
+    "drops_5min": 0,
+    "handovers": 1452
+   },
+   "ble1": {
+    "cp": 2,
+    "mean": -59.7,
+    "inst": -60.1,
+    "los": true,
+    "out_pct": 0.0,
+    "down_ms": 0,
+    "longest_ms": 401,
+    "drops_5min": 0,
+    "handovers": 1449
+   },
+   "nr2": {
+    "cp": 2,
+    "mean": -58.0,
+    "inst": -61.0,
+    "los": true,
+    "out_pct": 0.0,
+    "down_ms": 0,
+    "longest_ms": 692,
+    "drops_5min": 0,
+    "handovers": 1467
+   },
+   "ble2": {
+    "cp": 2,
+    "mean": -63.0,
+    "inst": -64.7,
+    "los": true,
+    "out_pct": 0.0,
+    "down_ms": 0,
+    "longest_ms": 100,
+    "drops_5min": 0,
+    "handovers": 1493
+   }
+  },
+  "paths": {
+   "nr1": {
+    "flow": "lidar",
+    "rx": 599,
+    "lost": 0,
+    "faded": 0,
+    "loss_pct": 0.0,
+    "p50": 141.7,
+    "p90": 180.2,
+    "p99": 207.7,
+    "kbps": 23.97
+   },
+   "ble1": {
+    "flow": "lidar",
+    "rx": 600,
+    "lost": 0,
+    "faded": 0,
+    "loss_pct": 0.0,
+    "p50": 179.2,
+    "p90": 226.7,
+    "p99": 324.2,
+    "kbps": 24.01
+   },
+   "nr2": {
+    "flow": "det",
+    "rx": 2794,
+    "lost": 0,
+    "faded": 0,
+    "loss_pct": 0.0,
+    "p50": 74.1,
+    "p90": 115.3,
+    "p99": 143.0,
+    "kbps": 5.72
+   },
+   "ble2": {
+    "flow": "det",
+    "rx": 2792,
+    "lost": 0,
+    "faded": 0,
+    "loss_pct": 0.0,
+    "p50": 50.2,
+    "p90": 69.8,
+    "p99": 86.0,
+    "kbps": 5.71
+   }
+  },
+  "race": {
+   "lidar": {
+    "n": 600,
+    "wins": {
+     "nr1": 545,
+     "ble1": 55
+    },
+    "margin_p50": 39.7,
+    "margin_p90": 89.9
+   },
+   "det": {
+    "n": 2794,
+    "wins": {
+     "nr2": 771,
+     "ble2": 2023
+    },
+    "margin_p50": 26.4,
+    "margin_p90": 65.0
+   }
+  },
+  "sync": {
+   "nr2": {
+    "n": 8,
+    "first": 3,
+    "p50": 122.4,
+    "p90": 146.6
+   },
+   "ble2": {
+    "n": 8,
+    "first": 5,
+    "p50": 76.2,
+    "p90": 85.5
+   }
+  }
+ },
+ "nr \u00b7 L2 \u00b7 0 dBm": {
+  "cfg": {
+   "level": "L2",
+   "mode": "nr",
+   "fade": false,
+   "tx": 0
+  },
+  "t": 1794413208.5114207,
+  "secs": 149,
+  "chsum": {
+   "nr1": {
+    "cp": 1,
+    "mean": -47.9,
+    "inst": -45.9,
+    "los": true,
+    "out_pct": 0.0,
+    "down_ms": 0,
+    "longest_ms": 687,
+    "drops_5min": 0,
+    "handovers": 1474
+   },
+   "ble1": {
+    "cp": 1,
+    "mean": -57.7,
+    "inst": -59.0,
+    "los": true,
+    "out_pct": 0.0,
+    "down_ms": 0,
+    "longest_ms": 401,
+    "drops_5min": 0,
+    "handovers": 1469
+   },
+   "nr2": {
+    "cp": 1,
+    "mean": -51.6,
+    "inst": -54.7,
+    "los": true,
+    "out_pct": 0.0,
+    "down_ms": 0,
+    "longest_ms": 692,
+    "drops_5min": 0,
+    "handovers": 1483
+   },
+   "ble2": {
+    "cp": 1,
+    "mean": -47.6,
+    "inst": -54.7,
+    "los": true,
+    "out_pct": 0.0,
+    "down_ms": 0,
+    "longest_ms": 100,
+    "drops_5min": 0,
+    "handovers": 1511
+   }
+  },
+  "paths": {
+   "nr1": {
+    "flow": "lidar",
+    "rx": 299,
+    "lost": 0,
+    "faded": 0,
+    "loss_pct": 0.0,
+    "p50": 135.7,
+    "p90": 181.5,
+    "p99": 191.6,
+    "kbps": 12.01
+   },
+   "ble1": {
+    "flow": "lidar",
+    "rx": 0,
+    "lost": 0,
+    "faded": 0,
+    "loss_pct": null,
+    "p50": null,
+    "p90": null,
+    "p99": null,
+    "kbps": 0.0
+   },
+   "nr2": {
+    "flow": "det",
+    "rx": 1492,
+    "lost": 0,
+    "faded": 0,
+    "loss_pct": 0.0,
+    "p50": 67.8,
+    "p90": 107.3,
+    "p99": 141.4,
+    "kbps": 3.05
+   },
+   "ble2": {
+    "flow": "det",
+    "rx": 0,
+    "lost": 0,
+    "faded": 0,
+    "loss_pct": null,
+    "p50": null,
+    "p90": null,
+    "p99": null,
+    "kbps": 0.0
+   }
+  },
+  "race": {
+   "lidar": {
+    "n": 0,
+    "wins": {
+     "nr1": 0,
+     "ble1": 0
+    },
+    "margin_p50": null,
+    "margin_p90": null
+   },
+   "det": {
+    "n": 0,
+    "wins": {
+     "nr2": 0,
+     "ble2": 0
+    },
+    "margin_p50": null,
+    "margin_p90": null
+   }
+  },
+  "sync": {
+   "nr2": {
+    "n": 8,
+    "first": 8,
+    "p50": 100.3,
+    "p90": 137.7
+   },
+   "ble2": {
+    "n": 0,
+    "first": 0,
+    "p50": null,
+    "p90": null
+   }
+  }
+ },
+ "both \u00b7 L1 \u00b7 -20 dBm": {
+  "cfg": {
+   "level": "L1",
+   "mode": "both",
+   "fade": false,
+   "tx": -20
+  },
+  "t": 1794413627.692331,
+  "secs": 149,
+  "chsum": {
+   "nr1": {
+    "cp": 4,
+    "mean": -79.8,
+    "inst": -79.4,
+    "los": true,
+    "out_pct": 0.2,
+    "down_ms": 0,
+    "longest_ms": 687,
+    "drops_5min": 0,
+    "handovers": 1504
+   },
+   "ble1": {
+    "cp": 4,
+    "mean": -82.9,
+    "inst": -85.6,
+    "los": true,
+    "out_pct": 0.0,
+    "down_ms": 0,
+    "longest_ms": 401,
+    "drops_5min": 0,
+    "handovers": 1502
+   },
+   "nr2": {
+    "cp": 1,
+    "mean": -80.6,
+    "inst": -81.0,
+    "los": true,
+    "out_pct": 0.0,
+    "down_ms": 0,
+    "longest_ms": 692,
+    "drops_5min": 0,
+    "handovers": 1525
+   },
+   "ble2": {
+    "cp": 4,
+    "mean": -79.0,
+    "inst": -80.0,
+    "los": true,
+    "out_pct": 0.0,
+    "down_ms": 0,
+    "longest_ms": 100,
+    "drops_5min": 0,
+    "handovers": 1539
+   }
+  },
+  "paths": {
+   "nr1": {
+    "flow": "lidar",
+    "rx": 148,
+    "lost": 0,
+    "faded": 0,
+    "loss_pct": 0.0,
+    "p50": 141.2,
+    "p90": 169.8,
+    "p99": 180.6,
+    "kbps": 5.98
+   },
+   "ble1": {
+    "flow": "lidar",
+    "rx": 148,
+    "lost": 0,
+    "faded": 0,
+    "loss_pct": 0.0,
+    "p50": 167.8,
+    "p90": 195.0,
+    "p99": 227.7,
+    "kbps": 5.98
+   },
+   "nr2": {
+    "flow": "det",
+    "rx": 742,
+    "lost": 0,
+    "faded": 0,
+    "loss_pct": 0.0,
+    "p50": 59.7,
+    "p90": 83.2,
+    "p99": 120.7,
+    "kbps": 1.5
+   },
+   "ble2": {
+    "flow": "det",
+    "rx": 742,
+    "lost": 0,
+    "faded": 0,
+    "loss_pct": 0.0,
+    "p50": 50.1,
+    "p90": 71.1,
+    "p99": 92.2,
+    "kbps": 1.5
+   }
+  },
+  "race": {
+   "lidar": {
+    "n": 148,
+    "wins": {
+     "nr1": 127,
+     "ble1": 21
+    },
+    "margin_p50": 30.9,
+    "margin_p90": 67.4
+   },
+   "det": {
+    "n": 742,
+    "wins": {
+     "nr2": 259,
+     "ble2": 483
+    },
+    "margin_p50": 16.3,
+    "margin_p90": 37.4
+   }
+  },
+  "sync": {
+   "nr2": {
+    "n": 8,
+    "first": 1,
+    "p50": 142.1,
+    "p90": 185.2
+   },
+   "ble2": {
+    "n": 8,
+    "first": 7,
+    "p50": 116.6,
+    "p90": 190.2
+   }
+  }
+ },
+ "both \u00b7 L1 \u00b7 -30 dBm \u00b7 fading drops": {
+  "cfg": {
+   "level": "L1",
+   "mode": "both",
+   "fade": true,
+   "tx": -30
+  },
+  "t": 1794413851.938059,
+  "secs": 163,
+  "chsum": {
+   "nr1": {
+    "cp": 4,
+    "mean": -84.4,
+    "inst": -83.0,
+    "los": true,
+    "out_pct": 7.9,
+    "down_ms": 0,
+    "longest_ms": 801,
+    "drops_5min": 0,
+    "handovers": 1522
+   },
+   "ble1": {
+    "cp": 4,
+    "mean": -80.9,
+    "inst": -82.8,
+    "los": true,
+    "out_pct": 3.2,
+    "down_ms": 0,
+    "longest_ms": 401,
+    "drops_5min": 0,
+    "handovers": 1526
+   },
+   "nr2": {
+    "cp": 4,
+    "mean": -86.7,
+    "inst": -85.5,
+    "los": true,
+    "out_pct": 5.2,
+    "down_ms": 0,
+    "longest_ms": 692,
+    "drops_5min": 0,
+    "handovers": 1540
+   },
+   "ble2": {
+    "cp": 4,
+    "mean": -82.6,
+    "inst": -83.3,
+    "los": true,
+    "out_pct": 5.4,
+    "down_ms": 0,
+    "longest_ms": 400,
+    "drops_5min": 0,
+    "handovers": 1563
+   }
+  },
+  "paths": {
+   "nr1": {
+    "flow": "lidar",
+    "rx": 148,
+    "lost": 0,
+    "faded": 14,
+    "loss_pct": 0.0,
+    "p50": 143.6,
+    "p90": 171.9,
+    "p99": 182.2,
+    "kbps": 5.46
+   },
+   "ble1": {
+    "flow": "lidar",
+    "rx": 160,
+    "lost": 0,
+    "faded": 2,
+    "loss_pct": 0.0,
+    "p50": 168.2,
+    "p90": 197.4,
+    "p99": 231.3,
+    "kbps": 5.9
+   },
+   "nr2": {
+    "flow": "det",
+    "rx": 791,
+    "lost": 0,
+    "faded": 22,
+    "loss_pct": 0.0,
+    "p50": 58.8,
+    "p90": 82.3,
+    "p99": 116.1,
+    "kbps": 1.51
+   },
+   "ble2": {
+    "flow": "det",
+    "rx": 806,
+    "lost": 0,
+    "faded": 8,
+    "loss_pct": 0.0,
+    "p50": 52.3,
+    "p90": 72.2,
+    "p99": 88.8,
+    "kbps": 1.54
+   }
+  },
+  "race": {
+   "lidar": {
+    "n": 146,
+    "wins": {
+     "nr1": 122,
+     "ble1": 24
+    },
+    "margin_p50": 32.3,
+    "margin_p90": 70.1
+   },
+   "det": {
+    "n": 783,
+    "wins": {
+     "nr2": 313,
+     "ble2": 470
+    },
+    "margin_p50": 14.9,
+    "margin_p90": 37.6
+   }
+  },
+  "sync": {
+   "nr2": {
+    "n": 8,
+    "first": 3,
+    "p50": 181.8,
+    "p90": 406.8
+   },
+   "ble2": {
+    "n": 8,
+    "first": 5,
+    "p50": 168.2,
+    "p90": 386.3
+   }
+  }
+ },
+ "ble \u00b7 L2 \u00b7 0 dBm": {
+  "cfg": {
+   "level": "L2",
+   "mode": "ble",
+   "fade": false,
+   "tx": 0
+  },
+  "t": 1794413417.77297,
+  "secs": 149,
+  "chsum": {
+   "nr1": {
+    "cp": 5,
+    "mean": -47.2,
+    "inst": -48.7,
+    "los": true,
+    "out_pct": 0.0,
+    "down_ms": 0,
+    "longest_ms": 687,
+    "drops_5min": 0,
+    "handovers": 1486
+   },
+   "ble1": {
+    "cp": 0,
+    "mean": -48.6,
+    "inst": -51.3,
+    "los": true,
+    "out_pct": 0.0,
+    "down_ms": 0,
+    "longest_ms": 401,
+    "drops_5min": 0,
+    "handovers": 1484
+   },
+   "nr2": {
+    "cp": 5,
+    "mean": -48.4,
+    "inst": -45.1,
+    "los": true,
+    "out_pct": 0.0,
+    "down_ms": 0,
+    "longest_ms": 692,
+    "drops_5min": 0,
+    "handovers": 1510
+   },
+   "ble2": {
+    "cp": 5,
+    "mean": -49.1,
+    "inst": -48.4,
+    "los": true,
+    "out_pct": 0.0,
+    "down_ms": 0,
+    "longest_ms": 100,
+    "drops_5min": 0,
+    "handovers": 1523
+   }
+  },
+  "paths": {
+   "nr1": {
+    "flow": "lidar",
+    "rx": 0,
+    "lost": 0,
+    "faded": 0,
+    "loss_pct": null,
+    "p50": null,
+    "p90": null,
+    "p99": null,
+    "kbps": 0.0
+   },
+   "ble1": {
+    "flow": "lidar",
+    "rx": 297,
+    "lost": 0,
+    "faded": 0,
+    "loss_pct": 0.0,
+    "p50": 172.3,
+    "p90": 203.4,
+    "p99": 229.9,
+    "kbps": 11.99
+   },
+   "nr2": {
+    "flow": "det",
+    "rx": 0,
+    "lost": 0,
+    "faded": 0,
+    "loss_pct": null,
+    "p50": null,
+    "p90": null,
+    "p99": null,
+    "kbps": 0.0
+   },
+   "ble2": {
+    "flow": "det",
+    "rx": 1487,
+    "lost": 0,
+    "faded": 0,
+    "loss_pct": 0.0,
+    "p50": 50.6,
+    "p90": 71.2,
+    "p99": 90.6,
+    "kbps": 3.07
+   }
+  },
+  "race": {
+   "lidar": {
+    "n": 0,
+    "wins": {
+     "nr1": 0,
+     "ble1": 0
+    },
+    "margin_p50": null,
+    "margin_p90": null
+   },
+   "det": {
+    "n": 0,
+    "wins": {
+     "nr2": 0,
+     "ble2": 0
+    },
+    "margin_p50": null,
+    "margin_p90": null
+   }
+  },
+  "sync": {
+   "nr2": {
+    "n": 0,
+    "first": 0,
+    "p50": null,
+    "p90": null
+   },
+   "ble2": {
+    "n": 7,
+    "first": 7,
+    "p50": 111.3,
+    "p90": 152.5
+   }
+  }
+ }
+}

@@ -433,7 +433,9 @@ up() {
   nstep "board bridges (host)"
   dk compose -f "$OLD_RAN" down >/dev/null 2>&1
   dk compose -f "$RAN" down >/dev/null 2>&1
-  start_proc gnb_bridge "$PY" -u gnb_bridge.py
+  # core PC: only nrUE1/2 are on the air (the UE PC has no UE3 board); polling an absent UE costs 2 x 25 ms a UL slot.
+  # --skip-empty (dynamic slotting): empty downlink-only slots stay off the air, the nrUEs fill them in (11 Nov 2026)
+  if [ "$ROLE" = core ]; then start_proc gnb_bridge "$PY" -u gnb_bridge.py --ues 1,2 --skip-empty; else start_proc gnb_bridge "$PY" -u gnb_bridge.py; fi
   [ "$ROLE" = core ] || for u in 1 2 3; do start_proc "ue${u}_bridge" "$PY" -u ue_bridge.py "$u"; done
   wait_for 20 "gNB board answers" grep -q "listening on udp" "$LOG/gnb_bridge.log"
   [ "$ROLE" = core ] && ok "gNB telemetry to $NRLINK_TELEMETRY (UE PC dashboard)"
