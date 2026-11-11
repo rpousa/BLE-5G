@@ -4,7 +4,7 @@ The repository's commits follow the steps of the work in order. Each firmware ve
 
 ## How this history was put together
 
-The work happened directly on the two PCs, and this repository was assembled from them afterwards, on 9 Nov 2026.
+The work happened directly on the two PCs, and this repository was assembled from them afterwards, on 9 Nov 2026. From 9 Nov on, each step was committed as it was done.
 Author dates are the days the steps happened; commit dates show when the repository was assembled.
 
 - **Firmware (hci_bb v1–v15)** is exact. Every version's SDK files were rebuilt from upstream SDK v26.09.00 plus that version's saved patch or source snapshot.
@@ -48,3 +48,13 @@ Author dates are the days the steps happened; commit dates show when the reposit
 | 2026-11-09 | hci_bb v14: record faults and what each tick interrupted |
 | 2026-11-09 | hci_bb v15: keep the radio core's power domain awake (fixes the hang) |
 | 2026-11-09 | Docs: how to reproduce the experiment, hardware, results, history; the published pages |
+| 2026-11-09 | ble_ip_link: pacing rate adjustable at runtime (ble_rate_kbps) |
+| 2026-11-09 | Factory at its maximum (Trial 3), and NR against Bluetooth LE from one source and sink |
+| 2026-11-09 | Pages: the Raspberry Pi Picos in the architecture and in the packet's path |
+| 2026-11-10 | Bluetooth links: 15 ms connection interval, pacing 150 down / 50 up |
+| 2026-11-10 | Bluetooth links: different intervals per link (15 / 18.75 ms); pages and docs updated |
+| 2026-11-11 | Bluetooth links with the core as central of both (tried, not used), and the fairness test (`fair_test.py`) |
+| 2026-11-11 | AGV testbed: one AGV's LiDAR and detections over NR and Bluetooth at once, simulated channel fading (`apps/agv*.py`) |
+| 2026-11-11 | NR tuning: poll only the live UEs, uplink pre-grant, `min_rxtxtime` 4; dynamic slotting option; slot timing |
+| 2026-11-11 | ble_ip_link: retry an unanswered connection update, then reconnect |
+| 2026-11-11 | Docs and pages: AGV testbed, NR tuning, where the code is |

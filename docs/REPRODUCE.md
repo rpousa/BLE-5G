@@ -164,8 +164,9 @@ Check:
 - `docker exec nrlink-n3iwue1 ip addr show gretun-id-2-1` shows a 12.1.1.x address;
 - `docker exec nrlink-n3iwue1 ping -I gretun-id-2-1 192.168.70.132` gets replies.
 
-Live pages, from the core PC: `./nrlink.sh live start` on both PCs. Then open http://192.168.10.223:8090/ (factory closed loop) and `/arch` (architecture).
-`./nrlink.sh live enable` adds a crontab `@reboot` entry.
+Live pages, from the core PC: `./nrlink.sh live start` on both PCs. Then open http://192.168.10.223:8090/ (the running scenario) and `/arch` (architecture).
+`./nrlink.sh live start --scenario agv|factory` picks the scenario (section 11.6); the choice is saved in `logs/live_scenario` and used
+by the next start. `./nrlink.sh live enable` adds a crontab `@reboot` entry, `live disable` removes it.
 
 Stop with `./nrlink.sh down` (`--keep-core` leaves free5GC running).
 
@@ -209,6 +210,12 @@ no file = the default: 150 down on the core, 50 up on the UE PC). Both ends re-r
 15 ms for UE 1, 18.75 ms for UE 2 (`--interval <ms>` overrides, 0 = keep the 45 ms the link opens with); it logs `ble<k>: connection interval 15 ms`.
 Never give both links the same interval: their events lock together on the Intel adapter and one link starves for minutes.
 
+### 11.3c Both Bluetooth links loaded at once (fairness)
+On the UE PC, live demo stopped: `python3 fair_test.py` runs UDP up, UDP down, TCP up and TCP down on n3iwue1 and n3iwue2 at the
+same time and writes `logs/compare/fair_<time>.json`. With BLE1 at 15 ms and BLE2 at 18.75 ms both links get the same share
+(`results/compare/fair_20261111_ci15_18.json`). The core-as-central mode of `ble_ip_link.py` (a `ble_core_central` file, see the
+script's header) was the alternative tried; it is slower (`fair_20261111_central15.json`) and is off.
+
 ### 11.4 hci_bb uplink load test (one BLE board)
 On the UE PC, as root:
 
@@ -239,6 +246,29 @@ The output shows:
 - any fault, with its address;
 - the last 16 changes of the interrupt mask, with function names.
 
+### 11.6 AGV testbed: the same data over NR and Bluetooth at once
+```sh
+./nrlink.sh live start --scenario agv [--level L1|L2|L3] [--mode both|nr|ble] [--tx-dbm 0|-10|-20|-30] [--fading-drop]   # both PCs
+```
+- UE PC: `apps/agv.py ue` simulates the AGV (route, checkpoints, LiDAR, camera detections, channel) and sends each message on
+  two paths at the same moment through sidecar containers `agv-fwd-<path>` in the UE's network namespace: LiDAR on nrUE1 and
+  n3iwue1, detections plus pose on nrUE2 and n3iwue2.
+- Core PC: `apps/agv_live.py` (page on :8090) and the `agv-edge` sidecar in oai-ext-dn's netns, which times every copy on the core clock
+  and answers checkpoint position requests on the path they came in on. The UE PC's clock offset is measured over the LAN (no NTP).
+- Change the setting on the page or with `curl -X POST -d '{"level":"L2","mode":"both","tx":0,"fade":false}' http://<core>:8090/cfg`.
+  Each setting is summarised from 60 s after it was set: `logs/agv/by_cfg.json` (also `GET /by_cfg.json`); `GET /window?secs=150`
+  gives the same statistics for the last N seconds. Every event the page receives goes to `logs/agv/trace_<time>.jsonl`.
+- The campaign in `results/agv/` held each setting for 210 s (3.5 min): L1, L2, L3 with both radios; L2 NR only and Bluetooth only;
+  L1 at −20 dBm; L1 at −30 dBm with fades dropping messages.
+- Before a campaign, check both Bluetooth links are at their interval (`grep interval logs/ble<k>.log` on the UE PC; 15 and 18.75 ms):
+  see the known issue below.
+
+### 11.7 NR tuning
+The settings in `deploy/nrlink/vnf.conf` and `gnb_bridge.py --ues 1,2` are the tuned ones (nrlink/README.md, "Scheduler settings").
+Each step was measured as AGV testbed L2, both radios, 0 dBm, 60 s to settle and 150 s measured (`/window?secs=150`), with the
+last `[gnb]` lines of `logs/gnb_bridge.log`; the files are in `results/nr_tuning/`. After a `vnf.conf` change, restart in the order
+given in nrlink/README.md. `gnb_bridge.py --skip-empty` turns on dynamic slotting (empty downlink-only slots stay off the air).
+
 ## 12. Known issues
 
 - Under heavy uplink, n3iwue1's IPsec/GRE tunnel sometimes stops passing traffic even though its board and Bluetooth link are fine. Restarting n3iwue1 recovers it, and the load test does that before each step. Not investigated yet.
@@ -247,3 +277,9 @@ The output shows:
 - `bluetoothd` is masked on the UE PC while the links run (`ble_attach.sh` does it). Its GATT client triggers a failed pairing that drops the LE link.
 - `gnb_bridge.py` can be left holding a dead serial handle (its log fills with `write failed: [Errno 5]`, 0 slots/s) while the gNB board answers fine. Restart gnb_bridge, then both `ue_bridge.py` on the UE PC, then the nrUEs.
 - Never `pkill -f` a pattern that also matches your own shell's command line. Several scripts use bracket patterns for this reason.
+  `nrlink.sh live start|stop|restart` kills `[a]gv_live\.py` and `[a]gv\.py ue`: do not run it from a command line that contains those names.
+  The same goes for a wait loop such as `until ! pgrep -f X`, whose own command line contains X.
+- After a Bluetooth link reconnects, the core's Intel adapter sometimes never answers the connection update (seen on BLE1, 11 Nov 2026):
+  the link stays at the 45 ms it opens with and its latency rises by half or more. `ble_ip_link.py` retries the update and, if it still
+  gets no answer, closes the link so it reconnects. By hand: `sudo hcitool -i hci<n> ledc <handle>` on the UE PC (`hcitool -i hci<n> con` lists the handle).
+- With the tuned `vnf.conf`, start the PNF only after the VNF has its NG setup, and restart the nrUEs one at a time (nrlink/README.md).

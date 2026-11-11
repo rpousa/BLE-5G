@@ -1,0 +1,187 @@
+<title>nrlink NR Tuning</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Semi+Condensed:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+<style>
+/* Layout: one result up top, the step-by-step chart, then the numbers and what each step changed.
+   Same palette and type as the nrlink Two-PC Split page: NR blue, Bluetooth green. */
+:root {
+  --bg: #eef1f4; --panel: #ffffff; --panel-2: #f5f7f9; --line: #d3d9e0;
+  --ink: #17202b; --ink-2: #4b5866; --ink-3: #7a8693;
+  --nr: #1f63d6; --nr-2: #8fb1ea; --ble: #1d8a3c; --warn: #b86e00;
+  --display: "Barlow Semi Condensed", "Arial Narrow", "Roboto Condensed", system-ui, sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+  --r: 6px;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) { --bg: #0e141b; --panel: #151d26; --panel-2: #1b2530; --line: #2a3644; --ink: #e6ebf0; --ink-2: #a9b4bf; --ink-3: #74808c;
+    --nr: #5b93f5; --nr-2: #2f4f86; --ble: #45c06a; --warn: #f0a830; color-scheme: dark; }
+}
+:root[data-theme="dark"] { --bg: #0e141b; --panel: #151d26; --panel-2: #1b2530; --line: #2a3644; --ink: #e6ebf0; --ink-2: #a9b4bf; --ink-3: #74808c;
+  --nr: #5b93f5; --nr-2: #2f4f86; --ble: #45c06a; --warn: #f0a830; color-scheme: dark; }
+* { box-sizing: border-box; }
+body { background: var(--bg); color: var(--ink); font: 16px/1.5 var(--display); }
+.wrap { max-width: 1120px; margin: 0 auto; padding-block: 22px 44px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); display: grid; gap: 16px; }
+h1 { font-size: 32px; line-height: 1.05; margin: 0; text-wrap: balance; }
+.sub { color: var(--ink-2); margin: 6px 0 0; max-width: 78ch; }
+.kpis { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
+@media (max-width: 760px) { .kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.kpi { background: var(--panel); border: 1px solid var(--line); border-radius: var(--r); padding: 10px 12px; min-width: 0; }
+.kpi span { display: block; font: 600 11px/1.3 var(--mono); letter-spacing: .05em; text-transform: uppercase; color: var(--ink-3); }
+.kpi b { display: block; font: 600 26px/1.2 var(--mono); font-variant-numeric: tabular-nums; color: var(--nr); }
+.kpi i { font: 12.5px/1.3 var(--mono); color: var(--ink-2); font-style: normal; }
+.card { background: var(--panel); border: 1px solid var(--line); border-radius: var(--r); min-width: 0; }
+.card > .hd { display: flex; flex-wrap: wrap; gap: 4px 12px; align-items: baseline; justify-content: space-between; padding: 11px 14px 9px; border-bottom: 1px solid var(--line); }
+.card h2 { font-size: 18px; margin: 0; text-wrap: balance; }
+.meta { font: 12px/1.3 var(--mono); color: var(--ink-3); }
+.bd { padding: 12px 14px; min-width: 0; }
+.scroll { overflow-x: auto; }
+.chart { display: block; width: 100%; min-width: 620px; height: auto; }
+.chart .grid { stroke: var(--line); }
+.chart .ax { fill: var(--ink-3); font: 12px var(--mono); }
+.chart .gl { fill: var(--ink); font: 600 14px var(--display); }
+.chart .v { fill: var(--ink-2); font: 600 11.5px var(--mono); }
+.chart .bar { fill: var(--nr); }
+.chart .bar.s0 { fill: var(--nr-2); }
+.chart .bar.rev { fill: none; stroke: var(--nr); stroke-width: 1.5; stroke-dasharray: 4 3; }
+.chart .p90 { stroke: var(--ink); stroke-width: 2; }
+.chart .ble { stroke: var(--ble); stroke-width: 2; stroke-dasharray: 6 4; }
+.chart .bl { fill: var(--ble); font: 600 12px var(--mono); }
+.legend { display: flex; flex-wrap: wrap; gap: 6px 16px; font: 12.5px/1.3 var(--mono); color: var(--ink-2); padding: 0 14px 12px; }
+.legend i { display: inline-block; width: 14px; height: 10px; margin-right: 6px; vertical-align: -1px; }
+table { border-collapse: collapse; width: 100%; font: 13px/1.35 var(--mono); font-variant-numeric: tabular-nums; }
+th, td { padding: 7px 9px; border-bottom: 1px solid var(--line); text-align: right; white-space: nowrap; }
+th { font: 600 11px/1.25 var(--mono); letter-spacing: .04em; text-transform: uppercase; color: var(--ink-3); background: var(--panel-2); white-space: normal; }
+th:first-child, td:first-child { text-align: left; }
+td b { font: 600 14px var(--display); }
+td.nr { color: var(--nr); } td.ble { color: var(--ble); }
+ol.steps { list-style: none; margin: 0; padding: 0; display: grid; gap: 0; }
+ol.steps li { padding: 12px 14px; border-top: 1px solid var(--line); }
+ol.steps li:first-child { border-top: 0; }
+.sh { display: flex; gap: 10px; align-items: baseline; }
+.sh .n { font: 600 13px/1 var(--mono); color: var(--panel); background: var(--nr); border-radius: 4px; padding: 4px 7px; }
+ol.steps p { margin: 6px 0 0; color: var(--ink-2); max-width: 90ch; }
+ol.steps p.res { font: 13px/1.4 var(--mono); color: var(--ink); }
+.prose { max-width: 80ch; color: var(--ink-2); margin: 0; }
+.prose + .prose { margin-top: 8px; }
+.prose b { color: var(--ink); }
+code { font: 13px var(--mono); background: var(--panel-2); padding: 1px 5px; border-radius: 3px; overflow-wrap: anywhere; }
+</style>
+
+<div class="wrap">
+  <header>
+    <h1>nrlink NR Tuning</h1>
+    <p class="sub">How fast NR (OAI gNB over nFAPI, nrUEs on FRDM-MCXW72 boards) carries the AGV testbed's data, after each of 5 changes tried one at a time on 11 Nov 2026. Each step was measured the same way: AGV testbed at load L2 (LiDAR 2 Hz, detections 10 Hz) with Bluetooth carrying the same data alongside, 60 s to settle, then 150 s measured.</p>
+  </header>
+
+  <div class="kpis">
+    <div class="kpi"><span>LiDAR, NR p50 · kept setup</span><b>144 ms</b><i>was 643 · −78 %</i></div>
+    <div class="kpi"><span>Detections, NR p50</span><b>70 ms</b><i>was 441 · −84 %</i></div>
+    <div class="kpi"><span>Checkpoint fix, NR p50</span><b>118 ms</b><i>was 408</i></div>
+    <div class="kpi"><span>gNB slot rate</span><b>248/s</b><i>was 49/s</i></div>
+  </div>
+
+  <section class="card">
+    <div class="hd"><h2>One-way delay after each step</h2><span class="meta">NR median (bar, value on top) and 90th percentile (tick) · dashed: Bluetooth median, same messages</span></div>
+    <div class="bd scroll"><svg viewBox="0 0 920 360" class="chart" role="img" aria-label="NR one-way delay per tuning step, median bar and 90th percentile tick, against Bluetooth">
+<line x1="56" x2="904" y1="296.0" y2="296.0" class="grid"/><text x="48" y="300.0" class="ax" text-anchor="end">0</text>
+<line x1="56" x2="904" y1="247.6" y2="247.6" class="grid"/><text x="48" y="251.6" class="ax" text-anchor="end">200</text>
+<line x1="56" x2="904" y1="199.3" y2="199.3" class="grid"/><text x="48" y="203.3" class="ax" text-anchor="end">400</text>
+<line x1="56" x2="904" y1="150.9" y2="150.9" class="grid"/><text x="48" y="154.9" class="ax" text-anchor="end">600</text>
+<line x1="56" x2="904" y1="102.5" y2="102.5" class="grid"/><text x="48" y="106.5" class="ax" text-anchor="end">800</text>
+<line x1="56" x2="904" y1="54.2" y2="54.2" class="grid"/><text x="48" y="58.2" class="ax" text-anchor="end">1000</text>
+<text x="14" y="163" class="ax" transform="rotate(-90 14 163)" text-anchor="middle">one-way delay, ms</text>
+<line x1="76.0" x2="345.0" y1="254.5" y2="254.5" class="ble"/><text x="349.0" y="258.5" class="bl">BLE 172</text>
+<rect x="86.0" y="140.4" width="34.0" height="155.6" class="bar s0" rx="2"><title>Baseline: LiDAR · nrUE1 p50 643 ms, p90 1028 ms</title></rect>
+<line x1="86.0" x2="120.0" y1="47.5" y2="47.5" class="p90"/>
+<text x="103.0" y="41.5" class="v" text-anchor="middle">643</text>
+<text x="103.0" y="312.0" class="ax" text-anchor="middle">0</text>
+<rect x="128.5" y="244.7" width="34.0" height="51.3" class="bar s1" rx="2"><title>1 · Poll only the UEs on air: LiDAR · nrUE1 p50 212 ms, p90 256 ms</title></rect>
+<line x1="128.5" x2="162.5" y1="234.1" y2="234.1" class="p90"/>
+<text x="145.5" y="228.1" class="v" text-anchor="middle">212</text>
+<text x="145.5" y="312.0" class="ax" text-anchor="middle">1</text>
+<rect x="171.0" y="250.5" width="34.0" height="45.5" class="bar s2" rx="2"><title>2 · Pre-grant the uplink: LiDAR · nrUE1 p50 188 ms, p90 226 ms</title></rect>
+<line x1="171.0" x2="205.0" y1="241.3" y2="241.3" class="p90"/>
+<text x="188.0" y="235.3" class="v" text-anchor="middle">188</text>
+<text x="188.0" y="312.0" class="ax" text-anchor="middle">2</text>
+<rect x="213.5" y="258.5" width="34.0" height="37.5" class="bar s3" rx="2"><title>3 · Shorter turnaround: LiDAR · nrUE1 p50 155 ms, p90 192 ms</title></rect>
+<line x1="213.5" x2="247.5" y1="249.7" y2="249.7" class="p90"/>
+<text x="230.5" y="243.7" class="v" text-anchor="middle">155</text>
+<text x="230.5" y="312.0" class="ax" text-anchor="middle">3</text>
+<rect x="256.0" y="255.0" width="34.0" height="41.0" class="bar s4 rev" rx="2"><title>4 · More uplink (reverted): LiDAR · nrUE1 p50 170 ms, p90 209 ms</title></rect>
+<line x1="256.0" x2="290.0" y1="245.5" y2="245.5" class="p90"/>
+<text x="273.0" y="239.5" class="v" text-anchor="middle">170</text>
+<text x="273.0" y="312.0" class="ax" text-anchor="middle">4</text>
+<rect x="298.5" y="261.2" width="34.0" height="34.8" class="bar s5" rx="2"><title>5 · Dynamic slotting: LiDAR · nrUE1 p50 144 ms, p90 181 ms</title></rect>
+<line x1="298.5" x2="332.5" y1="252.2" y2="252.2" class="p90"/>
+<text x="315.5" y="246.2" class="v" text-anchor="middle">144</text>
+<text x="315.5" y="312.0" class="ax" text-anchor="middle">5</text>
+<text x="213.5" y="334.0" class="gl" text-anchor="middle">LiDAR · nrUE1</text>
+<line x1="500.0" x2="769.0" y1="283.4" y2="283.4" class="ble"/><text x="773.0" y="287.4" class="bl">BLE 52</text>
+<rect x="510.0" y="189.3" width="34.0" height="106.7" class="bar s0" rx="2"><title>Baseline: Detections + pose · nrUE2 p50 441 ms, p90 805 ms</title></rect>
+<line x1="510.0" x2="544.0" y1="101.2" y2="101.2" class="p90"/>
+<text x="527.0" y="95.2" class="v" text-anchor="middle">441</text>
+<text x="527.0" y="312.0" class="ax" text-anchor="middle">0</text>
+<rect x="552.5" y="267.0" width="34.0" height="29.0" class="bar s1" rx="2"><title>1 · Poll only the UEs on air: Detections + pose · nrUE2 p50 120 ms, p90 225 ms</title></rect>
+<line x1="552.5" x2="586.5" y1="241.7" y2="241.7" class="p90"/>
+<text x="569.5" y="235.7" class="v" text-anchor="middle">120</text>
+<text x="569.5" y="312.0" class="ax" text-anchor="middle">1</text>
+<rect x="595.0" y="271.5" width="34.0" height="24.5" class="bar s2" rx="2"><title>2 · Pre-grant the uplink: Detections + pose · nrUE2 p50 102 ms, p90 158 ms</title></rect>
+<line x1="595.0" x2="629.0" y1="257.8" y2="257.8" class="p90"/>
+<text x="612.0" y="251.8" class="v" text-anchor="middle">102</text>
+<text x="612.0" y="312.0" class="ax" text-anchor="middle">2</text>
+<rect x="637.5" y="276.3" width="34.0" height="19.7" class="bar s3" rx="2"><title>3 · Shorter turnaround: Detections + pose · nrUE2 p50 82 ms, p90 123 ms</title></rect>
+<line x1="637.5" x2="671.5" y1="266.4" y2="266.4" class="p90"/>
+<text x="654.5" y="260.4" class="v" text-anchor="middle">82</text>
+<text x="654.5" y="312.0" class="ax" text-anchor="middle">3</text>
+<rect x="680.0" y="275.5" width="34.0" height="20.5" class="bar s4 rev" rx="2"><title>4 · More uplink (reverted): Detections + pose · nrUE2 p50 85 ms, p90 158 ms</title></rect>
+<line x1="680.0" x2="714.0" y1="257.7" y2="257.7" class="p90"/>
+<text x="697.0" y="251.7" class="v" text-anchor="middle">85</text>
+<text x="697.0" y="312.0" class="ax" text-anchor="middle">4</text>
+<rect x="722.5" y="279.0" width="34.0" height="17.0" class="bar s5" rx="2"><title>5 · Dynamic slotting: Detections + pose · nrUE2 p50 70 ms, p90 109 ms</title></rect>
+<line x1="722.5" x2="756.5" y1="269.5" y2="269.5" class="p90"/>
+<text x="739.5" y="263.5" class="v" text-anchor="middle">70</text>
+<text x="739.5" y="312.0" class="ax" text-anchor="middle">5</text>
+<text x="637.5" y="334.0" class="gl" text-anchor="middle">Detections + pose · nrUE2</text>
+</svg></div>
+    <div class="legend"><span><i style="background:var(--nr-2)"></i>step 0, baseline</span><span><i style="background:var(--nr)"></i>steps 1–3 and 5, each on top of the previous (kept)</span><span><i style="border:1.5px dashed var(--nr)"></i>step 4, tried and reverted</span><span><i style="border-top:2px solid var(--ink);height:0"></i>NR p90</span><span><i style="border-top:2px dashed var(--ble);height:0"></i>Bluetooth p50 (BLE 175 / 50 ms now)</span></div>
+  </section>
+
+  <section class="card">
+    <div class="hd"><h2>Every number</h2><span class="meta">ms · p50 / p90 / p99 · position fix = AGV stops → edge's answer back on that path</span></div>
+    <div class="scroll"><table>
+      <thead><tr><th>Step</th><th>gNB slots/s</th><th>Polls timed out</th><th>NR LiDAR</th><th>NR detections</th><th>NR position fix p50 / p90</th><th>NR delivered</th><th>BLE LiDAR</th><th>BLE detections</th></tr></thead>
+      <tbody>
+<tr><td><b>Baseline</b></td><td class="m">49</td><td class="m">50 %</td><td class="m nr">643 / 1028 / 1175</td><td class="m nr">441 / 805 / 1068</td><td class="m nr">408 / 555</td><td class="m">100.0 %</td><td class="m ble">173 / 198 / 227</td><td class="m ble">52 / 73 / 96</td></tr>
+<tr><td><b>1 · Poll only the UEs on air</b></td><td class="m">220</td><td class="m">0 %</td><td class="m nr">212 / 256 / 285</td><td class="m nr">120 / 225 / 300</td><td class="m nr">133 / 361</td><td class="m">100.0 %</td><td class="m ble">168 / 195 / 223</td><td class="m ble">53 / 73 / 92</td></tr>
+<tr><td><b>2 · Pre-grant the uplink</b></td><td class="m">217</td><td class="m">0 %</td><td class="m nr">188 / 226 / 256</td><td class="m nr">102 / 158 / 201</td><td class="m nr">152 / 315</td><td class="m">100.0 %</td><td class="m ble">171 / 197 / 239</td><td class="m ble">52 / 72 / 94</td></tr>
+<tr><td><b>3 · Shorter turnaround</b></td><td class="m">201</td><td class="m">0 %</td><td class="m nr">155 / 192 / 215</td><td class="m nr">82 / 123 / 162</td><td class="m nr">179 / 206</td><td class="m">100.0 %</td><td class="m ble">170 / 193 / 219</td><td class="m ble">53 / 72 / 90</td></tr>
+<tr><td><b>4 · More uplink (reverted)</b></td><td class="m">156</td><td class="m">0 %</td><td class="m nr">170 / 209 / 244</td><td class="m nr">85 / 158 / 198</td><td class="m nr">164 / 218</td><td class="m">100.0 %</td><td class="m ble">266 / 338 / 398</td><td class="m ble">48 / 61 / 80</td></tr>
+<tr><td><b>5 · Dynamic slotting</b></td><td class="m">248</td><td class="m">0 %</td><td class="m nr">144 / 181 / 189</td><td class="m nr">70 / 109 / 149</td><td class="m nr">118 / 215</td><td class="m">100.0 %</td><td class="m ble">175 / 201 / 224</td><td class="m ble">50 / 70 / 85</td></tr>
+      </tbody>
+    </table></div>
+  </section>
+
+  <section class="card">
+    <div class="hd"><h2>What each step changed</h2><span class="meta">cumulative: each step keeps the ones before it · steps 1–3 and 5 kept, step 4 reverted</span></div>
+    <ol class="steps">
+<li><div class="sh"><span class="n">0</span><b>As it was</b></div><p>TDD 7 DL + special + 2 UL slots in 5 ms, <code>min_rxtxtime 6,</code> OAI default <code>ulsch_max_frame_inactivity (10 frames)</code>. The gNB bridge polls three UE boards each uplink slot.</p><p class="res">LiDAR 643 ms · detections 441 ms · 49 slots/s, 50 % of polls timed out</p></li>
+<li><div class="sh"><span class="n">1</span><b>Poll only nrUE1 and nrUE2</b></div><p><code>gnb_bridge.py --ues 1,2</code> (nrlink.sh passes it on the core PC). UE3's board became Bluetooth board BLE1, but the bridge still polled UE3 every uplink slot and waited out two 25 ms timeouts.</p><p class="res">LiDAR 212 ms (was 643) · detections 120 ms (was 441) · 220 slots/s</p></li>
+<li><div class="sh"><span class="n">2</span><b>Grant the uplink without being asked</b></div><p><code>ulsch_max_frame_inactivity = 0</code> in vnf.conf: a UE without a grant for one TDD period gets one, so uplink data skips the scheduling request → grant round trip.</p><p class="res">LiDAR 188 ms (was 212) · detections 102 ms (was 120) · 217 slots/s</p></li>
+<li><div class="sh"><span class="n">3</span><b>min_rxtxtime 6 → 4</b></div><p>The minimum gap, in slots, from a grant to its PUSCH and from data to its acknowledgement. 2 was tried twice: the nrUEs never attach (no uplink at all), so 4 is the floor here.</p><p class="res">LiDAR 155 ms (was 188) · detections 82 ms (was 102) · 201 slots/s</p></li>
+<li><div class="sh"><span class="n">4</span><b>TDD 5 DL + special + 4 UL — reverted</b></div><p><code>nrofDownlinkSlots 7 → 5, nrofUplinkSlots 2 → 4</code>, same 5 ms period. 3 DL + 6 UL was tried first: random access fails (Msg3 never received). 5 + 4 attaches but is slower: every uplink slot costs a poll round over the board link, so the slot rate fell from about 200 to 145 a second and LiDAR went from 155 to 170 ms. Bluetooth's LiDAR was slower in that run too, for another reason: BLE1 had reconnected and was left at its 45 ms opening interval (see the Bluetooth note below). Back to 7 + 2.</p><p class="res">LiDAR 170 ms (was 155) · detections 85 ms (was 82) · 156 slots/s</p></li>
+<li><div class="sh"><span class="n">5</span><b>Leave empty downlink slots off the air</b></div><p><code>gnb_bridge.py --skip-empty</code>: a downlink-only slot with nothing in it (no SSB, DCI or transport block) is not broadcast. The nrUE already runs any slot it did not hear when the next one arrives, as it does for a slot lost over the air. About half of all slots are skipped; a broadcast took 2.0 ms. Compared with the step 3 setup re-measured just before.</p><p class="res">LiDAR 144 ms (was 153) · detections 70 ms (was 80) · 248 slots/s</p></li>
+    </ol>
+  </section>
+
+  <section class="card">
+    <div class="hd"><h2>Why slots did not need to get smaller</h2></div>
+    <div class="bd">
+      <p class="prose"><b>The air interface is emulated.</b> For each slot, the gNB's PNF hands the slot to the bridge. The bridge broadcasts it over the 2.4 GHz board link and, in uplink slots, polls each UE board in turn. Real time per slot comes from that exchange, not from the 0.5 ms the 30 kHz numerology nominally gives a slot. So a shorter slot or TDD period does not help; less waiting in each exchange and fewer slot round trips per packet do.</p>
+      <p class="prose"><b>The first step was the big one.</b> A missing UE cost two 25 ms poll timeouts in every uplink slot, about two thirds of all wall time. Removing it raised the slot rate about fourfold. The scheduler changes after it each removed a few slots from every packet's path.</p>
+      <p class="prose"><b>Where the gains stop.</b> <code>min_rxtxtime</code> below 4 and a 3 DL / 6 UL pattern both stop the nrUEs from attaching. More uplink slots do attach, but each one costs a poll round, so they slow the slot rate more than they save. Leaving empty downlink slots off the air (step 5) took the slot rate to about 240 a second. What remains is mostly the uplink slots: 10.4 ms each, a broadcast plus a poll round trip to each board. Polling both UEs in one exchange is the next step.</p>
+      <p class="prose"><b>A Bluetooth note.</b> During step 4, BLE1 reconnected and its request for a 15 ms connection interval got no answer from the core's adapter, so it stayed at the 45 ms it opens with (LiDAR about 265 ms instead of 170). A reconnect fixed it, and <code>ble_ip_link.py</code> now retries the request and reconnects if it never gets an answer. Steps 0–3 and 5 had BLE1 at 15 ms.</p>
+      <p class="prose"><b>Where NR and Bluetooth stand now.</b> On the same messages, NR LiDAR (144 ms median) now beats Bluetooth's (175 ms). For detections, Bluetooth is still faster (50 against 70 ms): its connection event comes every 15 ms, and an NR packet still needs several emulated slots end to end.</p>
+    </div>
+  </section>
+</div>

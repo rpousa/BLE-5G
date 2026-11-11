@@ -18,6 +18,7 @@ Raw data is in `results/`. Unless noted, the measurements are from ext-dn (192.1
 - The slot clock runs at about 94 slots/s. One slot exchange takes 10.6 ms on average: about 3.5 ms for a DL slot and 28 ms for a UL slot, because of the polls.
   Half of gnb_bridge's polls wait out their 25 ms timeout.
 - Clean throughput is about 44 kbit/s up and 90 kbit/s down. Under TCP load the RTT is 3–10 s, because RLC queues grow.
+- Since the 11 Nov tuning (section 10): about 240 slots/s, no poll timeouts, and a 56 B round trip of 96–114 ms (was 530–580). Throughput was not re-measured.
 
 ## 2. Non-3GPP access over Bluetooth LE
 
@@ -150,3 +151,65 @@ The SDK's default BusFault handler is a silent endless loop that outranks SysTic
 **Fix:** keep the radio domain awake for good. **Safety nets kept:** the 2 s hardware watchdog, the fault handlers that record and reset, and the breadcrumbs.
 
 **Open:** under heavy uplink, n3iwue1's IPsec/GRE tunnel sometimes stops passing traffic while the board and the Bluetooth link keep working. Restarting n3iwue1 recovers it.
+
+## 9. AGV testbed: the same data over NR and Bluetooth at once, 11 Nov 2026 (`results/agv/`, page `docs/pages/agv-testbed.html`)
+
+One simulated AGV drives a 124 m loop through a 48 × 30 m hall with six checkpoints. Every message is built once and the identical
+bytes go out on two paths at the same moment: the LiDAR scan (752 B) on nrUE1 and n3iwue1, the camera detections plus the AGV's pose
+(36–80 B) on nrUE2 and n3iwue2. The edge in ext-dn times both copies on the core clock. At a checkpoint the AGV asks for a position fix
+on both paths and takes the first answer. The radio channel is simulated from the AGV's position (3GPP TR 38.901 InF-SL path loss,
+shadowing, Rician/Rayleigh fading; NR on one fixed channel, Bluetooth hopping every 15 ms event). Loads: L1 LiDAR 1 Hz + detections 5 Hz,
+L2 2 + 10, L3 4 + 20. Each setting was held 210 s and summarised from 60 s on.
+
+Run with the tuned NR (section 10, all steps kept) and both Bluetooth links at 15 / 18.75 ms (`by_cfg_20261111_tuned.json`). One-way ms, p50 / p90:
+
+| Setting | NR LiDAR | BLE LiDAR | LiDAR first on NR | NR detections | BLE detections | Detections first on BLE | Position fix NR / BLE p50 |
+|---|---|---|---|---|---|---|---|
+| both · L1 | 143 / 174 | 172 / 196 | 82 % | 59 / 83 | 50 / 71 | 64 % | 233 / 229 |
+| both · L2 | 142 / 180 | 173 / 200 | 84 % | 69 / 108 | 51 / 69 | 74 % | 138 / 105 |
+| both · L3 | 142 / 180 | 179 / 227 | 91 % | 74 / 115 | 50 / 70 | 72 % | 122 / 76 |
+| NR only · L2 | 136 / 182 | – | – | 68 / 107 | – | – | 100 / – |
+| Bluetooth only · L2 | – | 172 / 203 | – | – | 51 / 71 | – | – / 111 |
+| both · L1 · −20 dBm | 141 / 170 | 168 / 195 | 86 % | 60 / 83 | 50 / 71 | 65 % | 142 / 117 |
+| both · L1 · −30 dBm, fades drop | 144 / 172 | 168 / 197 | 84 % | 59 / 82 | 52 / 72 | 60 % | 182 / 168 |
+
+- **Nothing lost.** Every copy reached the edge on all four paths at every load, L3 included. With fades dropping messages (−30 dBm),
+  NR did not send 14 of 162 LiDAR scans and 22 of 813 detection messages, Bluetooth 2 of 162 and 8 of 814: NR's fixed channel fades for
+  up to 0.7 s, a Bluetooth fade lasts one 15 ms event.
+- **NR wins the LiDAR race, Bluetooth the detection race.** NR carries a 752 B scan in one uplink slot with a pre-grant, and is first by a
+  median 31–40 ms. Bluetooth's 15 ms events suit the small detection messages, first by 15–26 ms.
+- **No coexistence penalty**: NR alone and Bluetooth alone at L2 match the "both" row within a few ms.
+- **Before the NR tuning** (`by_cfg_20261111.json`, `trace_20261111-051631.jsonl.gz`): NR took 630–840 ms for LiDAR and 430–505 ms for
+  detections (p90 near 1 s), and Bluetooth won 93–100 % of both races. Bluetooth's numbers were the same as now.
+
+## 10. NR tuning, 11 Nov 2026 (`results/nr_tuning/`, page `docs/pages/nr-tuning.html`)
+
+Each step was measured on the AGV testbed (section 9) at load L2 (LiDAR 2 Hz on nrUE1, detections 10 Hz on nrUE2), with Bluetooth
+carrying the same data alongside, 60 s to settle and 150 s measured. Steps are cumulative. One-way ms, p50 / p90 / p99:
+
+| Step | gNB slots/s | Polls timed out | NR LiDAR | NR detections | NR position fix p50 / p90 |
+|---|---|---|---|---|---|
+| 0. Baseline: TDD 7 DL + S + 2 UL, `min_rxtxtime` 6, bridge polls UE1–UE3 | 49 | 50 % | 643 / 1028 / 1175 | 441 / 805 / 1068 | 408 / 555 |
+| 1. `gnb_bridge.py --ues 1,2` | 220 | 0 % | 212 / 256 / 285 | 120 / 225 / 300 | 133 / 361 |
+| 2. `ulsch_max_frame_inactivity = 0` | 217 | 0 % | 188 / 226 / 256 | 102 / 158 / 201 | 152 / 315 |
+| 3. `min_rxtxtime = 4` (kept) | 201 | 0 % | 155 / 192 / 215 | 82 / 123 / 162 | 179 / 206 |
+| 4. TDD 5 DL + S + 4 UL (reverted) | 156 | 0 % | 170 / 209 / 244 | 85 / 158 / 198 | 164 / 218 |
+| 3, re-measured before step 5 | 209 | 0 % | 153 / 190 / 210 | 80 / 122 / 162 | 120 / 199 |
+| 5. Dynamic slotting, `gnb_bridge.py --skip-empty` (kept) | 248 | 0 % | 144 / 181 / 189 | 70 / 109 / 149 | 118 / 215 |
+
+- **Why smaller slots would not help.** The air interface is emulated: each slot lasts as long as its exchange over the boards,
+  not the 0.5 ms of 30 kHz numerology. What counts is the wait in each exchange and how many slots a packet needs end to end.
+- **Step 1 was most of the gain.** UE3's board became BLE1 at the two-PC split, but the bridge still polled UE3 in every uplink slot and
+  waited out two 25 ms timeouts each time, about two thirds of all wall time.
+- **Step 2:** a UE gets an uplink grant every TDD period without a scheduling request. **Step 3:** shorter grant-to-PUSCH and data-to-ACK gaps.
+  `min_rxtxtime = 2` was tried twice and the nrUEs never attach (no uplink at all).
+- **Step 4:** TDD 3 DL + 6 UL fails at random access (Msg3 never received). 5 + 4 attaches but is slower, because each uplink slot
+  costs a poll round: the slot rate fell to about 150/s. Bluetooth LiDAR was also slower in that run (266 ms), but that was BLE1 being
+  left at 45 ms after a reconnect (`docs/REPRODUCE.md`, known issues), not the extra polling.
+- **Where the time goes** (bridge statistics, `slot ms DL x UL y rest z`), before step 5: 2.0 ms per downlink-only slot (the broadcast),
+  9.6–10.4 ms per slot with uplink (broadcast plus two polls), 0.7 ms per slot in the PNF, VNF and UDP. About 50 ms per 5 ms TDD period.
+- **Step 5, dynamic slotting.** A downlink-only slot with no SSB, DCI or transport block is not broadcast; the nrUE runs the slots it
+  did not hear when the next one arrives (`nrlink_ue.c` already did this for slots lost over the air, up to 40). About 115 slots a second,
+  half of all slots, stay off the air, and the average downlink-only slot drops from 2.0 to 1.2 ms. Nothing was lost and both nrUEs stayed attached.
+  What is left is mostly the uplink slots; polling both UEs in one exchange would be the next step.
+
