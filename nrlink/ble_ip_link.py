@@ -64,6 +64,31 @@ def rate_bps():
     return _rate[0]
 BURST = 1600          # bytes: one full packet at air speed. Larger bursts reach the hci_bb board faster than its
                       # UART passes them on; lost PDUs never return their L2CAP credits and the link stalls for good
+CENTRAL_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "ble_core_central")
+CENTRAL_INTERVAL_MS = 15   # default per link when the core is the central
+# Tried 11 Nov 2026 and NOT used: with the Intel 8265 as central of both links there is one clock and no drift, but
+# once both links are busy it serves about one 27 B packet per link per event: 15 kbit/s down each (30 with the
+# boards as centrals at 15 / 18.75 ms), 1000 B pings 3-8 s. Kept as an opt-in for other core adapters.
+
+
+def central_ues():
+    """Role switch, the same file on both PCs. If ble_core_central exists, the core's adapter is the LE central of
+    every link: it connects to each UE board (lines "k ADDR [interval_ms [ce_ms]]", in connect order), sets the
+    interval of both from its one clock, and the
+    boards advertise and wait. Without it the boards are the centrals and connect to the advertising core (the
+    original layout; each board then times its link by its own clock, see conn_interval_ms)."""
+    try:
+        ues = {}
+        for line in open(CENTRAL_FILE):
+            f = line.split("#")[0].split()
+            if len(f) >= 2 and f[0].isdigit():
+                ues[int(f[0])] = (f[1].upper(), float(f[2]) if len(f) > 2 else CENTRAL_INTERVAL_MS,
+                                  float(f[3]) if len(f) > 3 else 0)
+        return ues
+    except OSError:
+        return None
+
+
 def conn_interval_ms(k):
     """UE k's LE connection interval, asked for after each connect (the link opens at 45 ms): 15 ms for UE 1,
     18.75 for UE 2, 3.75 ms more for each further UE. 1M PHY and 27 B link-layer packets are fixed by the core
@@ -243,13 +268,22 @@ def pump(sock, tun, name):
     log(f"{name}: link down ({rx} packets received; dropped {drops[0]} bulk over the pacing rate (queue > {MAX_WAIT} s), {drops[1]} on a full send buffer)")
 
 
+def btmgmt(hci, *cmd):
+    """btmgmt hangs without a terminal: run it under script(1). Returns (ok, output)."""
+    r = subprocess.run(["timeout", "6", "script", "-qec", " ".join(["btmgmt", "--index", str(hci)] + list(cmd)), "/dev/null"],
+                       capture_output=True, text=True)
+    out = (r.stdout + r.stderr).strip()
+    ok = r.returncode == 0 and "failed" not in out.lower()
+    if not ok:
+        log(f"btmgmt --index {hci} {' '.join(cmd)}: rc {r.returncode} {out[-200:]}")
+    return ok, out
+
+
 def advertise(hci):
     """Connectable LE advertising with the public address. 'advertising on' alone advertises non-connectable
     with a random address: the UEs then see the access point but cannot connect (LE connect times out)."""
     for c in (["power", "on"], ["le", "on"], ["privacy", "off"], ["connectable", "on"], ["advertising", "on"]):
-        r = subprocess.run(["timeout", "4", "btmgmt", "--index", str(hci)] + c, capture_output=True, text=True)
-        if r.returncode != 0:
-            log(f"btmgmt --index {hci} {' '.join(c)}: {(r.stdout + r.stderr).strip()[-200:]}")
+        btmgmt(hci, *c)
     log(f"hci{hci}: connectable LE advertising on")
 
 
@@ -290,25 +324,28 @@ def hci_index(addr):
     return None
 
 
-def set_interval(sock, local, name, ms):
-    """UE (LE central): ask for a ms connection interval on the link under this L2CAP socket (HCI LE Connection
-    Update), and log what the controllers agreed on. Per connection: run after every (re)connect."""
+def set_interval(sock, local, name, ms, hci=None, ce_ms=0):
+    """The LE central (UE board, or the core in ble_core_central mode): ask for a ms connection interval on the
+    link under this L2CAP socket (HCI LE Connection Update), and log what the controllers agreed on. Per
+    connection: run after every (re)connect. hci: the adapter index, else found from the local address.
+    ce_ms: connection event length to ask for (min = max; a hint the controller may ignore), 0 = no preference."""
     if not ms:
         return
     try:
         info = sock.getsockopt(6, 2, 8)                                     # SOL_L2CAP, L2CAP_CONNINFO
         h = struct.unpack_from("<H", info)[0]
-        hci = hci_index(local)
+        if hci is None:
+            hci = hci_index(local)
         if hci is None:
             raise OSError(f"no hci device with address {local}")
     except OSError as e:
         log(f"{name}: connection interval left as is ({e})"); return
-    units, to = round(ms / 1.25), SUPERVISION_MS // 10
+    units, to, ce = round(ms / 1.25), SUPERVISION_MS // 10, round(ce_ms / 0.625)
     r = socket.socket(AF_BLUETOOTH, socket.SOCK_RAW, 1)
     try:
         r.setsockopt(0, 2, struct.pack("<IIIH2x", 1 << 4, 1 << 0x0F, 1 << (0x3E - 32), 0))  # Command Status, LE Meta
         r.bind((hci,))
-        r.send(bytes([0x01, 0x13, 0x20, 14]) + struct.pack("<HHHHHHH", h, units, units, 0, to, 0, 0))
+        r.send(bytes([0x01, 0x13, 0x20, 14]) + struct.pack("<HHHHHHH", h, units, units, 0, to, ce, ce))
         end = time.monotonic() + 4
         while time.monotonic() < end:
             r.settimeout(max(0.1, end - time.monotonic()))
@@ -329,10 +366,20 @@ def set_interval(sock, local, name, ms):
 
 def listen(args):
     local = args.local or "00:00:00:00:00:00"
-    advertise(args.hci)
-    srv = l2cap_socket(local, BDADDR_LE_PUBLIC, PSM)
-    srv.listen(4)
-    log(f"L2CAP listener on PSM {PSM:#06x} ({local}), link subnet {NET}.0/24, waiting for the UEs")
+    ues = central_ues()
+    if ues:
+        log(f"ble_core_central: hci{args.hci} is the LE central, connecting to the UEs "
+            + ", ".join(f"{k} {a} at {ms:g} ms (event {ce:g} ms)" for k, (a, ms, ce) in ues.items()) + f", link subnet {NET}.0/24")
+        # stop advertising: the old mode's advertising stays on in the kernel, and an advertising adapter here
+        # refuses to start LE connections (EBUSY) and lets the boards connect to it the old way
+        for c in (["advertising", "off"], ["connectable", "off"]):
+            btmgmt(args.hci, *c)
+        srv = None
+    else:
+        advertise(args.hci)
+        srv = l2cap_socket(local, BDADDR_LE_PUBLIC, PSM)
+        srv.listen(4)
+        log(f"L2CAP listener on PSM {PSM:#06x} ({local}), link subnet {NET}.0/24, waiting for the UEs")
     busy = set()
     tuns = {}   # UE index -> tun fd, kept across reconnects
 
@@ -371,6 +418,33 @@ def listen(args):
         finally:
             busy.discard(k)
 
+    def dial(k, addr, ms, ce):   # ble_core_central mode: the core connects to UE k's board and keeps reconnecting
+        name, backoff = f"ble{k}", 2
+        while True:
+            s = None
+            try:
+                s = l2cap_socket(local, BDADDR_LE_PUBLIC)
+                buf, ln = sockaddr_l2(addr, PSM, BDADDR_LE_PUBLIC)
+                if libc.connect(s.fileno(), buf, ln) < 0:
+                    raise OSError(ctypes.get_errno(), "connect: " + os.strerror(ctypes.get_errno()))
+                set_interval(s, local, name, ms, hci=args.hci, ce_ms=ce)
+                backoff = 2
+                serve(s, addr)            # hello, tun, pump; returns when the link goes down
+            except OSError as e:
+                log(f"{name}: {addr}: {e}; retrying in {backoff}s")
+                try:
+                    s and s.close()
+                except OSError:
+                    pass
+            time.sleep(backoff)
+            backoff = min(backoff * 2, 30)
+
+    if ues:
+        for k, (addr, ms, ce) in ues.items():   # file order = connect order
+            threading.Thread(target=dial, args=(k, addr, ms, ce), daemon=True).start()
+            time.sleep(1)                 # one LE connection setup at a time
+        while True:
+            time.sleep(3600)
     while True:
         conn, peer = srv.accept()
         threading.Timer(0.5, readvertise, args=(args.hci,)).start()
@@ -378,9 +452,14 @@ def listen(args):
 
 
 def connect(args):
+    if central_ues() is not None:
+        return accept_core(args)
     k = args.index
     name = f"ble{k}"
     routes = args.route or []
+    h = hci_index(args.local)
+    if h is not None:   # left on by ble_core_central mode: a board that still advertises times out connecting as central
+        btmgmt(h, "advertising", "off")
     peer_type = BDADDR_LE_RANDOM if args.peer_random else BDADDR_LE_PUBLIC
     backoff = 2
     s = None
@@ -423,6 +502,59 @@ def connect(args):
                 pass
         time.sleep(backoff)
         backoff = min(backoff * 2, 30)
+
+
+def accept_core(args):
+    """UE side in ble_core_central mode: the board advertises (connectable, public address) and waits for the
+    core's adapter, which connects as the LE central and sets the interval. Then the same hello, tun and pump."""
+    k, name, routes = args.index, f"ble{args.index}", args.route or []
+    hci = hci_index(args.local)
+    if hci is None:
+        log(f"{name}: no hci device with address {args.local}, exiting"); return
+    advertise(hci)
+    srv = l2cap_socket(args.local, BDADDR_LE_PUBLIC, PSM)
+    srv.listen(1)
+    log(f"{name}: ble_core_central: hci{hci} ({args.local}) advertises, waiting for the core {args.connect} on PSM {PSM:#06x}")
+    tun = None
+    while True:
+        if args.netns and not os.path.exists(f"/proc/{args.netns}"):
+            log(f"{name}: pid {args.netns} (target network namespace) is gone, exiting")
+            return
+        srv.settimeout(5)
+        try:
+            conn, peer = srv.accept()
+        except socket.timeout:
+            continue
+        except OSError as e:
+            log(f"{name}: accept: {e}"); time.sleep(2); continue
+        peer = (peer[0] if isinstance(peer, tuple) else str(peer)).upper()
+        if peer != args.connect.upper():
+            log(f"{name}: connection from {peer}, not the core, closing"); conn.close(); continue
+        try:
+            conn.settimeout(10)
+            conn.send(HELLO + bytes([k]))
+            if conn.recv(16) != HELLO + bytes([k]):
+                raise OSError("no hello from the access point")
+            conn.settimeout(None)
+            again = tun is not None
+            if not again:
+                t = tun_open(name)
+                try:
+                    tun_up(t, name, f"{NET}.1{k}", f"{NET}.1", netns=args.netns, routes=routes)
+                except subprocess.CalledProcessError:
+                    os.close(t)
+                    raise
+                tun = t
+            log(f"{name}: {'up again' if again else 'up'} (core is central), {NET}.1{k} <-> {NET}.1"
+                + (f" in netns of pid {args.netns}" if args.netns else "") + (f", routes {' '.join(routes)}" if routes else ""))
+            pump(conn, tun, name)
+        except (OSError, subprocess.CalledProcessError) as e:
+            log(f"{name}: {e}")
+            try:
+                conn.close()
+            except OSError:
+                pass
+        threading.Timer(0.5, readvertise, args=(hci,)).start()   # the controller stopped advertising on connect
 
 
 def main():

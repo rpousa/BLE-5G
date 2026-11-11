@@ -1,0 +1,198 @@
+{
+ "_meta": {
+  "ues": "n3iwue1,n3iwue2",
+  "secs": 30,
+  "udp_len": 500,
+  "t0": 1794422319.2660463
+ },
+ "steps": [
+  {
+   "dir": "dl",
+   "offered_kbps": 20,
+   "t": 1794422350.571792,
+   "res": {
+    "n3iwue2": {
+     "offered_kbps": 20,
+     "kbps": 20.0,
+     "loss_pct": 0,
+     "jitter_ms": 15.2
+    },
+    "n3iwue1": {
+     "offered_kbps": 20,
+     "kbps": 20.0,
+     "loss_pct": 0,
+     "jitter_ms": 14.9
+    }
+   }
+  },
+  {
+   "dir": "dl",
+   "offered_kbps": 40,
+   "t": 1794422392.3132932,
+   "res": {
+    "n3iwue2": {
+     "offered_kbps": 40,
+     "kbps": 30.0,
+     "loss_pct": 7.3,
+     "jitter_ms": 48.0
+    },
+    "n3iwue1": {
+     "offered_kbps": 40,
+     "kbps": 29.9,
+     "loss_pct": 7.6,
+     "jitter_ms": 47.8
+    }
+   }
+  },
+  {
+   "dir": "dl",
+   "offered_kbps": 60,
+   "t": 1794422434.2022984,
+   "res": {
+    "n3iwue1": {
+     "offered_kbps": 60,
+     "kbps": 29.5,
+     "loss_pct": 33.2,
+     "jitter_ms": 45.1
+    },
+    "n3iwue2": {
+     "offered_kbps": 60,
+     "kbps": 29.6,
+     "loss_pct": 33.4,
+     "jitter_ms": 49.8
+    }
+   }
+  },
+  {
+   "dir": "dl",
+   "offered_kbps": 80,
+   "t": 1794422476.1482162,
+   "res": {
+    "n3iwue2": {
+     "offered_kbps": 80,
+     "kbps": 30.5,
+     "loss_pct": 43.6,
+     "jitter_ms": 50.1
+    },
+    "n3iwue1": {
+     "offered_kbps": 80,
+     "kbps": 30.4,
+     "loss_pct": 44.1,
+     "jitter_ms": 64.3
+    }
+   }
+  },
+  {
+   "dir": "ul",
+   "offered_kbps": 20,
+   "t": 1794422512.2369125,
+   "res": {
+    "n3iwue1": {
+     "offered_kbps": 20,
+     "kbps": 20.0,
+     "loss_pct": 0,
+     "jitter_ms": 25.3
+    },
+    "n3iwue2": {
+     "offered_kbps": 20,
+     "kbps": 19.9,
+     "loss_pct": 0,
+     "jitter_ms": 14.6
+    }
+   }
+  },
+  {
+   "dir": "ul",
+   "offered_kbps": 40,
+   "t": 1794422549.7800727,
+   "res": {
+    "n3iwue2": {
+     "offered_kbps": 40,
+     "kbps": 37.5,
+     "loss_pct": 2.7,
+     "jitter_ms": 14.9
+    },
+    "n3iwue1": {
+     "offered_kbps": 40,
+     "kbps": 36.8,
+     "loss_pct": 2.7,
+     "jitter_ms": 30.6
+    }
+   }
+  },
+  {
+   "dir": "ul",
+   "offered_kbps": 60,
+   "t": 1794422587.523686,
+   "res": {
+    "n3iwue1": {
+     "offered_kbps": 60,
+     "kbps": 35.0,
+     "loss_pct": 36.4,
+     "jitter_ms": 49.5
+    },
+    "n3iwue2": {
+     "offered_kbps": 60,
+     "kbps": 39.4,
+     "loss_pct": 29.3,
+     "jitter_ms": 45.3
+    }
+   }
+  },
+  {
+   "dir": "ul",
+   "offered_kbps": 80,
+   "t": 1794422625.4179032,
+   "res": {
+    "n3iwue2": {
+     "offered_kbps": 80,
+     "kbps": 37.5,
+     "loss_pct": 48.2,
+     "jitter_ms": 41.5
+    },
+    "n3iwue1": {
+     "offered_kbps": 80,
+     "kbps": 36.0,
+     "loss_pct": 50.2,
+     "jitter_ms": 50.0
+    }
+   }
+  },
+  {
+   "dir": "tcp_ul",
+   "t": 1794422663.835875,
+   "res": {
+    "n3iwue1": {
+     "kbps": 34.5,
+     "bytes": 131838,
+     "secs": 30.6,
+     "retransmits": 24
+    },
+    "n3iwue2": {
+     "kbps": 34.0,
+     "bytes": 130480,
+     "secs": 30.7,
+     "retransmits": 26
+    }
+   }
+  },
+  {
+   "dir": "tcp_dl",
+   "t": 1794422700.6257434,
+   "res": {
+    "n3iwue1": {
+     "kbps": 9.2,
+     "bytes": 34650,
+     "secs": 30.0,
+     "retransmits": 21
+    },
+    "n3iwue2": {
+     "kbps": 21.8,
+     "bytes": 81774,
+     "secs": 30.0,
+     "retransmits": 57
+    }
+   }
+  }
+ ]
+}
