@@ -330,7 +330,7 @@ def set_interval(sock, local, name, ms, hci=None, ce_ms=0):
     connection: run after every (re)connect. hci: the adapter index, else found from the local address.
     ce_ms: connection event length to ask for (min = max; a hint the controller may ignore), 0 = no preference."""
     if not ms:
-        return
+        return True
     try:
         info = sock.getsockopt(6, 2, 8)                                     # SOL_L2CAP, L2CAP_CONNINFO
         h = struct.unpack_from("<H", info)[0]
@@ -339,7 +339,7 @@ def set_interval(sock, local, name, ms, hci=None, ce_ms=0):
         if hci is None:
             raise OSError(f"no hci device with address {local}")
     except OSError as e:
-        log(f"{name}: connection interval left as is ({e})"); return
+        log(f"{name}: connection interval left as is ({e})"); return True
     units, to, ce = round(ms / 1.25), SUPERVISION_MS // 10, round(ce_ms / 0.625)
     r = socket.socket(AF_BLUETOOTH, socket.SOCK_RAW, 1)
     try:
@@ -351,17 +351,37 @@ def set_interval(sock, local, name, ms, hci=None, ce_ms=0):
             r.settimeout(max(0.1, end - time.monotonic()))
             ev = r.recv(64)
             if ev[1] == 0x0F and ev[5:7] == b"\x13\x20" and ev[3] != 0:       # Command Status, refused
-                log(f"{name}: hci{hci} refused the connection update, status {ev[3]:#04x}"); return
+                log(f"{name}: hci{hci} refused the connection update, status {ev[3]:#04x}"); return True
             if ev[1] == 0x3E and ev[3] == 0x03 and struct.unpack_from("<H", ev, 5)[0] == h:
                 st, iv = ev[4], struct.unpack_from("<H", ev, 7)[0]
                 log(f"{name}: connection interval {iv * 1.25:g} ms" if st == 0 else
                     f"{name}: connection update failed, status {st:#04x}")
-                return
+                return True
         log(f"{name}: no answer to the connection update")
     except OSError as e:
         log(f"{name}: connection update: {e}")
     finally:
         r.close()
+    return False     # no answer: the caller retries (keep_interval)
+
+
+def keep_interval(sock, local, name, ms, tries=4, every=5.0):
+    """Retry a connection update that got no answer; if the peer never answers, close the link so it reconnects.
+    Seen 11 Nov 2026: BLE1 reconnected, its update timed out, and the link stayed at the 45 ms it opens with
+    (Bluetooth LiDAR 170 -> 265 ms) until a reconnect; a later hcitool lecup on that connection timed out too."""
+    def run():
+        for _ in range(tries):
+            time.sleep(every)
+            if sock.fileno() < 0:
+                return
+            if set_interval(sock, local, name, ms):
+                return
+        log(f"{name}: the peer never answered the connection update; reconnecting")
+        try:
+            sock.shutdown(socket.SHUT_RDWR)
+        except OSError:
+            pass
+    threading.Thread(target=run, daemon=True).start()
 
 
 def listen(args):
@@ -479,7 +499,9 @@ def connect(args):
             if s.recv(16) != HELLO + bytes([k]):
                 raise OSError("no hello from the access point")
             s.settimeout(None)
-            set_interval(s, args.local, name, conn_interval_ms(k) if args.interval is None else args.interval)
+            ms = conn_interval_ms(k) if args.interval is None else args.interval
+            if not set_interval(s, args.local, name, ms):
+                keep_interval(s, args.local, name, ms)
             again = tun is not None
             if not again:
                 t = tun_open(name)
