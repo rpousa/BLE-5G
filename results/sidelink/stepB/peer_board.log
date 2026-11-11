@@ -1,0 +1,74 @@
+23:12:03 board GBAMNH4BQ3CSB nrlink v4
+23:12:07 UE at 172.30.99.3:40004, nearby UE
+23:12:07 slot clock set: now slot 244
+23:12:07 slot clock set: now slot 444 (was 250)
+23:12:07 slot clock set: now slot 564 (was 510)
+23:12:07 slot clock set: now slot 644 (was 569)
+23:12:07 slot clock set: now slot 764 (was 737)
+23:12:07 slot clock set: now slot 1084 (was 1079)
+23:12:12 UE slot 10591: 2068 slots/s in 999 RUNs/s; air 261 polls/s, 7 repeats, items in 101 out 1, backlog 0, dropped 1
+23:12:15 slot clock set: now slot 16004 (was 16001)
+23:12:17 UE slot 20602: 2001 slots/s in 1000 RUNs/s; air 263 polls/s, 0 repeats, items in 93 out 0, backlog 0, dropped 1
+23:12:22 UE slot 30606: 2000 slots/s in 1000 RUNs/s; air 259 polls/s, 0 repeats, items in 95 out 1, backlog 0, dropped 1
+23:12:27 UE slot 40608: 2000 slots/s in 1000 RUNs/s; air 268 polls/s, 0 repeats, items in 94 out 0, backlog 0, dropped 1
+23:12:32 UE slot 50612: 2000 slots/s in 1000 RUNs/s; air 267 polls/s, 0 repeats, items in 95 out 1, backlog 0, dropped 1
+23:12:37 UE slot 60618: 2000 slots/s in 1000 RUNs/s; air 263 polls/s, 0 repeats, items in 104 out 10, backlog 0, dropped 1
+23:12:42 UE slot 70632: 2000 slots/s in 1000 RUNs/s; air 258 polls/s, 0 repeats, items in 105 out 12, backlog 0, dropped 1
+23:12:47 UE slot 80656: 2000 slots/s in 1000 RUNs/s; air 256 polls/s, 0 repeats, items in 104 out 10, backlog 0, dropped 1
+23:12:52 UE slot 90658: 2000 slots/s in 1000 RUNs/s; air 250 polls/s, 0 repeats, items in 104 out 10, backlog 0, dropped 1
+23:12:57 UE slot 100658: 2000 slots/s in 1000 RUNs/s; air 228 polls/s, 0 repeats, items in 104 out 10, backlog 0, dropped 1
+23:13:02 UE slot 110682: 2000 slots/s in 1000 RUNs/s; air 219 polls/s, 0 repeats, items in 106 out 29, backlog 0, dropped 1
+23:13:07 UE slot 120690: 2000 slots/s in 1000 RUNs/s; air 190 polls/s, 0 repeats, items in 95 out 62, backlog 0, dropped 1
+23:13:12 UE slot 130692: 2000 slots/s in 1000 RUNs/s; air 188 polls/s, 0 repeats, items in 94 out 63, backlog 0, dropped 1
+23:13:17 UE slot 140692: 2000 slots/s in 1000 RUNs/s; air 206 polls/s, 0 repeats, items in 97 out 53, backlog 0, dropped 1
+23:13:22 UE slot 150730: 2000 slots/s in 1000 RUNs/s; air 206 polls/s, 0 repeats, items in 98 out 49, backlog 0, dropped 1
+23:13:27 UE slot 160734: 2000 slots/s in 1000 RUNs/s; air 107 polls/s, 0 repeats, items in 94 out 125, backlog 0, dropped 1
+23:13:32 UE slot 170737: 2000 slots/s in 1000 RUNs/s; air 112 polls/s, 0 repeats, items in 94 out 125, backlog 0, dropped 1
+23:13:37 UE slot 180743: 2000 slots/s in 1000 RUNs/s; air 161 polls/s, 0 repeats, items in 97 out 85, backlog 0, dropped 1
+23:13:42 UE slot 190793: 2000 slots/s in 1000 RUNs/s; air 153 polls/s, 0 repeats, items in 97 out 92, backlog 1, dropped 1
+23:13:47 UE slot 200871: 2000 slots/s in 1000 RUNs/s; air 25 polls/s, 0 repeats, items in 95 out 189, backlog 1, dropped 1
+23:13:52 UE slot 210899: 2000 slots/s in 1000 RUNs/s; air 29 polls/s, 0 repeats, items in 94 out 188, backlog 1, dropped 1
+23:13:57 UE slot 220901: 2000 slots/s in 1000 RUNs/s; air 137 polls/s, 0 repeats, items in 97 out 102, backlog 0, dropped 1
+23:14:02 UE slot 231065: 2000 slots/s in 1000 RUNs/s; air 110 polls/s, 0 repeats, items in 98 out 128, backlog 5, dropped 26
+23:14:07 UE slot 241146: 2000 slots/s in 1000 RUNs/s; air 10 polls/s, 0 repeats, items in 94 out 204, backlog 6, dropped 73
+23:14:12 UE slot 251302: 2000 slots/s in 1000 RUNs/s; air 10 polls/s, 0 repeats, items in 95 out 204, backlog 6, dropped 123
+23:14:17 UE slot 261308: 2000 slots/s in 1000 RUNs/s; air 165 polls/s, 0 repeats, items in 99 out 80, backlog 0, dropped 144
+23:14:22 UE slot 271422: 2000 slots/s in 1000 RUNs/s; air 78 polls/s, 0 repeats, items in 97 out 154, backlog 11, dropped 262
+23:14:27 UE slot 281600: 2000 slots/s in 1000 RUNs/s; air 10 polls/s, 0 repeats, items in 96 out 204, backlog 11, dropped 439
+23:14:32 UE slot 291652: 2000 slots/s in 1000 RUNs/s; air 10 polls/s, 0 repeats, items in 95 out 200, backlog 11, dropped 616
+23:14:37 UE slot 301654: 2000 slots/s in 1000 RUNs/s; air 193 polls/s, 0 repeats, items in 98 out 56, backlog 0, dropped 665
+23:14:42 UE slot 311656: 2000 slots/s in 1000 RUNs/s; air 136 polls/s, 0 repeats, items in 201 out 5, backlog 0, dropped 665
+23:14:47 UE slot 321713: 2000 slots/s in 1000 RUNs/s; air 116 polls/s, 0 repeats, items in 220 out 0, backlog 0, dropped 665
+23:14:52 UE slot 331717: 2000 slots/s in 1000 RUNs/s; air 116 polls/s, 0 repeats, items in 219 out 0, backlog 0, dropped 665
+23:14:57 UE slot 341725: 2000 slots/s in 1000 RUNs/s; air 235 polls/s, 0 repeats, items in 119 out 4, backlog 0, dropped 665
+23:15:02 UE slot 351765: 2000 slots/s in 1000 RUNs/s; air 37 polls/s, 0 repeats, items in 274 out 6, backlog 0, dropped 665
+23:15:07 UE slot 361793: 2000 slots/s in 1000 RUNs/s; air 27 polls/s, 0 repeats, items in 283 out 0, backlog 0, dropped 665
+23:15:13 UE slot 371865: 2000 slots/s in 1000 RUNs/s; air 29 polls/s, 0 repeats, items in 283 out 0, backlog 0, dropped 665
+23:15:18 UE slot 382025: 2000 slots/s in 1000 RUNs/s; air 228 polls/s, 0 repeats, items in 127 out 10, backlog 0, dropped 665
+23:15:23 UE slot 392167: 2000 slots/s in 1000 RUNs/s; air 10 polls/s, 0 repeats, items in 289 out 0, backlog 0, dropped 665
+23:15:28 UE slot 402175: 2000 slots/s in 1000 RUNs/s; air 10 polls/s, 0 repeats, items in 285 out 0, backlog 0, dropped 665
+23:15:33 UE slot 412177: 2000 slots/s in 1000 RUNs/s; air 23 polls/s, 0 repeats, items in 281 out 5, backlog 0, dropped 665
+23:15:38 UE slot 422349: 2000 slots/s in 1000 RUNs/s; air 224 polls/s, 0 repeats, items in 105 out 26, backlog 3, dropped 673
+23:15:43 UE slot 432485: 2000 slots/s in 1000 RUNs/s; air 25 polls/s, 0 repeats, items in 160 out 125, backlog 0, dropped 685
+23:15:48 UE slot 442583: 2000 slots/s in 1000 RUNs/s; air 26 polls/s, 0 repeats, items in 157 out 124, backlog 2, dropped 692
+23:15:53 UE slot 452604: 2000 slots/s in 1000 RUNs/s; air 22 polls/s, 0 repeats, items in 162 out 124, backlog 3, dropped 701
+23:15:58 UE slot 462644: 2000 slots/s in 1000 RUNs/s; air 21 polls/s, 0 repeats, items in 157 out 126, backlog 0, dropped 708
+23:16:03 UE slot 472726: 2000 slots/s in 1000 RUNs/s; air 22 polls/s, 1 repeats, items in 168 out 124, backlog 2, dropped 715
+23:16:08 UE slot 482728: 2000 slots/s in 1000 RUNs/s; air 44 polls/s, 0 repeats, items in 157 out 113, backlog 0, dropped 723
+23:16:13 UE slot 492838: 2000 slots/s in 1000 RUNs/s; air 205 polls/s, 0 repeats, items in 118 out 15, backlog 0, dropped 724
+23:16:18 UE slot 502948: 2000 slots/s in 1000 RUNs/s; air 25 polls/s, 0 repeats, items in 210 out 66, backlog 0, dropped 727
+23:16:23 UE slot 513088: 2000 slots/s in 1000 RUNs/s; air 23 polls/s, 0 repeats, items in 213 out 69, backlog 0, dropped 730
+23:16:28 UE slot 523114: 2000 slots/s in 1000 RUNs/s; air 20 polls/s, 0 repeats, items in 218 out 69, backlog 0, dropped 731
+23:16:33 UE slot 533284: 2000 slots/s in 1000 RUNs/s; air 23 polls/s, 0 repeats, items in 219 out 65, backlog 0, dropped 732
+23:16:38 UE slot 543338: 2000 slots/s in 1000 RUNs/s; air 23 polls/s, 0 repeats, items in 212 out 71, backlog 0, dropped 734
+23:16:43 UE slot 553340: 2000 slots/s in 1000 RUNs/s; air 58 polls/s, 0 repeats, items in 198 out 64, backlog 0, dropped 738
+23:16:48 UE slot 563451: 2000 slots/s in 1000 RUNs/s; air 186 polls/s, 0 repeats, items in 116 out 44, backlog 2, dropped 753
+23:16:53 UE slot 573453: 2000 slots/s in 1000 RUNs/s; air 22 polls/s, 0 repeats, items in 169 out 129, backlog 2, dropped 761
+23:16:58 UE slot 583525: 2000 slots/s in 1000 RUNs/s; air 24 polls/s, 0 repeats, items in 161 out 130, backlog 0, dropped 770
+23:17:03 UE slot 593669: 2000 slots/s in 1000 RUNs/s; air 24 polls/s, 0 repeats, items in 164 out 135, backlog 3, dropped 779
+23:17:08 UE slot 603705: 2000 slots/s in 1000 RUNs/s; air 29 polls/s, 0 repeats, items in 155 out 126, backlog 0, dropped 786
+23:17:13 UE slot 613709: 2000 slots/s in 1000 RUNs/s; air 98 polls/s, 0 repeats, items in 140 out 90, backlog 0, dropped 791
+23:17:18 UE slot 623715: 2000 slots/s in 1000 RUNs/s; air 261 polls/s, 0 repeats, items in 94 out 0, backlog 0, dropped 791
+23:17:23 UE slot 633719: 2000 slots/s in 1000 RUNs/s; air 264 polls/s, 0 repeats, items in 93 out 0, backlog 0, dropped 791
+23:17:28 UE slot 643725: 2000 slots/s in 1000 RUNs/s; air 268 polls/s, 0 repeats, items in 94 out 0, backlog 0, dropped 791
+23:17:33 UE slot 653725: 2000 slots/s in 1000 RUNs/s; air 268 polls/s, 0 repeats, items in 94 out 0, backlog 0, dropped 791

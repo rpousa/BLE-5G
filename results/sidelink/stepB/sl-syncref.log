@@ -1,0 +1,534 @@
+Calling sched_setscheduler(79)
+[ENB_APP]   nfapi running mode: MONOLITHIC
+[0m[UTIL]   Creating thread Tpool0_-1 with affinity -1 and priority 50, stacksize 8388608
+[0m[UTIL]   Creating thread Tpool1_-1 with affinity -1 and priority 50, stacksize 8388608
+[0m[UTIL]   Creating thread Tpool2_-1 with affinity -1 and priority 50, stacksize 8388608
+[0m[UTIL]   Creating thread Tpool3_-1 with affinity -1 and priority 50, stacksize 8388608
+[0m[ITTI]   Starting itti queue: TASK_UNKNOWN as task 0
+[0m[ITTI]   Starting itti queue: TASK_TIMER as task 1
+[0m[ITTI]   Starting itti queue: TASK_L2L1 as task 2
+[0m[ITTI]   Starting itti queue: TASK_BM as task 3
+[0m[ITTI]   Starting itti queue: TASK_PHY_ENB as task 4
+[0m[ITTI]   Starting itti queue: TASK_MAC_GNB as task 5
+[0m[ITTI]   Starting itti queue: TASK_RLC_ENB as task 6
+[0m[ITTI]   Starting itti queue: TASK_RRC_ENB_NB_IoT as task 7
+[0m[ITTI]   Starting itti queue: TASK_PDCP_ENB as task 8
+[0m[ITTI]   Starting itti queue: TASK_PDCP_GNB as task 9
+[0m[ITTI]   Starting itti queue: TASK_DATA_FORWARDING as task 10
+[0m[ITTI]   Starting itti queue: TASK_END_MARKER as task 11
+[0m[ITTI]   Starting itti queue: TASK_RRC_ENB as task 12
+[0m[ITTI]   Starting itti queue: TASK_RRC_GNB as task 13
+[0m[ITTI]   Starting itti queue: TASK_RAL_ENB as task 14
+[0m[ITTI]   Starting itti queue: TASK_S1AP as task 15
+[0m[ITTI]   Starting itti queue: TASK_NGAP as task 16
+[0m[ITTI]   Starting itti queue: TASK_X2AP as task 17
+[0m[ITTI]   Starting itti queue: TASK_M2AP_ENB as task 18
+[0m[ITTI]   Starting itti queue: TASK_M2AP_MCE as task 19
+[0m[ITTI]   Starting itti queue: TASK_M3AP as task 20
+[0m[ITTI]   Starting itti queue: TASK_M3AP_MME as task 21
+[0m[ITTI]   Starting itti queue: TASK_M3AP_MCE as task 22
+[0m[ITTI]   Starting itti queue: TASK_SCTP as task 23
+[0m[ITTI]   Starting itti queue: TASK_ENB_APP as task 24
+[0m[ITTI]   Starting itti queue: TASK_GNB_APP as task 25
+[0m[ITTI]   Starting itti queue: TASK_MCE_APP as task 26
+[0m[ITTI]   Starting itti queue: TASK_MME_APP as task 27
+[0m[ITTI]   Starting itti queue: TASK_PHY_UE as task 28
+[0m[ITTI]   Starting itti queue: TASK_MAC_UE as task 29
+[0m[ITTI]   Starting itti queue: TASK_RLC_UE as task 30
+[0m[ITTI]   Starting itti queue: TASK_PDCP_UE as task 31
+[0m[ITTI]   Starting itti queue: TASK_RRC_UE as task 32
+[0m[ITTI]   Starting itti queue: TASK_RRC_NRUE as task 33
+[0m[ITTI]   Starting itti queue: TASK_NAS_UE as task 34
+[0m[ITTI]   Starting itti queue: TASK_RAL_UE as task 35
+[0m[ITTI]   Starting itti queue: TASK_GTPV1_U as task 36
+[0m[ITTI]   Starting itti queue: TASK_CU_F1 as task 37
+[0m[ITTI]   Starting itti queue: TASK_DU_F1 as task 38
+[0m[ITTI]   Starting itti queue: TASK_CUCP_E1 as task 39
+[0m[ITTI]   Starting itti queue: TASK_CUUP_E1 as task 40
+[0m[ITTI]   Starting itti queue: TASK_RRC_UE_SIM as task 41
+[0m[ITTI]   Starting itti queue: TASK_RRC_GNB_SIM as task 42
+[0m[ITTI]   Starting itti queue: TASK_RRC_NSA_UE as task 43
+[0m[ITTI]   Starting itti queue: TASK_RRC_NSA_NRUE as task 44
+[0m[ITTI]   Starting itti queue: TASK_NAS_NRUE as task 45
+[0m[OPT]   OPT disabled
+[0m[HW]   Version: Branch:  Abrev. Hash:  Date: 
+[0m[RRC]   NUM SL-FCC elem in cfg file:1
+[0m[RRC]   NUM SL-BWP elem in cfg file:1
+[0m[RRC]   NUM Rx RPOOLs in cfg file:1
+[0m[NR_RRC]   Freeing sl_PSFCH_Config_r16
+[0m[RRC]   NUM Tx RPOOL in cfg file:1
+[0m[NR_RRC]   Freeing sl_PSFCH_Config_r16
+[0m[RRC]   NUM SL-SYNCCFG elem in cfg file:1
+[0mCMDLINE: "./nr-uesoftmodem" "-O" "/oai-ran/targets/PROJECTS/NR-SIDELINK/CONF/sl_sync_ref_nofb.conf" "--sa" "--sl-mode" "2" "--sync-ref" "--thread-pool" "-1,-1,-1,-1" 
+[CONFIG] get parameters from libconfig /oai-ran/targets/PROJECTS/NR-SIDELINK/CONF/sl_sync_ref_nofb.conf [LIBCONFIG] Path for include directive set to: /oai-ran/targets/PROJECTS/NR-SIDELINK/CONF
+[CONFIG] function config_libconfig_init returned 0
+[CONFIG] config module libconfig loaded
+[LIBCONFIG] config: 2/2 parameters successfully set, (2 to default value)
+[CONFIG] debug flags: 0x00000000
+[LIBCONFIG] log_config: 3/3 parameters successfully set, (2 to default value)
+[LIBCONFIG] log_config: 54/54 parameters successfully set, (54 to default value)
+[LIBCONFIG] log_config: 54/54 parameters successfully set, (54 to default value)
+[LIBCONFIG] log_config: 16/16 parameters successfully set, (16 to default value)
+[LIBCONFIG] log_config: 16/16 parameters successfully set, (16 to default value)
+log init done
+[LIBCONFIG] (root): 35/35 parameters successfully set, (33 to default value)
+[LIBCONFIG] (root): 44/44 parameters successfully set, (41 to default value)
+[LIBCONFIG] (root): 6/6 parameters successfully set, (5 to default value)
+[LIBCONFIG] TTracer: 3/3 parameters successfully set, (3 to default value)
+create a thread for core -1
+create a thread for core -1
+create a thread for core -1
+create a thread for core -1
+CPU Freq is 3.072139 
+[LIBCONFIG] opt: 3/3 parameters successfully set, (3 to default value)
+[LIBCONFIG] loader: 2/2 parameters successfully set, (2 to default value)
+[LIBCONFIG] loader.ldpc: 2/2 parameters successfully set, (1 to default value)
+shlib_path libldpc.so
+[LOADER] library libldpc.so successfully loaded
+[LIBCONFIG] SIDELINK_PRECONFIGURATION.[0].sl_UEINFO.[0]: 5/5 parameters successfully set, (0 to default value)
+[LIBCONFIG] SIDELINK_PRECONFIGURATION.[0].sl_FrequencyCommonConfig.[0]: 5/5 parameters successfully set, (0 to default value)
+[LIBCONFIG] SIDELINK_PRECONFIGURATION.[0].sl_BWP.[0]: 3/3 parameters successfully set, (0 to default value)
+[LIBCONFIG] SIDELINK_PRECONFIGURATION.[0].sl_RxResPools.[0]: 11/11 parameters successfully set, (0 to default value)
+[LIBCONFIG] SIDELINK_PRECONFIGURATION.[0].rsrc_selection_params.[0]: 8/8 parameters successfully set, (1 to default value)
+[LIBCONFIG] SIDELINK_PRECONFIGURATION.[0].sl_TxResPools.[0]: 11/11 parameters successfully set, (0 to default value)
+[LIBCONFIG] SIDELINK_PRECONFIGURATION.[0].rsrc_selection_params.[0]: 8/8 parameters successfully set, (1 to default value)
+[LIBCONFIG] SIDELINK_PRECONFIGURATION.[0].sl_syncCfg.[0]: 3/3 parameters successfully set, (0 to default value)
+[LIBCONFIG] SIDELINK_PRECONFIGURATION.[0]: 5/5 parameters successfully set, (0 to default value)
+<SL-PreconfigurationNR-r16>
+    <sidelinkPreconfigNR-r16>
+        <sl-PreconfigFreqInfoList-r16>
+            <SL-FreqConfigCommon-r16>
+                <sl-SCS-SpecificCarrierList-r16>
+                    <SCS-SpecificCarrier>
+                        <offsetToCarrier>0</offsetToCarrier>
+                        <subcarrierSpacing><kHz30/></subcarrierSpacing>
+                        <carrierBandwidth>106</carrierBandwidth>
+                    </SCS-SpecificCarrier>
+                </sl-SCS-SpecificCarrierList-r16>
+                <sl-AbsoluteFrequencyPointA-r16>515180</sl-AbsoluteFrequencyPointA-r16>
+                <sl-AbsoluteFrequencySSB-r16>516990</sl-AbsoluteFrequencySSB-r16>
+                <valueN-r16>0</valueN-r16>
+                <sl-BWP-List-r16>
+                    <SL-BWP-ConfigCommon-r16>
+                        <sl-BWP-Generic-r16>
+                            <sl-BWP-r16>
+                                <locationAndBandwidth>28875</locationAndBandwidth>
+                                <subcarrierSpacing><kHz30/></subcarrierSpacing>
+                            </sl-BWP-r16>
+                            <sl-LengthSymbols-r16><sym14/></sl-LengthSymbols-r16>
+                            <sl-StartSymbol-r16><sym0/></sl-StartSymbol-r16>
+                            <sl-PSBCH-Config-r16>
+                                <release></rel[NR_MAC]   [UE0] Applying default macMainConfig
+[0m[NR_MAC]   Initializing dl and ul config_request. num_slots = 20
+[0m[MAC]   Running without CellGroupConfig
+[0m[RRC]   NUM SL-FCC elem in cfg file:1
+[0m[RRC]   NUM SL-BWP elem in cfg file:1
+[0m[RRC]   NUM Rx RPOOLs in cfg file:1
+[0m[NR_RRC]   Freeing sl_PSFCH_Config_r16
+[0m[RRC]   NUM Tx RPOOL in cfg file:1
+[0m[NR_RRC]   Freeing sl_PSFCH_Config_r16
+[0m[RRC]   NUM SL-SYNCCFG elem in cfg file:1
+[0mease>
+                            </sl-PSBCH-Config-r16>
+                        </sl-BWP-Generic-r16>
+                        <sl-BWP-PoolConfigCommon-r16>
+                            <sl-RxPool-r16>
+                                <SL-ResourcePool-r16>
+                                    <sl-PSCCH-Config-r16>
+                                        <setup>
+                                            <sl-TimeResourcePSCCH-r16><n2/></sl-TimeResourcePSCCH-r16>
+                                            <sl-FreqResourcePSCCH-r16><n12/></sl-FreqResourcePSCCH-r16>
+                                            <sl-DMRS-ScrambleID-r16>0</sl-DMRS-ScrambleID-r16>
+                                            <sl-NumReservedBits-r16>2</sl-NumReservedBits-r16>
+                                        </setup>
+                                    </sl-PSCCH-Config-r16>
+                                    <sl-PSSCH-Config-r16>
+                                        <setup>
+                                            <sl-PSSCH-DMRS-TimePatternList-r16>
+                                                <INTEGER>2</INTEGER>
+                                                <INTEGER>3</INTEGER>
+                                                <INTEGER>4</INTEGER>
+                                            </sl-PSSCH-DMRS-TimePatternList-r16>
+                                            <sl-BetaOffsets2ndSCI-r16>
+                                                <SL-BetaOffsets-r16>0</SL-BetaOffsets-r16>
+                                                <SL-BetaOffsets-r16>4</SL-BetaOffsets-r16>
+                                                <SL-BetaOffsets-r16>8</SL-BetaOffsets-r16>
+                                                <SL-BetaOffsets-r16>12</SL-BetaOffsets-r16>
+                                            </sl-BetaOffsets2ndSCI-r16>
+                                            <sl-Scaling-r16><f0p5/></sl-Scaling-r16>
+                                        </setup>
+                                    </sl-PSSCH-Config-r16>
+                                    <sl-SyncAllowed-r16>
+                                        <gnss-Sync-r16><true/></gnss-Sync-r16>
+                                        <ue-Sync-r16><true/></ue-Sync-r16>
+                                    </sl-SyncAllowed-r16>
+                                    <sl-SubchannelSize-r16><n100/></sl-SubchannelSize-r16>
+                                    <sl-StartRB-Subchannel-r16>0</sl-StartRB-Subchannel-r16>
+                                    <sl-NumSubchannel-r16>1</sl-NumSubchannel-r16>
+                                    <sl-UE-SelectedConfigRP-r16>
+                                        <sl-Thres-RSRP-List-r16>
+                                        </sl-Thres-RSRP-List-r16>
+                                        <sl-MaxNumPerReserve-r16><n2/></sl-MaxNumPerReserve-r16>
+                                        <sl-SensingWindow-r16>[LIBCONFIG] SIDELINK_PRECONFIGURATION.[0].sl_FrequencyCommonConfig.[0]: 5/5 parameters successfully set, (0 to default value)
+[LIBCONFIG] SIDELINK_PRECONFIGURATION.[0].sl_BWP.[0]: 3/3 parameters successfully set, (0 to default value)
+[LIBCONFIG] SIDELINK_PRECONFIGURATION.[0].sl_RxResPools.[0]: 11/11 parameters successfully set, (0 to default value)
+[LIBCONFIG] SIDELINK_PRECONFIGURATION.[0].rsrc_selection_params.[0]: 8/8 parameters successfully set, (1 to default value)
+[LIBCONFIG] SIDELINK_PRECONFIGURATION.[0].sl_TxResPools.[0]: 11/11 parameters successfully set, (0 to default value)
+[LIBCONFIG] SIDELINK_PRECONFIGURATION.[0].rsrc_selection_params.[0]: 8/8 parameters successfully set, (1 to default value)
+[LIBCONFIG] SIDELINK_PRECONFIGURATION.[0].sl_syncCfg.[0]: 3/3 parameters successfully set, (0 to default value)
+[LIBCONFIG] SIDELINK_PRECONFIGURATION.[0]: 5/5 parameters successfully set, (0 to default value)
+<SL-PreconfigurationNR-r16>
+    <sidelinkPreconfigNR-r16>
+        <sl-PreconfigFreqInfoList-r16>
+            <SL-FreqConfigCommon-r16>
+                <sl-SCS-SpecificCarrierList-r16>
+                    <SCS-SpecificCarrier>
+               [UTIL]   Creating thread rlc_data_req_thread with affinity -1 and priority 96, stacksize 8388608
+[0m[RLC]   rlc_data_req_thread created on core 13
+[0m[UTIL]   Creating thread rlc_data_req_thread_pc5 with affinity -1 and priority 96, stacksize 8388608
+[0m[PDCP]   pdcp init,usegtp usenetlink
+[0m         <offsetToCarrier>0</offsetToCarrier>
+                        <subcarrierSpacing><kHz30/></subcarrierSpacing>
+                        <carrierBandwidth>106</carrierBandwidth>
+                    </SCS-SpecificCarrier>
+                </sl-SCS-SpecificCarrierList-r16>
+                <sl-AbsoluteFrequencyPointA-r16>515180</sl-AbsoluteFrequencyPointA-r16>
+                <sl-AbsoluteFrequencySSB-r16>516990</sl-AbsoluteFrequencySSB-r16>
+                <valueN-r16>0</valueN-r16>
+                <sl-BWP-List-r16>
+                    <SL-BWP-ConfigCommon-r16>
+                        <sl-BWP-Generic-r16>
+                            <sl-BWP-r16>
+                                <locationAndBandwidth>28875</locationAndBandwidth>
+                                <subcarrierSpacing><kHz30/></subcarrierSpacing>
+                            </sl-BWP-r16>
+                            <sl-LengthSymbols-r16><sym14/></sl-LengthSymbols-r16>
+                            <sl-StartSymbol-r16><sym0/></sl-StartSymbol-r16>
+                            <sl-PSBCH-Config-r16>
+                                <release></release>
+                            </sl-PSBCH-Config-r16>
+                        </sl-BWP-Generic-r16>
+                        <sl-BWP-PoolConfigCommon-r16>
+                            <sl-RxPool-r16>
+                                <SL-ResourcePool-r16>
+                                    <sl-PSCCH-Config-r16>
+                                        <setup>
+                                            <sl-TimeResourcePSCCH-r16><n2/></sl-TimeResourcePSCCH-r16>
+                                            <sl-FreqResourcePSCCH-r16><n12/></sl-FreqResourcePSCCH-r16>
+                                            <sl-DMRS-ScrambleID-r16>0</sl-DMRS-ScrambleID-r16>
+                                            <sl-NumReservedBits-r16>2</sl-NumReservedBits-r16>
+                                        </setup>
+                                    </sl-PSCCH-Config-r16>
+                                    <sl-PSSCH-Config-r16>
+                                        <setup>
+                                            <sl-PSSCH-DMRS-TimePatternList-r16>
+                                                <INTEGER>2</INTEGER>
+                                                <INTEGER>3</INTEGER>
+                                                <INTEGER>4</INTEGER>
+                                            </sl-PSSCH-DMRS-TimePatternList-r16>
+                                            <sl-BetaOffsets2ndSCI-r16>
+                                                <SL-BetaOffsets-r16>0</SL-BetaOffsets-r16>
+                                                <SL-BetaOffsets-r16>4</SL-BetaOffsets-r16>
+                                                <SL-BetaOffsets-r16>8</SL-BetaOffsets-r16>
+                                                <SL-BetaOffsets-r16>12</SL-BetaOffsets-r16>
+                                            </sl-BetaOffsets2ndSCI-r16>
+                                            <sl-Scaling-r16><f0p5/></sl-Scaling-r16>
+                                        </setup>
+                                    </sl-PSSCH-Config-r16>
+                                    <sl-SyncAllowed-r16>
+                                        <gnss-Sync-r16><true/></gnss-Sync-r16>
+                                        <ue-Sync-r16><true/></ue-Sync-r16>
+                                    </sl-SyncAllowed-r16>
+                                    <sl-SubchannelSize-r16><n100/></sl-SubchannelSize-r16>
+                                    <sl-StartRB-Subchannel-r16>0</sl-StartRB-Subchannel-r16>
+                                    <sl-NumSubchannel-r16>1</sl-NumSubchannel-r16>
+                                    <sl-UE-SelectedConfigRP-r16>
+                                        <sl-Thres-RSRP-List-r16>
+                                        </sl-Thres-RSRP-List-r16>
+                                        <sl-MaxNumPerReserve-r16><n2/></sl-MaxNumPerReserve-r16>
+                                        <sl-SensingWindow-r16>[LIBCONFIG] nas.noS1: 3/3 parameters successfully[RLC]   rlc_data_req_thread_pc5 created on core 12
+[0m[PDCP]   TUN: Opened socket oaitun_ue1 with fd nas_sock_fd[0]=97
+[0m[PDCP]   UE pdcp will use tun interface
+[0m[UTIL]   Creating thread ue_tun_read_thread with affinity -1 and priority 96, stacksize 8388608
+[0m[PDCP]   ue_tun_read_thread created on core 13
+[0m[PHY]   Set UE_fo_compensation 0, UE_scan_carrier 0, UE_no_timing_correction 0 
+, chest-freq 0, chest-time 0
+[0m[PHY]   Set UE nb_rx_antenna 1, nb_tx_antenna 1, threequarter_fs 0, ssb_start_subcarrier 516
+[0m[PHY]   SA init parameters. DL freq 0 UL offset 0 SSB numerology 1 N_RB_DL 106
+[0m[NR_MAC]   NR band duplex spacing is 0 KHz (nr_bandtable[37].band = 78)
+[0m[NR_MAC]   NR band 78, duplex mode TDD, duplex spacing = 0 KHz
+[0m[93m[PHY]   Init: N_RB_DL 106, first_carrier_offset 1412, nb_prefix_samples 144,nb_prefix_samples0 176, ofdm_symbol_size 2048
+[0m[93m[PHY]   samples_per_subframe 61440/per second 61440000, wCP 57344
+[0m[OIP]   Interface oaitun_ue1 successfully configured, ip address 10.0.0.1, mask 255.255.255.0 broadcast address 10.0.0.255
+[0msh: 1: ip: not found
+[NR_MAC]   [UE0] SL RRC->MAC CONFIG RECEIVED. Syncsource:4
+[0m[NR_MAC]   Rxpool[0] - num subchannels:1, sci_1a_len:22
+[0m[NR_MAC]   Txpool[0] - num subchannels:1, sci_1a_len:22
+[0m[NR_MAC]   Sidelink CFG: sync source:4
+[0m[NR_MAC]   SIDELINK CONFIGs: AbsFreqSSB:516990, AbsFreqPointA:515180, SL band:38
+[0m[PHY]   not found same deltaf_raster == scs_khz, use only band and last deltaf_raster 
+[0m[PHY]   not found same deltaf_raster == scs_khz, use only band and last deltaf_raster 
+[0m[NR_MAC]   NR band duplex spacing is 0 KHz (nr_bandtable[16].band = 38)
+[0m[NR_MAC]   SIDELINK CONFIGs: tdd config period:6, mu:1, DLslots:6,ULslots:4 Mixedslotsym DL:UL 0:0
+[0m[NR_MAC]   UE[0] Function sl_prepare_phy_config - Phy config preparation:
+[0m[NR_MAC]   UE[0] Sync source params: sync_source :4-LOCAL_TIMING, gnss_dfn_offset:0, rx_slss_id:0
+[0m[NR_MAC]   UE[0] Carrier CFG Params: freq:2575900, bw:40, gridsize:106, rxant:1, txant:1, valueN:0
+[0m[NR_MAC]   UE[0] SL-BWP Params: start:0, size:106, scs:1, Ncp:0, startsym:0, numsym:14,ssb_offset:235,dcloc:0
+[0m[PDCP]   /oai-ran/openair2/LAYER2/nr_pdcp/nr_pdcp_oai_api.c:1141:add_drb_sl: added slrb 1 to UE ID 0
+[0m[SDAP]   Default DRB for the created SDAP entity: 1 
+[0m[RLC]   /oai-ran/openair2/LAYER2/nr_rlc/nr_rlc_oai_api.c:nr_rlc_add_drb_sl:1281: added SL_DRB 1 to UE with SRCID 0x0
+[0m[NR_MAC]   [UE0]SL RRC->MAC: TX SLSS REQ - TDD CONFIG STUFFED INSIDE - SL-MIB :4038
+[0m[NR_MAC]   NR band duplex spacing is 0 KHz (nr_bandtable[20].band = 41)
+[0m[NR_MAC]   NR band 41, duplex mode TDD, duplex spacing = 0 KHz
+[0m[NR_MAC]   NR band duplex spacing is 0 KHz (nr_bandtable[20].band = 41)
+[0m[PHY]   Initializing frame parms: DL frequency 2594980000 Hz, UL frequency 2594980000 Hz: band 41, uldl offset 0 Hz
+[0m[PHY]   Initializing frame parms for mu 1, N_RB 106, Ncp 0
+[0m[93m[PHY]   Init: N_RB_DL 106, first_carrier_offset 1412, nb_prefix_samples 144,nb_prefix_samples0 176, ofdm_symbol_size 2048
+[0m[NR_PHY]   Doing symbol rotation calculation for gNB TX/RX, f0 2594980000.000000 Hz, Nsymb 28
+[0m[PHY]   Symbol rotation 0/28 => tl 0.000000 (32767,0) (0.536458)
+[0m[PHY]   Symbol rotation 1/28 => tl 0.000036 (32767,0) (0.854167)
+[0m[PHY]   Symbol rotation 2/28 => tl 0.000072 (32767,0) (0.171875)
+[0m[PHY]   Symbol rotation 3/28 => tl 0.000108 (32767,0) (0.489583)
+[0m[PHY]   Symbol rotation 4/28 => tl 0.000143 (32767,0) (0.807292)
+[0m[PHY]   Symbol rotation 5/28 => tl 0.000179 (32767,0) (0.125000)
+[0m[PHY]   Symbol rotation 6/28 => tl 0.000215 (32767,0) (0.442708)
+[0m[PHY]   Symbol rotation 7/28 => tl 0.000250 (32767,0) (0.760417)
+[0m[PHY]   Symbol rotation 8/28 => tl 0.000286 (32767,0) (0.078125)
+[0m[PHY]   Symbol rotation 9/28 => tl 0.000322 (32767,0) (0.395833)
+[0m[PHY]   Symbol rotation 10/28 => tl 0.000357 (32767,0) (0.713542)
+[0m[PHY]   Symbol rotation 11/28 => tl 0.000393 (32767,0) (0.031250)
+[0m[PHY]   Symbol rotation 12/28 => tl 0.000429 (32767,0) (0.348958)
+[0m[PHY]   Symbol rotation 13/28 => tl 0.000464 (32767,0) (0.666667)
+[0m[PHY]   Symbol rotation 14/28 => tl 0.000500 (32767,0) (0.536458)
+[0m[PHY]   Symbol rotation 15/28 => tl 0.000536 (32767,0) (0.854167)
+[0m[PHY]   Symbol rotation 16/28 => tl 0.000572 (32767,0) (0.171875)
+[0m[PHY]   Symbol rotation 17/28 => tl 0.000608 (32767,0) (0.489583)
+[0m[PHY]   Symbol rotation 18/28 => tl 0.000643 (32767,0) (0.807292)
+[0m[PHY]   Symbol rotation 19/28 => tl 0.000679 (32767,0) (0.125000)
+[0m[PHY]   Symbol rotation 20/28 => tl 0.000715 (32767,0) (0.442708)
+[0m[PHY]   Symbol rotation 21/28 => tl 0.000750 (32767,0) (0.760417)
+[0m[PHY]   Symbol rotation 22/28 => tl 0.000786 (32767,0) (0.078125)
+[0m[PHY]   Symbol rotation 23/28 => tl 0.000822 (32767,0) (0.395833)
+[0m[PHY]   Symbol rotation 24/28 => tl 0.000857 (32767,0) (0.713542)
+[0m[PHY]   Symbol rotation 25/28 => tl 0.000893 (32767,0) (0.031250)
+[0m[PHY]   Symbol rotation 26/28 => tl 0.000929 (32767,0) (0.348958)
+[0m[PHY]   Symbol rotation 27/28 => tl 0.000964 (32767,0) (0.666667)
+[0m[NR_PHY]   Doing symbol rotation calculation for gNB TX/RX, f0 2594980000.000000 Hz, Nsymb 28
+[0m[PHY]   Symbol rotation 0/28 => tl 0.000000 (32767,0) (0.536458)
+[0m[PHY]   Symbol rotation 1/28 => tl 0.000036 (32767,0) (0.854167)
+[0m[PHY]   Symbol rotation 2/28 => tl 0.000072 (32767,0) (0.171875)
+[0m[PHY]   Symbol rotation 3/28 => tl 0.000108 (32767,0) (0.489583)
+[0m[PHY]   Symbol rotation 4/28 => tl 0.000143 (32767,0) (0.807292)
+[0m[PHY]   Symbol rotation 5/28 => tl 0.000179 (32767,0) (0.125000)
+[0m[PHY]   Symbol rotation 6/28 => tl 0.000215 (32767,0) (0.442708)
+[0m[PHY]   Symbol rotation 7/28 => tl 0.000250 (32767,0) (0.760417)
+[0m[PHY]   Symbol rotation 8/28 => tl 0.000286 (32767,0) (0.078125)
+[0m[PHY]   Symbol rotation 9/28 => tl 0.000322 (32767,0) (0.395833)
+[0m[PHY]   Symbol rotation 10/28 => tl 0.000357 (32767,0) (0.713542)
+[0m[PHY]   Symbol rotation 11/28 => tl 0.000393 (32767,0) (0.031250)
+[0m[PHY]   Symbol rotation 12/28 => tl 0.000429 (32767,0) (0.348958)
+[0m[PHY]   Symbol rotation 13/28 => tl 0.000464 (32767,0) (0.666667)
+[0m[PHY]   Symbol rotation 14/28 => tl 0.000500 (32767,0) (0.536458)
+[0m[PHY]   Symbol rotation 15/28 => tl 0.000536 (32767,0) (0.854167)
+[0m[PHY]   Symbol rotation 16/28 => tl 0.000572 (32767,0) (0.171875)
+[0m[PHY]   Symbol rotation 17/28 => tl 0.000608 (32767,0) (0.489583)
+[0m[PHY]   Symbol rotation 18/28 => tl 0.000643 (32767,0) (0.807292)
+[0m[PHY]   Symbol rotation 19/28 => tl 0.000679 (32767,0) (0.125000)
+[0m[PHY]   Symbol rotation 20/28 => tl 0.000715 (32767,0) (0.442708)
+[0m[PHY]   Symbol rotation 21/28 => tl 0.000750 (32767,0) (0.760417)
+[0m[PHY]   Symbol rotation 22/28 => tl 0.000786 (32767,0) (0.078125)
+[0m[PHY]   Symbol rotation 23/28 => tl 0.000822 (32767,0) (0.395833)
+[0m[PHY]   Symbol rotation 24/28 => tl 0.000857 (32767,0) (0.713542)
+[0m[PHY]   Symbol rotation 25/28 => tl 0.000893 (32767,0) (0.031250)
+[0m[PHY]   Symbol rotation 26/28 => tl 0.000929 (32767,0) (0.348958)
+[0m[PHY]   Symbol rotation 27/28 => tl 0.000964 (32767,0) (0.666667)
+[0m[NR_PHY]   Doing symbol rotation calculation for gNB TX/RX, f0 2594980000.000000 Hz, Nsymb 28
+[0m[PHY]   Symbol rotation 0/28 => tl 0.000000 (32767,0) (0.536458)
+[0m[PHY]   Symbol rotation 1/28 => tl 0.000036 (32767,0) (0.854167)
+[0m[PHY]   Symbol rotation 2/28 => tl 0.000072 (32767,0) (0.171875)
+[0m[PHY]   Symbol rotation 3/28 => tl 0.000108 (32767,0) (0.489583)
+[0m[PHY]   Symbol rotation 4/28 => tl 0.000143 (32767,0) (0.807292)
+[0m[PHY]   Symbol rotation 5/28 => tl 0.000179 (32767,0) (0.125000)
+[0m[PHY]   Symbol rotation 6/28 => tl 0.000215 (32767,0) (0.442708)
+[0m[PHY]   Symbol rotation 7/28 => tl 0.000250 (32767,0) (0.760417)
+[0m[PHY]   Symbol rotation 8/28 => tl 0.000286 (32767,0) (0.078125)
+[0m[PHY]   Symbol rotation 9/28 => tl 0.000322 (32767,0) (0.395833)
+[0m[PHY]   Symbol rotation 10/28 => tl 0.000357 (32767,0) (0.713542)
+[0m[PHY]   Symbol rotation 11/28 => tl 0.000393 (32767,0) (0.031250)
+[0m[PHY]   Symbol rotation 12/28 => tl 0.000429 (32767,0) (0.348958)
+[0m[PHY]   Symbol rotation 13/28 => tl 0.000464 (32767,0) (0.666667)
+[0m[PHY]   Symbol rotation 14/28 => tl 0.000500 (32767,0) (0.536458)
+[0m[PHY]   Symbol rotation 15/28 => tl 0.000536 (32767,0) (0.854167)
+[0m[PHY]   Symbol rotation 16/28 => tl 0.000572 (32767,0) (0.171875)
+[0m[PHY]   Symbol rotation 17/28 => tl 0.000608 (32767,0) (0.489583)
+[0m[PHY]   Symbol rotation 18/28 => tl 0.000643 (32767,0) (0.807292)
+[0m[PHY]   Symbol rotation 19/28 => tl 0.000679 (32767,0) (0.125000)
+[0m[PHY]   Symbol rotation 20/28 => tl 0.000715 (32767,0) (0.442708)
+[0m[PHY]   Symbol rotation 21/28 => tl 0.000750 (32767,0) (0.760417)
+[0m[PHY]   Symbol rotation 22/28 => tl 0.000786 (32767,0) (0.078125)
+[0m[PHY]   Symbol rotation 23/28 => tl 0.000822 (32767,0) (0.395833)
+[0m[PHY]   Symbol rotation 24/28 => tl 0.000857 (32767,0) (0.713542)
+[0m[PHY]   Symbol rotation 25/28 => tl 0.000893 (32767,0) (0.031250)
+[0m[PHY]   Symbol rotation 26/28 => tl 0.000929 (32767,0) (0.348958)
+[0m[PHY]   Symbol rotation 27/28 => tl 0.000964 (32767,0) (0.666667)
+[0m[PHY]   Dumping Sidelink Frame Parameters
+[0m[PHY]   fp->scs=30000
+[0m[PHY]   fp->ofdm_symbol_size=2048
+[0m[PHY]   fp->nb_prefix_samples0=176
+[0m[PHY]   fp->nb_prefix_samples=144
+[0m[PHY]   fp->slots_per_subframe=2
+[0m[PHY]   fp->samples_per_subframe_wCP=57344
+[0m[PHY]   fp->samples_per_frame_wCP=573440
+[0m[PHY]   fp->samples_per_subframe=61440
+[0m[PHY]   fp->samples_per_frame=614400
+[0m[PHY]   fp->dl_CarrierFreq=2594980000
+[0m[PHY]   fp->ul_CarrierFreq=2594980000
+[0m[PHY]   fp->Nid_cell=0
+[0m[PHY]   fp->first_carrier_offset=1412
+[0m[PHY]   fp->ssb_start_subcarrier=235
+[0m[PHY]   fp->Ncp=0
+[0m[PHY]   fp->N_RB_DL=106
+[0m[PHY]   fp->numerology_index=1
+[0m[PHY]   fp->nr_band=41
+[0m[PHY]   fp->ofdm_offset_divisor=8
+[0m[PHY]   fp->threequarter_fs=0
+[0m[PHY]   fp->sl_CarrierFreq=2594980000
+[0m[PHY]   fp->N_RB_SL=106
+[0m[PHY]   Initializing UE vars for gNB TXant 1, UE RXant 1
+[0m[PHY]   prs_config configuration NOT found..!! Skipped configuring UE for the PRS reception
+[0m[PHY]   SIDELINK INIT: GENERATE PSS, SSS, GOLD SEQUENCES AND PSBCH DMRS SEQUENCES FOR ALL possible SLSS IDs 0- 671
+[0m[PHY]   SIDELINK INIT: Generation of PSS time domain samples. scaling_factor:512
+[0m[PHY]   Allocating Transport Channel Buffers for SLSCH 0/2
+[0m[PHY]   Allocating Transport Channel Buffers for SLSCH 1/2
+[0m[PHY]   HW: Configuring card 0, sample_rate 61440000.000000, tx/rx num_channels 1/1, duplex_mode TDD
+[0m[PHY]   HW: Configuring channel 0 (rf_chain 0): setting tx_freq -nan Hz, rx_freq -nan Hz, tune_offset 0
+[0m[PHY]   HW: Configuring channel 0 (rf_chain 0): setting tx_gain 0, rx_gain 110
+[0m[PHY]   HW: Configuring card 1, sample_rate 61440000.000000, tx/rx num_channels 1/1, duplex_mode TDD
+[0m[PHY]   HW: Configuring channel 0 (rf_chain 0): setting tx_freq 2594980000 Hz, rx_freq 2594980000 Hz, tune_offset 0
+[0m[PHY]   HW: Configuring channel 0 (rf_chain 0): setting tx_gain 0, rx_gain 110
+[0m[PHY]   HW: Configuring card 2, sample_rate 61440000.000000, tx/rx num_channels 1/1, duplex_mode TDD
+[0m[PHY]   HW: Configuring channel 0 (rf_chain 0): setting tx_freq -nan Hz, rx_freq -nan Hz, tune_offset 0
+[0m[PHY]   HW: Configuring channel 0 (rf_chain 0): setting tx_gain 0, rx_gain 110
+[0m[PHY]   HW: Configuring card 3, sample_rate 61440000.000000, tx/rx num_channels 1/1, duplex_mode TDD
+[0m[PHY]   HW: Configuring channel 0 (rf_chain 0): setting tx_freq 2594980000 Hz, rx_freq 2594980000 Hz, tune_offset 0
+[0m[PHY]   HW: Configuring channel 0 (rf_chain 0): setting tx_gain 0, rx_gain 110
+[0m[PHY]   HW: Configuring card 4, sample_rate 61440000.000000, tx/rx num_channels 1/1, duplex_mode TDD
+[0m[PHY]   HW: Configuring channel 0 (rf_chain 0): setting tx_freq -nan Hz, rx_freq -nan Hz, tune_offset 0
+[0m[PHY]   HW: Configuring channel 0 (rf_chain 0): setting tx_gain 0, rx_gain 110
+[0m[PHY]   HW: Configuring card 5, sample_rate 61440000.000000, tx/rx num_channels 1/1, duplex_mode TDD
+[0m[PHY]   HW: Configuring channel 0 (rf_chain 0): setting tx_freq 2594980000 Hz, rx_freq 2594980000 Hz, tune_offset 0
+[0m[PHY]   HW: Configuring channel 0 (rf_chain 0): setting tx_gain 0, rx_gain 110
+[0m[PHY]   HW: Configuring card 6, sample_rate 61440000.000000, tx/rx num_channels 1/1, duplex_mode TDD
+[0m[PHY]   HW: Configuring channel 0 (rf_chain 0): setting tx_freq -nan Hz, rx_freq -nan Hz, tune_offset 0
+[0m[PHY]   HW: Configuring channel 0 (rf_chain 0): setting tx_gain 0, rx_gain 110
+[0m[PHY]   HW: Configuring card 7, sample_rate 61440000.000000, tx/rx num_channels 1/1, duplex_mode TDD
+[0m[PHY]   HW: Configuring channel 0 (rf_chain 0): setting tx_freq 2594980000 Hz, rx_freq 2594980000 Hz, tune_offset 0
+[0m[PHY]   HW: Configuring channel 0 (rf_chain 0): setting tx_gain 0, rx_gain 110
+[0m[1;31m[HW]   Can't set /dev/cpu_dma_latency to 2 us
+[0msh: 1: cannot create /sys/devices/system/cpu/cpu0/cpufreq/scaling_min_freq: Read-only file system
+sh: 1: cannot create /sys/devices/system/cpu/cpu1/cpufreq/scaling_min_freq: Read-only file system
+sh: 1: cannot create /sys/devices/system/cpu/cpu10/cpufreq/scaling_min_freq: Read-only file system
+sh: 1: cannot create /sys/devices/system/cpu/cpu11/cpufreq/scaling_min_freq: Read-only file system
+sh: 1: cannot create /sys/devices/system/cpu/cpu12/cpufreq/scaling_min_freq: Read-only file system
+sh: 1: cannot create /sys/devices/system/cpu/cpu13/cpufreq/scaling_min_freq: Read-only file system
+sh: 1: cannot create /sys/devices/system/cpu/cpu14/cpufreq/scaling_min_freq: Read-only file system
+sh: 1: cannot create /sys/devices/system/cpu/cpu15/cpufreq/scaling_min_freq: Read-only file system
+sh: 1: cannot create /sys/devices/system/cpu/cpu16/cpufreq/scaling_min_freq: Read-only file system
+sh: 1: cannot create /sys/devices/system/cpu/cpu17/cpufreq/scaling_min_freq: Read-only file system
+sh: 1: cannot create /sys/devices/system/cpu/cpu18/cpufreq/scaling_min_freq: Read-only file system
+sh: 1: cannot create /sys/devices/system/cpu/cpu19/cpufreq/scaling_min_freq: Read-only file system
+sh: 1: cannot create /sys/devices/system/cpu/cpu2/cpufreq/scaling_min_freq: Read-only file system
+sh: 1: cannot create /sys/devices/system/cpu/cpu20/cpufreq/scaling_min_freq: Read-only file system
+sh: 1: cannot create /sys/devices/system/cpu/cpu21/cpufreq/scaling_min_freq: Read-only file system
+sh: 1: cannot create /sys/devices/system/cpu/cpu3/cpufreq/scaling_min_freq: Read-only file system
+sh: 1: cannot create /sys/devices/system/cpu/cpu4/cpufreq/scaling_min_freq: Read-only file system
+sh: 1: cannot create /sys/devices/system/cpu/cpu5/cpufreq/scaling_min_freq: Read-only file system
+sh: 1: cannot create /sys/devices/system/cpu/cpu6/cpufreq/scaling_min_freq: Read-only file system
+sh: 1: cannot create /sys/devices/system/cpu/cpu7/cpufreq/scaling_min_freq: Read-only file system
+sh: 1: cannot create /sys/devices/system/cpu/cpu8/cpufreq/scaling_min_freq: Read-only file system
+sh: 1: cannot create /sys/devices/system/cpu/cpu9/cpufreq/scaling_min_freq: Read-only file system
+[1;31m[HW]   Can't set cpu frequency
+[0m[PHY]   Intializing UE Threads for instance 0 (0x55c1c7b98910,0x7f17aab1f010)...
+[0m[UTIL]   Creating thread nrlink_sl with affinity -1 and priority 97, stacksize 8388608
+[0m[UTIL]   Creating thread L1_UE_stats with affinity -1 and priority 1, stacksize 8388608
+[0m[NR_PHY]   nrlink_sl: sync reference, bridge 172.30.99.1:5600, 20 slots per frame, TX at RX + 4
+[0m[NR_PHY]   nrlink_sl: 0 SL RX slots, actions none 0 psbch 0 pscch 0 sci2 0 slsch 0; latest delivery 0 slots
+[0m[NR_RRC]   create TASK_RRC_NRUE 
+[0m[UTIL]   Creating thread TASK_RRC_NRUE with affinity -1 and priority 50, stacksize 8388608
+[0m[NR_MAC]   [UE0]PSBCH params adjusted based on RX current timing 0:2. frame_16:0, slot_in_16frames:2
+[0m[NR_MAC]   [UE0]PSBCH params adjusted based on TX current timing 0:6. frame_16:0, slot_in_16frames:6
+[0m[NR_MAC]   [UE0]PSBCH params adjusted based on RX current timing 0:2. NumSSB:0, ssb_slot:0
+[0m[NR_MAC]   [UE0]PSBCH params adjusted based on TX current timing 0:6. NumSSB:0, ssb_slot:8
+[0m[ITTI]   Created Posix thread TASK_RRC_NRUE
+[0m[UTIL]   Creating thread TASK_NAS_NRUE with affinity -1 and priority 50, stacksize 8388608
+[0m[ITTI]   Created Posix thread TASK_NAS_NRUE
+[0m[SIM]   UICC simulation: IMSI=2089900007487, IMEISV=6754567890123413, Ki=fec86ba6eb707ed08905757b1bb44b8f, OPc=c42449363bbad02b66d16bc975d77cc1, DNN=oai, SST=0x01, SD=0xffffff
+[0m[NR_PHY]   nrlink_sl: slot 19710, 9855 RUNs; TX psbch 185 pssch 2; RX psbch 0 sci1 1 sci2 1 slsch 1; dropped 0
+[0m[NR_PHY]   nrlink_sl: 3940 SL RX slots, actions none 0 psbch 0 pscch 3940 sci2 0 slsch 0; latest delivery 20 slots
+[0m[NR_PHY]   nrlink_sl: slot 39710, 19855 RUNs; TX psbch 373 pssch 3; RX psbch 0 sci1 2 sci2 2 slsch 2; dropped 0
+[0m[NR_PHY]   nrlink_sl: 7940 SL RX slots, actions none 0 psbch 0 pscch 7940 sci2 0 slsch 0; latest delivery 20 slots
+[0m[NR_PHY]   nrlink_sl: slot 59710, 29854 RUNs; TX psbch 560 pssch 13; RX psbch 0 sci1 12 sci2 12 slsch 12; dropped 0
+[0m[NR_PHY]   nrlink_sl: 11940 SL RX slots, actions none 0 psbch 0 pscch 11940 sci2 0 slsch 0; latest delivery 20 slots
+[0m[NR_PHY]   nrlink_sl: slot 79710, 39854 RUNs; TX psbch 748 pssch 35; RX psbch 0 sci1 34 sci2 34 slsch 34; dropped 0
+[0m[NR_PHY]   nrlink_sl: 15940 SL RX slots, actions none 0 psbch 0 pscch 15940 sci2 0 slsch 0; latest delivery 40 slots
+[0m[NR_PHY]   nrlink_sl: slot 99710, 49854 RUNs; TX psbch 935 pssch 55; RX psbch 0 sci1 54 sci2 54 slsch 54; dropped 0
+[0m[NR_PHY]   nrlink_sl: 19940 SL RX slots, actions none 0 psbch 0 pscch 19940 sci2 0 slsch 0; latest delivery 80 slots
+[0m[NR_PHY]   nrlink_sl: slot 119710, 59854 RUNs; TX psbch 1123 pssch 69; RX psbch 0 sci1 140 sci2 140 slsch 140; dropped 0
+[0m[NR_PHY]   nrlink_sl: 23940 SL RX slots, actions none 0 psbch 0 pscch 23940 sci2 0 slsch 0; latest delivery 80 slots
+[0m[NR_PHY]   nrlink_sl: slot 139710, 69854 RUNs; TX psbch 1310 pssch 73; RX psbch 0 sci1 262 sci2 262 slsch 262; dropped 0
+[0m[NR_PHY]   nrlink_sl: 27940 SL RX slots, actions none 0 psbch 0 pscch 27940 sci2 0 slsch 0; latest delivery 80 slots
+[0m[NR_PHY]   nrlink_sl: slot 159710, 79854 RUNs; TX psbch 1498 pssch 77; RX psbch 0 sci1 423 sci2 423 slsch 423; dropped 0
+[0m[NR_PHY]   nrlink_sl: 31940 SL RX slots, actions none 0 psbch 0 pscch 31940 sci2 0 slsch 0; latest delivery 80 slots
+[0m[NR_PHY]   nrlink_sl: slot 179710, 89854 RUNs; TX psbch 1685 pssch 80; RX psbch 0 sci1 646 sci2 646 slsch 646; dropped 0
+[0m[NR_PHY]   nrlink_sl: 35940 SL RX slots, actions none 0 psbch 0 pscch 35940 sci2 0 slsch 0; latest delivery 80 slots
+[0m[NR_PHY]   nrlink_sl: slot 199710, 99854 RUNs; TX psbch 1873 pssch 84; RX psbch 0 sci1 904 sci2 904 slsch 904; dropped 0
+[0m[NR_PHY]   nrlink_sl: 39940 SL RX slots, actions none 0 psbch 0 pscch 39940 sci2 0 slsch 0; latest delivery 183 slots
+[0m[NR_PHY]   nrlink_sl: slot 219710, 109854 RUNs; TX psbch 2060 pssch 87; RX psbch 0 sci1 1217 sci2 1217 slsch 1217; dropped 0
+[0m[NR_PHY]   nrlink_sl: 43940 SL RX slots, actions none 0 psbch 0 pscch 43940 sci2 0 slsch 0; latest delivery 183 slots
+[0m[NR_PHY]   nrlink_sl: slot 239709, 119853 RUNs; TX psbch 2248 pssch 91; RX psbch 0 sci1 1517 sci2 1517 slsch 1517; dropped 0
+[0m[NR_PHY]   nrlink_sl: 47940 SL RX slots, actions none 0 psbch 0 pscch 47940 sci2 0 slsch 0; latest delivery 400 slots
+[0m[NR_PHY]   nrlink_sl: slot 259709, 129853 RUNs; TX psbch 2435 pssch 94; RX psbch 0 sci1 1833 sci2 1833 slsch 1833; dropped 0
+[0m[NR_PHY]   nrlink_sl: 51940 SL RX slots, actions none 0 psbch 0 pscch 51940 sci2 0 slsch 0; latest delivery 420 slots
+[0m[NR_PHY]   nrlink_sl: slot 279709, 139853 RUNs; TX psbch 2623 pssch 99; RX psbch 0 sci1 2151 sci2 2151 slsch 2151; dropped 0
+[0m[NR_PHY]   nrlink_sl: 55940 SL RX slots, actions none 0 psbch 0 pscch 55940 sci2 0 slsch 0; latest delivery 420 slots
+[0m[NR_PHY]   nrlink_sl: slot 299709, 149853 RUNs; TX psbch 2810 pssch 102; RX psbch 0 sci1 2447 sci2 2447 slsch 2447; dropped 0
+[0m[NR_PHY]   nrlink_sl: 59940 SL RX slots, actions none 0 psbch 0 pscch 59940 sci2 0 slsch 0; latest delivery 420 slots
+[0m[NR_PHY]   nrlink_sl: slot 319709, 159853 RUNs; TX psbch 2998 pssch 310; RX psbch 0 sci1 2452 sci2 2452 slsch 2452; dropped 0
+[0m[NR_PHY]   nrlink_sl: 63940 SL RX slots, actions none 0 psbch 0 pscch 63940 sci2 0 slsch 0; latest delivery 420 slots
+[0m[NR_PHY]   nrlink_sl: slot 339709, 169853 RUNs; TX psbch 3185 pssch 485; RX psbch 0 sci1 2456 sci2 2456 slsch 2456; dropped 0
+[0m[NR_PHY]   nrlink_sl: 67940 SL RX slots, actions none 0 psbch 0 pscch 67940 sci2 0 slsch 0; latest delivery 420 slots
+[0m[NR_PHY]   nrlink_sl: slot 359709, 179853 RUNs; TX psbch 3373 pssch 816; RX psbch 0 sci1 2462 sci2 2462 slsch 2462; dropped 0
+[0m[NR_PHY]   nrlink_sl: 71940 SL RX slots, actions none 0 psbch 0 pscch 71940 sci2 0 slsch 0; latest delivery 420 slots
+[0m[NR_PHY]   nrlink_sl: slot 379710, 189853 RUNs; TX psbch 3560 pssch 1056; RX psbch 0 sci1 2466 sci2 2466 slsch 2466; dropped 0
+[0m[NR_PHY]   nrlink_sl: 75940 SL RX slots, actions none 0 psbch 0 pscch 75940 sci2 0 slsch 0; latest delivery 420 slots
+[0m[NR_PHY]   nrlink_sl: slot 399710, 199853 RUNs; TX psbch 3748 pssch 1524; RX psbch 0 sci1 2472 sci2 2472 slsch 2472; dropped 0
+[0m[NR_PHY]   nrlink_sl: 79940 SL RX slots, actions none 0 psbch 0 pscch 79940 sci2 0 slsch 0; latest delivery 420 slots
+[0m[NR_PHY]   nrlink_sl: slot 419710, 209853 RUNs; TX psbch 3935 pssch 1820; RX psbch 0 sci1 2477 sci2 2477 slsch 2477; dropped 0
+[0m[NR_PHY]   nrlink_sl: 83940 SL RX slots, actions none 0 psbch 0 pscch 83940 sci2 0 slsch 0; latest delivery 420 slots
+[0m[NR_PHY]   nrlink_sl: slot 439710, 219853 RUNs; TX psbch 4123 pssch 1946; RX psbch 0 sci1 2716 sci2 2716 slsch 2716; dropped 0
+[0m[NR_PHY]   nrlink_sl: 87940 SL RX slots, actions none 0 psbch 0 pscch 87940 sci2 0 slsch 0; latest delivery 420 slots
+[0m[93m[RLC]   /oai-ran/openair2/LAYER2/nr_rlc/nr_rlc_entity_um.c:351:nr_rlc_entity_um_recv_pdu: warning: discard PDU, SN (17) < rx_next_reassembly (18)
+[0m[93m[RLC]   /oai-ran/openair2/LAYER2/nr_rlc/nr_rlc_entity_um.c:351:nr_rlc_entity_um_recv_pdu: warning: discard PDU, SN (45) < rx_next_reassembly (46)
+[0m[NR_PHY]   nrlink_sl: slot 459709, 229851 RUNs; TX psbch 4310 pssch 2085; RX psbch 0 sci1 2963 sci2 2963 slsch 2963; dropped 0
+[0m[NR_PHY]   nrlink_sl: 91940 SL RX slots, actions none 0 psbch 0 pscch 91940 sci2 0 slsch 0; latest delivery 420 slots
+[0m[93m[RLC]   /oai-ran/openair2/LAYER2/nr_rlc/nr_rlc_entity_um.c:351:nr_rlc_entity_um_recv_pdu: warning: discard PDU, SN (4) < rx_next_reassembly (5)
+[0m[93m[RLC]   /oai-ran/openair2/LAYER2/nr_rlc/nr_rlc_entity_um.c:351:nr_rlc_entity_um_recv_pdu: warning: discard PDU, SN (15) < rx_next_reassembly (16)
+[0m[NR_PHY]   nrlink_sl: slot 479709, 239851 RUNs; TX psbch 4498 pssch 2231; RX psbch 0 sci1 3208 sci2 3208 slsch 3208; dropped 0
+[0m[NR_PHY]   nrlink_sl: 95940 SL RX slots, actions none 0 psbch 0 pscch 95940 sci2 0 slsch 0; latest delivery 420 slots
+[0m[NR_PHY]   nrlink_sl: slot 499709, 249851 RUNs; TX psbch 4685 pssch 2382; RX psbch 0 sci1 3298 sci2 3298 slsch 3298; dropped 0
+[0m[NR_PHY]   nrlink_sl: 99940 SL RX slots, actions none 0 psbch 0 pscch 99940 sci2 0 slsch 0; latest delivery 420 slots
+[0m[NR_PHY]   nrlink_sl: slot 519709, 259851 RUNs; TX psbch 4873 pssch 2648; RX psbch 0 sci1 3434 sci2 3434 slsch 3434; dropped 0
+[0m[NR_PHY]   nrlink_sl: 103940 SL RX slots, actions none 0 psbch 0 pscch 103940 sci2 0 slsch 0; latest delivery 420 slots
+[0m[NR_PHY]   nrlink_sl: slot 539709, 269850 RUNs; TX psbch 5060 pssch 2909; RX psbch 0 sci1 3567 sci2 3567 slsch 3567; dropped 0
+[0m[NR_PHY]   nrlink_sl: 107940 SL RX slots, actions none 0 psbch 0 pscch 107940 sci2 0 slsch 0; latest delivery 420 slots
+[0m[NR_PHY]   nrlink_sl: slot 559709, 279850 RUNs; TX psbch 5248 pssch 3069; RX psbch 0 sci1 3658 sci2 3658 slsch 3658; dropped 0
+[0m[NR_PHY]   nrlink_sl: 111940 SL RX slots, actions none 0 psbch 0 pscch 111940 sci2 0 slsch 0; latest delivery 420 slots
+[0m[NR_PHY]   nrlink_sl: slot 579709, 289849 RUNs; TX psbch 5435 pssch 3216; RX psbch 0 sci1 3914 sci2 3914 slsch 3914; dropped 0
+[0m[NR_PHY]   nrlink_sl: 115940 SL RX slots, actions none 0 psbch 0 pscch 115940 sci2 0 slsch 0; latest delivery 420 slots
+[0m[NR_PHY]   nrlink_sl: slot 599709, 299849 RUNs; TX psbch 5623 pssch 3359; RX psbch 0 sci1 4176 sci2 4176 slsch 4176; dropped 0
+[0m[NR_PHY]   nrlink_sl: 119940 SL RX slots, actions none 0 psbch 0 pscch 119940 sci2 0 slsch 0; latest delivery 420 slots
+[0m[NR_PHY]   nrlink_sl: slot 619710, 309848 RUNs; TX psbch 5810 pssch 3427; RX psbch 0 sci1 4312 sci2 4312 slsch 4312; dropped 0
+[0m[NR_PHY]   nrlink_sl: 123940 SL RX slots, actions none 0 psbch 0 pscch 123940 sci2 0 slsch 0; latest delivery 420 slots
+[0m[NR_PHY]   nrlink_sl: slot 639710, 319848 RUNs; TX psbch 5998 pssch 3427; RX psbch 0 sci1 4312 sci2 4312 slsch 4312; dropped 0
+[0m[NR_PHY]   nrlink_sl: 127940 SL RX slots, actions none 0 psbch 0 pscch 127940 sci2 0 slsch 0; latest delivery 420 slots
+[0m

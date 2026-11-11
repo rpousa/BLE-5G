@@ -1,0 +1,25 @@
+--- executables/nr-ue.c	2026-11-11 22:27:40.516625851 -0500
++++ executables/nr-ue.c	2026-11-11 22:29:32.644628132 -0500
+@@ -1409,7 +1409,11 @@
+       threadCreate(&threads[inst], UE_thread, (void *)UE, "UE_thread", -1, OAI_PRIORITY_RT_MAX);
+       threadCreate(&threads[inst], UE_RU_thread, (void *)UE, "UE_RU_thread", -1, OAI_PRIORITY_RT_MAX);
+     }
+-    else {
++    else if (getenv("NRLINK_SL")) {
++      /* nrlink: sidelink L1 emulated over the nrlink boards (executables/nrlink_sl.c) */
++      extern void *nrlink_sl_thread(void *arg);
++      threadCreate(&threads_sl[inst], nrlink_sl_thread, (void *)UE, "nrlink_sl", -1, OAI_PRIORITY_RT_MAX);
++    } else {
+       threadCreate(&threads_sl[inst], UE_thread_sl, (void *)UE, "UE_thread_sl", -1, OAI_PRIORITY_RT_MAX);
+       threadCreate(&threads_sl[inst], UE_RU_thread_sl, (void *)UE, "UE_RU_thread_sl", -1, OAI_PRIORITY_RT_MAX);
+     }
+--- CMakeLists.txt	2026-11-11 22:27:40.516625851 -0500
++++ CMakeLists.txt	2026-11-11 22:29:32.644628132 -0500
+@@ -2146,6 +2146,7 @@
+ #  ${OPENAIR_BIN_DIR}/messages_xml.h
+   ${OPENAIR_DIR}/executables/nr-uesoftmodem.c
+   ${OPENAIR_DIR}/executables/nr-ue.c
++  ${OPENAIR_DIR}/executables/nrlink_sl.c
+   ${OPENAIR_DIR}/executables/softmodem-common.c
+   ${OPENAIR_DIR}/radio/COMMON/common_lib.c
+   ${OPENAIR_DIR}/radio/COMMON/record_player.c
