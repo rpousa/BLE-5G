@@ -16,6 +16,8 @@ every period and announces the window (AIR_SLWIN); the chain transmits only insi
   core, sidecar in oai-ext-dn's netns:  agv_chain.py edge                       (JSON lines on stdout)
 """
 import argparse
+import hashlib
+import hmac
 import json
 import math
 import os
@@ -309,10 +311,13 @@ class Controller:
             self.uu_poll(i, s1, s2)
 
     # ---------------------------------------------------------------- receive, per board
+    def on_beacon_rssi(self, rx, tx, rssi):
+        """Board rx heard board tx's beacon at this RSSI (dBm). L3Relay uses it for SD-RSRP."""
+
     def rx_loop(self, i):
         N, b = self.N, self.boards[i]
         while True:
-            _rssi, _ts, pkt = b.rx.get()
+            rssi, _ts, pkt = b.rx.get()
             if len(pkt) < N.AIR_HDR.size:
                 continue
             kind, uid, sfn, slot, _frag, _nf = N.AIR_HDR.unpack_from(pkt)
@@ -328,6 +333,7 @@ class Controller:
                     continue
                 if kind == N.AIR_BEACON:
                     x, y, ts = struct.unpack_from("<ffd", pkt, N.AIR_HDR.size)
+                    self.on_beacon_rssi(i, uid, rssi)
                     self.view[i][uid] = (x, y, time.time())
                     self.st["beacons_rx"] += 1
                     continue
@@ -1403,7 +1409,9 @@ SL_RELAY_CFG = {
     "hystMaxRemote": 2.0,
     "sl-RSRP-Thresh": -90.0,          # SL-ReselectionConfig-r17: SD-RSRP a relay must exceed to be selected
     "sl-HystMin": 2.0,                #   and how much stronger another relay must be to reselect
+    "sl-FilterCoefficientRSRP": 4,    #   layer-3 filter of the measurement: F = (1 - a) F + a M, a = 1 / 2^(k / 4)
 }
+MEAS_CAL_N = 40                       # beacons per board pair averaged into its calibration (the boards' mean coupling on the desk)
 
 # ---- TS 24.554 messages. The message sets, their IEs and the order of the exchange follow 24.554 (5G ProSe): a Model A
 # UE-to-network relay discovery announcement; PC5-S direct link establishment (request, security mode command/complete with
@@ -1417,9 +1425,50 @@ DLER, DLEA, DLEJ, DLRR, DLRA, DLSMC, DLSMCC = 0x01, 0x02, 0x03, 0x07, 0x08, 0x0D
 PC5S_NAME = {DLER: "DIRECT LINK ESTABLISHMENT REQUEST", DLEA: "DIRECT LINK ESTABLISHMENT ACCEPT",
              DLEJ: "DIRECT LINK ESTABLISHMENT REJECT", DLRR: "DIRECT LINK RELEASE REQUEST", DLRA: "DIRECT LINK RELEASE ACCEPT",
              DLSMC: "DIRECT LINK SECURITY MODE COMMAND", DLSMCC: "DIRECT LINK SECURITY MODE COMPLETE"}
-IE_SRC, IE_TGT, IE_RSC, IE_SECCAP, IE_NONCE, IE_ALGS, IE_IPCFG, IE_CAUSE = range(1, 9)
+IE_SRC, IE_TGT, IE_RSC, IE_SECCAP, IE_NONCE, IE_ALGS, IE_IPCFG, IE_CAUSE, IE_MAC, IE_KID = range(1, 11)
 IPCFG_DHCPV4 = 0x01                   # IP address configuration: DHCPv4 server
-SECCAP_NULL = b"\x80\x80"             # UE PC5 security capabilities: NEA0 and NIA0 only (no PC5 security here)
+SECCAP = b"\xe0\xe0"                  # UE PC5 security capabilities: NEA0-2, NIA0-2
+ALGS_CHOSEN = b"\x22"                  # chosen algorithms: ciphering 2, integrity 2 (here ESP AES-GCM-128 and HMAC-SHA-256/32)
+# PC5 key hierarchy, after TS 33.503 (user-plane based U2N relay security) and TS 33.536: a long-term root shared by the
+# fleet (standing in for the PRUK a 5G ProSe key management function would provision; here generated per run), KNRP per
+# remote-relay pair, KNRP-sess per link from Nonce_1 (request) and Nonce_2 (security mode command), and from it the keys.
+# KDF as TS 33.220 Annex B (HMAC-SHA-256 over FC || P0 || L0 || ...); the FC values are ours.
+FC_KNRP, FC_SESS, FC_KEY = 0x60, 0x61, 0x62
+
+
+# QoS for relayed traffic (TS 23.304 5.6.2.1: the relay maps the remote's PC5 QoS to a QoS flow of its relay PDU session).
+# Per flow: PQI (TS 23.287 Table 5.4.4-1) on PC5, the 5QI (TS 23.501 Table 5.7.4-1) it maps to on Uu, and the DSCP that
+# carries the class through the IP hops. OAI's UE has one QoS flow (one QFI, one DRB) per session, so the 5QI is enforced
+# as the relay's QoS rules would be on the UE side: a strict-priority queue per class on the interfaces that send it
+# (the remote's and relay's sidelink UE, the relay session). Commands from the edge are left at best effort.
+L3_QOS = {"det": dict(pqi=58, fqi=7, dscp=34, band=0),       # positioning: 100 ms budget both ways
+          "lidar": dict(pqi=59, fqi=9, dscp=10, band=2)}     # LiDAR: 500 ms / 300 ms, lowest priority
+
+
+def qos_qdisc(dev):
+    """Strict priority by DSCP on dev: band 0 positioning, 1 everything else (signalling, DHCP, ESP of other classes), 2 LiDAR."""
+    cmds = [f"tc qdisc replace dev {dev} root handle 1: prio bands 3 priomap " + " ".join(["1"] * 16)]
+    for q in L3_QOS.values():
+        cmds.append(f"tc filter replace dev {dev} parent 1: protocol ip prio {q['band'] + 1} u32 "
+                    f"match ip dsfield {q['dscp'] << 2:#x} 0xfc flowid 1:{q['band'] + 1}")
+    return cmds
+
+
+def kdf(key, fc, *ps):
+    return hmac.new(key, bytes([fc]) + b"".join(p + len(p).to_bytes(2, "big") for p in ps), hashlib.sha256).digest()
+
+
+def pc5_keys(root, remote, relay, n1, n2):
+    """-> dict: integrity key for PC5-S, ESP keys and SPIs for both directions of one link."""
+    knrp = kdf(root, FC_KNRP, user_info(remote), user_info(relay))
+    sess = kdf(knrp, FC_SESS, n1, n2)
+    k = {d: kdf(sess, FC_KEY, bytes([d])) for d in (1, 2, 3)}
+    return dict(ik=k[3][:16], up=k[1][:20], down=k[2][:20],          # 16 B key + 4 B salt for rfc4106(gcm(aes))
+                spi_up=0x1000 + int.from_bytes(k[1][20:22], "big"), spi_down=0x1000 + int.from_bytes(k[2][20:22], "big"))
+
+
+def pc5s_mac(ik, m):
+    return hmac.new(ik, m, hashlib.sha256).digest()[:4]
 CAUSE_NOT_RELAY = 0x05                # reject: this UE does not offer the relay service now
 CAUSE_NOT_NEEDED = 0x01               # release: direct communication to the target UE no longer needed
 
@@ -1491,8 +1540,10 @@ class L3Relay:
         self.l3q = {}                          # remote -> [(t, app, meta)] waiting for the link
         self.ann_t = 0.0
         self.pc5seq = 0
-        self.l3st = dict(ann=0, pc5s=0, up=0, rel=0, app=0, q=0, rej=0)
+        self.l3st = dict(ann=0, pc5s=0, up=0, rel=0, app=0, q=0, rej=0, sec=0, badmac=0)
+        self.root = os.urandom(32)             # the fleet's PC5 root key (see pc5_keys)
         self.relaying = {}                     # (relay, remote) -> leased address (one report each way)
+        self.meas = {}                         # (rx AGV, tx AGV) -> board-to-board RSSI: calibration, filtered deviation
         super().__init__(args)
         self.log("slcfg", cfg=self.slcfg)
         print(f"{time.strftime('%T')} L3 relay configuration (SIB12 / pre-configured): "
@@ -1551,11 +1602,14 @@ class L3Relay:
         except OSError:
             return False
 
-    def pc5s(self, frm, to, typ, ies, seq=None):
+    def pc5s(self, frm, to, typ, ies, seq=None, ik=None):
         if seq is None:
             self.pc5seq += 1
             seq = self.pc5seq
-        ok = self.to_sl(frm, to, b"PCS", pc5s_pack(typ, seq, ies))
+        m = pc5s_pack(typ, seq, ies)
+        if ik:                                   # integrity protected: the MAC IE over the message without it
+            m += struct.pack(">BB", IE_MAC, 4) + pc5s_mac(ik, m)
+        ok = self.to_sl(frm, to, b"PCS", m)
         if ok:
             self.l3st["pc5s"] += 1
             self.log("pc5s", a=frm, b=to, m=typ, s=seq)
@@ -1586,47 +1640,100 @@ class L3Relay:
                     if o != g and self.to_sl(g, o, b"DSC", m):
                         self.l3st["ann"] += 1
 
+    def on_beacon_rssi(self, rx, tx, rssi):
+        """A measured PC5 sample: the RSSI of tx's beacon at rx's board. The boards share one desk, so the distance part of
+        SD-RSRP comes from the path-loss model; what is measured is the link's deviation from its calibrated mean (fades,
+        interference), layer-3 filtered (sl-FilterCoefficientRSRP)."""
+        if not 0 <= tx < 3 or tx == rx:
+            return
+        m = self.meas.setdefault((rx, tx), dict(cal=[], off=None, f=None, n=0, t=0.0))
+        m["n"] += 1
+        m["t"] = time.time()
+        if m["off"] is None:
+            m["cal"].append(rssi)
+            if len(m["cal"]) >= MEAS_CAL_N:
+                m["off"] = sorted(m["cal"])[len(m["cal"]) // 2]
+                self.log("slcal", rx=rx, tx=tx, rssi=m["off"], n=len(m["cal"]))
+            return
+        a = 1.0 / 2 ** (self.slcfg["sl-FilterCoefficientRSRP"] / 4)
+        dev = rssi - m["off"]
+        m["f"] = dev if m["f"] is None else (1 - a) * m["f"] + a * dev
+
+    def sd_rsrp(self, me, peer):
+        """SD-RSRP of peer's discovery message at me: the path-loss model at their distance plus the measured deviation."""
+        a, b = self.fleet.a[me], self.fleet.a[peer]
+        m = self.meas.get((me, peer))
+        dev = m["f"] if m and m["f"] is not None and time.time() - m["t"] < 3.0 else 0.0
+        return sl_rsrp((a["x"], a["y"]), (b["x"], b["y"])) + dev, dev
+
     def on_disc(self, me, peer, m):
         if len(m) < PCD.size:
             return
         typ, rsc, ui, _mic, _utc = PCD.unpack_from(m)
         if typ != PCD_ANN or int.from_bytes(rsc, "big") != RSC or agv_of_ui(ui) != peer:
             return
-        now, a, b = time.time(), self.fleet.a[me], self.fleet.a[peer]
+        now = time.time()
         new = peer not in self.disc[me] or now - self.disc[me][peer][0] > 3 * self.args.beacon_s
-        self.disc[me][peer] = (now, sl_rsrp((a["x"], a["y"]), (b["x"], b["y"])))
+        sd, dev = self.sd_rsrp(me, peer)
+        self.disc[me][peer] = (now, sd)
         if new:
-            self.log("disc", agv=me, relay=peer, sd=round(self.disc[me][peer][1], 1))
+            self.log("disc", agv=me, relay=peer, sd=round(sd, 1), dev=round(dev, 1))
 
     def on_pc5s(self, me, peer, m):
         if len(m) < 3:
             return
         typ, seq, ies = pc5s_unpack(m)
         now = time.time()
+        body = m[:-6] if IE_MAC in ies and len(m) >= 9 else m
+
+        def mac_ok(ik):
+            if ies.get(IE_MAC) == pc5s_mac(ik, body):
+                return True
+            self.l3st["badmac"] += 1
+            self.log("pc5s_badmac", a=me, b=peer, m=typ, s=seq)
+            return False
         self.log("pc5s_rx", a=me, b=peer, m=typ, s=seq)
         # ---- as the relay
         if typ == DLER:
             if not self.relay_eligible(me) or ies.get(IE_RSC) != RSC.to_bytes(3, "big"):
                 self.pc5s(me, peer, DLEJ, {IE_CAUSE: bytes([CAUSE_NOT_RELAY])}, seq)
                 return
-            self.rl[(me, peer)] = "smc"
-            self.pc5s(me, peer, DLSMC, {IE_SECCAP: SECCAP_NULL, IE_NONCE: os.urandom(16), IE_ALGS: b"\x00"}, seq)
+            st = self.rl.get((me, peer))
+            if not st or st["n1"] != ies.get(IE_NONCE):   # a new request (a repeat keeps its keys)
+                n2 = os.urandom(16)
+                st = self.rl[(me, peer)] = dict(st="smc", n1=ies.get(IE_NONCE, b""), n2=n2,
+                                                k=pc5_keys(self.root, peer, me, ies.get(IE_NONCE, b""), n2))
+            self.pc5s(me, peer, DLSMC, {IE_SECCAP: SECCAP, IE_NONCE: st["n2"], IE_ALGS: ALGS_CHOSEN, IE_KID: st["n2"][:1]},
+                      seq, ik=st["k"]["ik"])
         elif typ == DLSMCC:
-            if (me, peer) in self.rl:
-                self.rl[(me, peer)] = "acc"
-                self.pc5s(me, peer, DLEA, {IE_SRC: user_info(me), IE_IPCFG: bytes([IPCFG_DHCPV4])}, seq)
+            st = self.rl.get((me, peer))
+            if st and mac_ok(st["k"]["ik"]):
+                if st["st"] != "acc":
+                    st["st"] = "acc"
+                    self.sec_install(me, peer, "relay", st["k"])
+                self.pc5s(me, peer, DLEA, {IE_SRC: user_info(me), IE_IPCFG: bytes([IPCFG_DHCPV4])}, seq, ik=st["k"]["ik"])
         elif typ == DLRR:
-            self.pc5s(me, peer, DLRA, {}, seq)
-            self.rl.pop((me, peer), None)
+            st = self.rl.pop((me, peer), None)
+            self.pc5s(me, peer, DLRA, {}, seq, ik=st["k"]["ik"] if st else None)
+            if st:
+                self.to_sl(me, peer, b"SEX")
             self.end_relaying(me, peer)
         # ---- as the remote
         lk = self.link.get(me)
         if not lk or lk["g"] != peer:
             return
         if typ == DLSMC and lk["st"] in ("req", "sec"):
+            k = pc5_keys(self.root, me, peer, lk["nonce"], ies.get(IE_NONCE, b""))
+            if not mac_ok(k["ik"]):
+                return
+            if lk["st"] == "req":
+                lk.update(k=k)
+                self.sec_install(me, peer, "remote", k)
             lk.update(st="sec", tx=now)
-            self.pc5s(me, peer, DLSMCC, {IE_SECCAP: SECCAP_NULL}, seq)
+            self.pc5s(me, peer, DLSMCC, {IE_SECCAP: SECCAP}, seq, ik=lk["k"]["ik"])
         elif typ == DLEA and lk["st"] in ("req", "sec"):
+            if "k" not in lk or not mac_ok(lk["k"]["ik"]):
+                return
             if ies.get(IE_IPCFG) == bytes([IPCFG_DHCPV4]):
                 lk.update(st="dhcp", tx=now)
                 self.to_sl(me, peer, b"DHC", bytes([me]))
@@ -1681,9 +1788,26 @@ class L3Relay:
             self.release(r)
         now = time.time()
         self.pc5seq += 1
-        self.link[r] = dict(g=g, st="req", t0=now, tx=now, seq=self.pc5seq, ip=None)
-        self.pc5s(r, g, DLER, {IE_SRC: user_info(r), IE_TGT: user_info(g), IE_RSC: RSC.to_bytes(3, "big"),
-                               IE_SECCAP: SECCAP_NULL, IE_NONCE: os.urandom(16)}, self.pc5seq)
+        self.link[r] = dict(g=g, st="req", t0=now, tx=now, seq=self.pc5seq, ip=None, nonce=os.urandom(16))
+        self.dler(r)
+
+    def dler(self, r):
+        lk = self.link[r]
+        g = lk["g"]
+        self.pc5s(r, g, DLER, {IE_SRC: user_info(r), IE_TGT: user_info(g), IE_RSC: RSC.to_bytes(3, "big"), IE_SECCAP: SECCAP,
+                               IE_NONCE: lk["nonce"], IE_KID: lk["nonce"][:1]}, lk["seq"])
+
+    def sec_install(self, me, peer, role, k):
+        """The link's ESP security associations and policies in me's sidelink UE (slfwd does the ip xfrm)."""
+        L, side = self.link_of(me, peer)
+        rside = side if role == "relay" else 1 - side
+        up_out = role == "remote"                 # the remote sends with the up key, the relay with the down key
+        d = dict(role=role, pool=pool_of(L["l"], rside),
+                 k_out=(k["up"] if up_out else k["down"]).hex(), spi_out=k["spi_up"] if up_out else k["spi_down"],
+                 k_in=(k["down"] if up_out else k["up"]).hex(), spi_in=k["spi_down"] if up_out else k["spi_up"])
+        self.to_sl(me, peer, b"SEC", json.dumps(d).encode())
+        self.l3st["sec"] += 1
+        self.log("pc5sec", a=me, b=peer, role=role, alg="ESP rfc4106(gcm(aes)) 128, PC5-S HMAC-SHA-256/32")
 
     def release(self, r):
         lk = self.link.pop(r, None)
@@ -1692,7 +1816,9 @@ class L3Relay:
         g = lk["g"]
         if lk["st"] in ("dhcp", "up"):
             self.to_sl(r, g, b"DHR")                 # DHCPRELEASE, and the address off its interface
-        self.pc5s(r, g, DLRR, {IE_CAUSE: bytes([CAUSE_NOT_NEEDED])})
+        self.pc5s(r, g, DLRR, {IE_CAUSE: bytes([CAUSE_NOT_NEEDED])}, ik=lk["k"]["ik"] if "k" in lk else None)
+        if "k" in lk:
+            self.to_sl(r, g, b"SEX")                 # its security associations removed
         if self.pc5c.pop(r, None) is not None:
             self.l3st["rel"] += 1
             self.log("pc5conn", agv=r, relay=g, on=0)
@@ -1713,8 +1839,7 @@ class L3Relay:
         return cur if cur in heard and heard[cur] >= heard[best] - c["sl-HystMin"] else best
 
     def sl_edge(self, i, g):
-        me, rl = self.fleet.a[i], self.fleet.a[g]
-        return sl_rsrp((me["x"], me["y"]), (rl["x"], rl["y"])) < self.slcfg["sl-RSRP-Thresh"] + SL_MARGIN_DB
+        return self.sd_rsrp(i, g)[0] < self.slcfg["sl-RSRP-Thresh"] + SL_MARGIN_DB
 
     def set_serve(self, r, g):
         if r in self.link and self.link[r]["g"] != g:
@@ -1738,7 +1863,9 @@ class L3Relay:
 
     def l3_send(self, node, nxt, app, meta):
         try:
-            if not self.to_sl(node, nxt, b"APP", app):
+            f = meta["f"]
+            q = L3_QOS.get(FLOWS[f] if isinstance(f, int) and 0 <= f < len(FLOWS) else f)
+            if not self.to_sl(node, nxt, b"APP", bytes([q["dscp"] if q else 0]) + app):
                 raise OSError("sidelink UE not up")
             self.l3st["app"] += 1
             self.log("hop", agv=meta["agv"], f=meta["f"], s=meta["s"], a=node, b=nxt, l3=1)
@@ -1782,17 +1909,21 @@ class L3Relay:
             g = lk["g"]
             if lk["st"] == "req" and now - lk["tx"] > PC5S_RETRY_S:
                 lk["tx"] = now
-                self.pc5s(r, g, DLER, {IE_SRC: user_info(r), IE_TGT: user_info(g), IE_RSC: RSC.to_bytes(3, "big"),
-                                       IE_SECCAP: SECCAP_NULL, IE_NONCE: os.urandom(16)}, lk["seq"])
+                self.dler(r)
             elif lk["st"] == "sec" and now - lk["tx"] > PC5S_RETRY_S:
                 lk["tx"] = now
-                self.pc5s(r, g, DLSMCC, {IE_SECCAP: SECCAP_NULL}, lk["seq"])
+                self.pc5s(r, g, DLSMCC, {IE_SECCAP: SECCAP}, lk["seq"], ik=lk["k"]["ik"])
             elif lk["st"] == "dhcp" and now - lk["tx"] > DHCP_RETRY_S:
                 lk["tx"] = now
                 self.to_sl(r, g, b"DHC", bytes([r]))
         super().tick(now)
 
     def on_ctl(self, p):
+        if p[:3] in (b"RRS", b"RRA") and len(p) >= 5:       # Remote UE report sent as NAS / its response from the SMF
+            k = "rur_nas" if p[:3] == b"RRS" else "rur_rsp"
+            self.l3st[k] = self.l3st.get(k, 0) + 1
+            self.log(k, relay=p[3] - 1, pti=p[4])
+            return
         if p[:3] == b"RLY" and len(p) >= 4:
             i = p[3] - 1
             ip = p[4:].decode(errors="replace")
@@ -1831,8 +1962,11 @@ class L3Relay:
         links = " ".join(f"{NAMES[r]}->{NAMES[g]}" for r, g in self.pc5c.items()) or "none"
         rel = "".join(NAMES[g] for g in range(3) if self.rel_on[g]) or "-"
         sess = "".join(NAMES[g] for g in range(3) if self.rly[g]) or "-"
+        meas = " ".join(f"{NAMES[t]}>{NAMES[r]} {m['off']}{m['f']:+.1f}" for (r, t), m in sorted(self.meas.items())
+                        if m["off"] is not None and m["f"] is not None)
         return (super().extra_stats() + f"  L3: relays {rel} (relay sessions {sess}), links {links}, ann {s['ann']}, "
-                f"PC5-S {s['pc5s']}, up {s['up']}, rel {s['rel']}, rej {s['rej']}, via relay {s['app']}, queued {s['q']}")
+                f"PC5-S {s['pc5s']} (bad MAC {s['badmac']}), SAs {s['sec']}, RUR NAS {s.get('rur_nas', 0)}/{s.get('rur_rsp', 0)} answered, up {s['up']}, rel {s['rel']}, rej {s['rej']}, via relay {s['app']}, queued {s['q']}, "
+                f"PC5 RSSI dBm {meas or 'calibrating'}")
 
 
 class CoverOai(CoverGw, Pc5Oai):
@@ -1870,6 +2004,21 @@ def dev_addr(dev):
         s.close()
 
 
+RELAY_PSI = 2                          # the relay PDU session's ID (the UE's second session, after DNN internet)
+NAS_RAW5GSM = ("127.0.0.1", 6620)      # the OAI UE's hook for a 5GSM message to send in UL NAS transport (patched NAS)
+MSG_RUR, IEI_RUC_CONN, IEI_RUC_DISC = 218, 0x76, 0x70
+
+
+def rur_5gsm(pti, ev, ui, ip, psi=RELAY_PSI):
+    """Remote UE report (TS 24.501 8.3.19): one Remote UE context (9.11.4.29) in the connected or the disconnected list.
+    Context: number of user IDs, the user ID (length, type 1 = the PC5 User Info ID of 23.304, 6 octets), address type
+    (1 = IPv4) and the remote's address."""
+    ctx = bytes([1, 1 + len(ui), 1]) + ui + bytes([1]) + socket.inet_aton(ip)
+    lst = bytes([1, len(ctx)]) + ctx
+    ie = bytes([IEI_RUC_CONN if ev == "connect" else IEI_RUC_DISC]) + len(lst).to_bytes(2, "big") + lst
+    return bytes([0x2E, psi, pti, MSG_RUR]) + ie
+
+
 def fwd(a):
     """In oai-nrue1's netns: app messages from the pivot out over the PDU session, commands back.
     --relay-dev (L3 relay): once that PDU session (DNN relay) is up, it carries the remote UEs' traffic (NAT) and the
@@ -1885,6 +2034,9 @@ def fwd(a):
     ctl = os.path.join(a.w, "ctl.sock")
     s = rs = None
     t_rly = 0.0
+    nas = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)    # to and from the UE's NAS (Remote UE report)
+    nas.bind(("127.0.0.1", 0))
+    pti = 0
     print(f"fwd: {a.dev} -> {a.edge}:{EDGE_PORT}", flush=True)
     while True:
         if s is None:
@@ -1917,9 +2069,23 @@ def fwd(a):
         if rs is not None and now - t_rly > 2.0:   # (again every 2 s: the controller may have restarted)
             t_rly = now
             u.sendto(b"RLY" + bytes([a.k]) + rs.getsockname()[0].encode(), ctl)
-        r, _, _ = select.select([u, s], [], [], 0.5)
+        r, _, _ = select.select([u, s, nas], [], [], 0.5)
+        if nas in r:
+            m = nas.recv(64)
+            if m[:3] == b"RSP":
+                print(f"fwd: Remote UE report response (NAS, PDU session {m[3]}, PTI {m[6]})", flush=True)
+                u.sendto(b"RRA" + bytes([a.k, m[6]]), ctl)
         if u in r:
             m = u.recv(4096)
+            if m[:4] == b"RUR1" and rs is not None:        # also as NAS (5GSM) on the relay PDU session, to the SMF
+                try:
+                    d = json.loads(m[4:])
+                    pti = pti % 254 + 1
+                    nas.sendto(bytes([RELAY_PSI]) + rur_5gsm(pti, d["ev"], bytes.fromhex(d["ui"]), d["ip"]), NAS_RAW5GSM)
+                    print(f"fwd: Remote UE report (NAS, PTI {pti}): {d['ev']} {d['ui']} {d['ip']}", flush=True)
+                    u.sendto(b"RRS" + bytes([a.k, pti]), ctl)
+                except (OSError, ValueError, KeyError) as e:
+                    print(f"fwd: Remote UE report (NAS) not sent: {e}", flush=True)
             try:
                 (rs if rs is not None and m[:4] == b"RUR1" else s).send(m)
             except OSError:
@@ -1955,8 +2121,11 @@ def l3_ue_setup(a):
                  f"ip rule del iif {t} lookup 100 2>/dev/null; ip rule add iif {t} lookup 100",
                  f"ip route replace {pool} dev {t}"]
     cmds.append("for f in /proc/sys/net/ipv4/conf/*/rp_filter; do echo 0 > $f; done")
+    cmds += qos_qdisc(dev)
     bad = [c for c in cmds if sh(c).returncode]
-    print(f"fwd: L3 relay set up: GRE to the sidelink UEs -> {dev} (NAT), pools {a.l3_routes}" + (f"; FAILED: {bad}" if bad else ""), flush=True)
+    print(f"fwd: L3 relay set up: GRE to the sidelink UEs -> {dev} (NAT, QoS: "
+          + ", ".join(f"{f} PQI {q['pqi']} -> 5QI {q['fqi']}" for f, q in L3_QOS.items())
+          + f"), pools {a.l3_routes}" + (f"; FAILED: {bad}" if bad else ""), flush=True)
 
 
 def l3_sl_setup(a, dev):
@@ -1970,7 +2139,7 @@ def l3_sl_setup(a, dev):
             "ip link set agvu up",
             "ip route replace default dev agvu table 100",
             f"ip route replace {a.l3_pool} dev {dev}",
-            "for f in /proc/sys/net/ipv4/conf/*/rp_filter; do echo 0 > $f; done"]
+            "for f in /proc/sys/net/ipv4/conf/*/rp_filter; do echo 0 > $f; done"] + qos_qdisc(dev)
     bad = [c for c in cmds if sh(c).returncode]
     print(f"slfwd {a.link}{'mp'[a.side]}: L3 set up on {dev}: DHCPv4 pool {a.l3_pool}, relayed over GRE to {a.l3_ue}"
           + (f"; FAILED: {bad}" if bad else ""), flush=True)
@@ -2106,6 +2275,30 @@ def dhcp_bind(a, dev, ip, old):
     return [c for c in cmds if sh(c).returncode]
 
 
+def sec_setup(me, peer, d):
+    """PC5 user-plane security for one link, in a sidelink UE's netns: ESP tunnel SAs between the two sidelink addresses
+    (AES-GCM-128, keys from KNRP-sess), and policies for what must be protected: the remote's traffic (the relay's pool, any
+    address beyond) and DHCP. Discovery and PC5-S stay outside them (PC5-S carries its own MAC)."""
+    P, aead = d["pool"], "'rfc4106(gcm(aes))'"
+    t_out = f"tmpl src {me} dst {peer} proto esp reqid 1 mode tunnel"
+    t_in = f"tmpl src {peer} dst {me} proto esp reqid 2 mode tunnel"
+    cmds = ["ip xfrm policy flush", "ip xfrm state flush",
+            f"ip xfrm state add src {me} dst {peer} proto esp spi {d['spi_out']} reqid 1 mode tunnel aead {aead} 0x{d['k_out']} 128",
+            f"ip xfrm state add src {peer} dst {me} proto esp spi {d['spi_in']} reqid 2 mode tunnel aead {aead} 0x{d['k_in']} 128"]
+    if d["role"] == "remote":
+        cmds += [f"ip xfrm policy add src {P} dst 0.0.0.0/0 dir out {t_out}",
+                 f"ip xfrm policy add src 0.0.0.0/0 dst {P} dir in {t_in}",
+                 f"ip xfrm policy add src {me}/32 dst {peer}/32 proto udp sport {DHCP_CLI} dport {DHCP_SRV} dir out {t_out}",
+                 f"ip xfrm policy add src {peer}/32 dst {me}/32 proto udp sport {DHCP_SRV} dport {DHCP_CLI} dir in {t_in}"]
+    else:
+        cmds += [f"ip xfrm policy add src 0.0.0.0/0 dst {P} dir out {t_out}",
+                 f"ip xfrm policy add src {P} dst 0.0.0.0/0 dir fwd {t_in}",
+                 f"ip xfrm policy add src {P} dst 0.0.0.0/0 dir in {t_in}",
+                 f"ip xfrm policy add src {me}/32 dst {peer}/32 proto udp sport {DHCP_SRV} dport {DHCP_CLI} dir out {t_out}",
+                 f"ip xfrm policy add src {peer}/32 dst {me}/32 proto udp sport {DHCP_CLI} dport {DHCP_SRV} dir in {t_in}"]
+    return [c for c in cmds if sh(c).returncode]
+
+
 def slfwd(a):
     """In a sidelink UE's netns: hop messages from the controller out over the sidelink's IP, and back.
     --l3-agv: also the L3 relay's PC5 side: PC5 discovery and PC5-S sockets, the DHCPv4 server (as a relay) and client
@@ -2122,6 +2315,7 @@ def slfwd(a):
     ctl = os.path.join(a.w, "ctl.sock")
     s, t_rdy = None, 0.0
     app = dsc = pcs = dsrv = dcli = None
+    app_tos = 0
     srv = cli = None
     l3 = a.l3_agv is not None
     tag = bytes([a.link, a.side])
@@ -2176,7 +2370,10 @@ def slfwd(a):
             m = u.recv(4096)
             try:
                 if m[:3] == b"APP" and app:
-                    app.send(m[3:])
+                    if m[3] != app_tos:              # the flow's DSCP (L3_QOS): ESP copies it to the outer header
+                        app_tos = m[3]
+                        app.setsockopt(socket.IPPROTO_IP, socket.IP_TOS, app_tos << 2)
+                    app.send(m[4:])
                 elif m[:3] == b"DSC" and dsc:
                     dsc.sendto(m[3:], (a.peer, DISC_PORT))
                 elif m[:3] == b"PCS" and pcs:
@@ -2198,7 +2395,14 @@ def slfwd(a):
                         app = None
                     if old:
                         sh(f"ip route del {EDGE}/32 dev {sldev}; ip addr del {old}/32 dev {sldev}")
-                elif m[:3] not in (b"APP", b"DSC", b"PCS", b"DHC", b"DHR"):
+                elif m[:3] == b"SEC" and l3:
+                    d = json.loads(m[3:])
+                    bad = sec_setup(ip, a.peer, d)
+                    print(f"slfwd {a.link}{side}: PC5 security as {d['role']}: ESP AES-GCM SAs to {a.peer}, protecting {d['pool']} "
+                          f"and DHCP" + (f"; FAILED: {bad}" if bad else ""), flush=True)
+                elif m[:3] == b"SEX" and l3:
+                    sh("ip xfrm policy flush; ip xfrm state flush")
+                elif m[:3] not in (b"APP", b"DSC", b"PCS", b"DHC", b"DHR", b"SEC", b"SEX"):
                     s.send(m)
             except OSError:
                 pass
@@ -2230,7 +2434,7 @@ def slfwd(a):
                     bad = dhcp_bind(a, sldev, leased, old)
                     if app:
                         app.close()
-                    app = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+                    app, app_tos = socket.socket(socket.AF_INET, socket.SOCK_DGRAM), 0
                     app.bind((leased, 0))
                     app.connect((EDGE, EDGE_PORT))
                     u.sendto(b"SLI" + tag + leased.encode(), ctl)

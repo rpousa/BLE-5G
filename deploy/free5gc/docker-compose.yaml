@@ -61,7 +61,7 @@ services:
   smf:
     <<: *nf
     container_name: f5gc-smf
-    image: free5gc/smf:v4.3.0
+    image: free5gc/smf:v4.3.0-rur
     command: ./smf -c ./config/smfcfg.yaml -u ./config/uerouting.yaml
     volumes:
       - ./config/smfcfg.yaml:/free5gc/config/smfcfg.yaml

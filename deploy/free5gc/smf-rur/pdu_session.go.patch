@@ -1,0 +1,24 @@
+diff --git a/internal/sbi/processor/pdu_session.go b/internal/sbi/processor/pdu_session.go
+index f61559b..fe22579 100644
+--- a/internal/sbi/processor/pdu_session.go
++++ b/internal/sbi/processor/pdu_session.go
+@@ -398,6 +398,19 @@ func (p *Processor) HandlePDUSessionSMContextUpdate(
+ 	smContextUpdateData := body.JsonData
+ 
+ 	if body.BinaryDataN1SmMessage != nil {
++		if rsp, rurErr := handleRemoteUEReport(smContext, relatedBytes(body.BinaryDataN1SmMessage)); rurErr != nil || rsp != nil {
++			if rurErr != nil {
++				smContext.Log.Errorf("%v", rurErr)
++				c.JSON(http.StatusForbidden, models.UpdateSmContextResponse400{
++					JsonData: &models.Smf_PDUSess_SmContextUpdateError{Error: &smf_errors.N1SmError},
++				}.JsonData)
++				return
++			}
++			response.BinaryDataN1SmMessage = &multipart.RelatedContent{ContentID: "GSM_NAS", Content: rsp}
++			response.JsonData.N1SmMsg = &models.RefToBinaryData{ContentId: "RemoteUEReportResponse"}
++			c.Render(http.StatusOK, openapi.MultipartRelatedRender{Data: response})
++			return
++		}
+ 		var gsmMessage message.GSMMessage
+ 		gsmMessage, err = message.ParseGSM(relatedBytes(body.BinaryDataN1SmMessage))
+ 		smContext.Log.Tracef("N1 Message: %s", hex.EncodeToString(relatedBytes(body.BinaryDataN1SmMessage)))

@@ -1,0 +1,194 @@
+--- a/openair3/NAS/NR_UE/nr_nas_msg.c
++++ b/openair3/NAS/NR_UE/nr_nas_msg.c
+@@ -15,6 +15,13 @@
+ #include <stdlib.h>
+ #include <string.h>
+ #include <unistd.h>
++#include <pthread.h>
++#include <arpa/inet.h>
++#include <sys/socket.h>
++/* nrlink: Remote UE report hook (see raw5gsm_listener) */
++static int raw5gsm_sock = -1;
++static struct sockaddr_in raw5gsm_peer;
++static volatile int raw5gsm_have_peer = 0;
+ #include "common/utils/ds/byte_array.h"
+ #include "common/utils/nr/nr_common.h"
+ #include "AuthenticationResponseParameter.h"
+@@ -2155,6 +2162,15 @@
+   } else if (msg_type == FGS_PDU_SESSION_MODIFICATION_COMMAND) {
+     LOG_A(NAS, "Received PDU Session Modification Command in DL NAS Transport\n");
+     handle_pdu_session_modification_command(nas, pdu_buffer, pdu_length);
++  } else if (msg_type == 219) { /* Remote UE report response, TS 24.501 8.3.20 */
++    LOG_A(NAS, "Received Remote UE Report Response in DL NAS Transport (PDU session %d)\n", pdu_buffer[14]);
++    if (raw5gsm_sock >= 0 && raw5gsm_have_peer) {
++      uint8_t rsp[3 + 1 + 4];
++      memcpy(rsp, "RSP", 3);
++      rsp[3] = pdu_buffer[14];
++      memcpy(rsp + 4, pdu_buffer + 13, 4);
++      sendto(raw5gsm_sock, rsp, sizeof(rsp), 0, (struct sockaddr *)&raw5gsm_peer, sizeof(raw5gsm_peer));
++    }
+   } else {
+     LOG_E(NAS, "Received unexpected message in DLinformationTransfer %d\n", msg_type);
+   }
+@@ -2330,6 +2346,85 @@
+   }
+ }
+ 
++/* nrlink: Remote UE report (TS 24.501 8.3.19) from a layer-3 UE-to-network relay. The relay's controller encodes the
++ * 5GSM message and sends it here as one UDP datagram, <PDU session ID><5GSM message>, to 127.0.0.1:NAS_RAW5GSM_PORT
++ * (env, default 6620). The NAS task sends it in an integrity-protected, ciphered UL NAS transport (payload container
++ * type N1 SM information) for that PDU session; the Remote UE report response (DL NAS transport) is echoed back to the
++ * last sender as "RSP" <PDU session ID> <5GSM header>. */
++
++static void *raw5gsm_listener(void *arg)
++{
++  UNUSED(arg);
++  const char *e = getenv("NAS_RAW5GSM_PORT");
++  int port = e ? atoi(e) : 6620;
++  int s = socket(AF_INET, SOCK_DGRAM, 0);
++  struct sockaddr_in a = {.sin_family = AF_INET, .sin_port = htons(port)};
++  a.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
++  if (s < 0 || bind(s, (struct sockaddr *)&a, sizeof(a)) < 0) {
++    LOG_E(NAS, "Remote UE report: cannot bind 127.0.0.1:%d\n", port);
++    return NULL;
++  }
++  raw5gsm_sock = s;
++  LOG_I(NAS, "Remote UE report: listening on 127.0.0.1:%d\n", port);
++  while (1) {
++    uint8_t buf[1100];
++    struct sockaddr_in from;
++    socklen_t fl = sizeof(from);
++    int n = recvfrom(s, buf, sizeof(buf), 0, (struct sockaddr *)&from, &fl);
++    if (n < 5 || n - 1 > (int)sizeof(((nas_raw_5gsm_req_t *)0)->data))
++      continue;
++    raw5gsm_peer = from;
++    raw5gsm_have_peer = 1;
++    MessageDef *m = itti_alloc_new_message(TASK_NAS_NRUE, 0, NAS_RAW_5GSM_REQ);
++    nas_raw_5gsm_req_t *r = &NAS_RAW_5GSM_REQ(m);
++    r->pdusession_id = buf[0];
++    r->length = n - 1;
++    memcpy(r->data, buf + 1, n - 1);
++    itti_send_msg_to_task(TASK_NAS_NRUE, 0, m);
++  }
++  return NULL;
++}
++
++static void generateUlNasTransportN1SM(nr_ue_nas_t *nas, as_nas_info_t *out, const nas_raw_5gsm_req_t *r)
++{
++  int size = 7 + 3 + 1 + 2 + r->length + 2 + 16;
++  fgmm_nas_msg_security_protected_t sp_msg = {0};
++  fgs_nas_message_security_header_t *sp_header = &sp_msg.header;
++  sp_header->protocol_discriminator = FGS_MOBILITY_MANAGEMENT_MESSAGE;
++  sp_header->security_header_type = INTEGRITY_PROTECTED_AND_CIPHERED;
++  sp_header->sequence_number = nas->security.nas_count_ul & 0xff;
++  fgmm_nas_message_plain_t *plain = &sp_msg.plain;
++  plain->header = set_mm_header(FGS_UPLINK_NAS_TRANSPORT, PLAIN_5GS_MSG);
++  fgs_uplink_nas_transport_msg *mm_msg = &plain->mm_msg.uplink_nas_transport;
++  mm_msg->payloadcontainertype.iei = 0;
++  mm_msg->payloadcontainertype.type = 1; /* N1 SM information */
++  mm_msg->fgspayloadcontainer.payloadcontainercontents.length = r->length;
++  mm_msg->fgspayloadcontainer.payloadcontainercontents.value = (uint8_t *)r->data;
++  mm_msg->pdusessionid = r->pdusession_id;
++  out->nas_data = malloc_or_fail(size);
++  int hl = nas_protected_security_header_encode(out->nas_data, sp_header, size);
++  out->length = hl + mm_msg_encode(plain, (uint8_t *)(out->nas_data + hl), size - hl);
++
++  nas_stream_cipher_t stream_cipher;
++  uint8_t mac[NAS_INTEGRITY_SIZE];
++  uint8_t buf[out->length - 7];
++  stream_cipher.context = nas->security_container->ciphering_context;
++  stream_cipher.count = nas->security.nas_count_ul;
++  stream_cipher.bearer = 1;
++  stream_cipher.direction = 0;
++  stream_cipher.message = (unsigned char *)(out->nas_data + 7);
++  stream_cipher.blength = (out->length - 7) << 3;
++  stream_compute_encrypt(nas->security_container->ciphering_algorithm, &stream_cipher, buf);
++  memcpy(stream_cipher.message, buf, out->length - 7);
++  stream_cipher.context = nas->security_container->integrity_context;
++  stream_cipher.count = nas->security.nas_count_ul++;
++  stream_cipher.message = (unsigned char *)(out->nas_data + 6);
++  stream_cipher.blength = (out->length - 6) << 3;
++  stream_compute_integrity(nas->security_container->integrity_algorithm, &stream_cipher, mac);
++  for (int i = 0; i < 4; i++)
++    out->nas_data[2 + i] = mac[i];
++}
++
+ /** Send initial NAS to RRC as NAS_INITIAL_UL_TRANSFER_REQ (e.g. paging Service Request, TS 24.501 §5.6.1).
+  *  RRC buffers for RRCSetupComplete dedicatedNAS when no SRB (TS 38.331 §5.3.3.4). */
+ static void send_nas_initial_ul_transfer_req(nr_ue_nas_t *nas, const as_nas_info_t *initial_nas_msg)
+@@ -2434,6 +2529,9 @@
+ void *nas_nrue_task(void *args_p)
+ {
+   UNUSED(args_p);
++  pthread_t rawt;
++  if (pthread_create(&rawt, NULL, raw5gsm_listener, NULL) == 0)
++    pthread_detach(rawt);
+   while (1) {
+     nas_nrue(NULL);
+   }
+@@ -2725,6 +2823,19 @@
+         break;
+       }
+ 
++      case NAS_RAW_5GSM_REQ: {
++        if (!nas->security_container) {
++          LOG_W(NAS, "Remote UE report: no NAS security context yet, dropped\n");
++          break;
++        }
++        as_nas_info_t ulMsg = {0};
++        generateUlNasTransportN1SM(nas, &ulMsg, &NAS_RAW_5GSM_REQ(msg_p));
++        send_nas_uplink_data_req(nas, &ulMsg);
++        LOG_I(NAS, "Send NAS_UPLINK_DATA_REQ message(5GSM type %d, PDU session %d, %d B)\n",
++              NAS_RAW_5GSM_REQ(msg_p).data[3], NAS_RAW_5GSM_REQ(msg_p).pdusession_id, NAS_RAW_5GSM_REQ(msg_p).length);
++        break;
++      }
++
+       case NAS_PDU_SESSION_REQ: {
+         as_nas_info_t pduEstablishMsg = {0};
+         nas_pdu_session_req_t *pduReq = &NAS_PDU_SESSION_REQ(msg_p);
+@@ -2884,6 +2995,9 @@
+           case FGS_REGISTRATION_REJECT:
+             handle_registration_reject(nas, &buffer);
+             break;
++          case 219: /* nrlink: Remote UE report response; get_msg_type returns the 5GSM type inside the DL NAS transport */
++            handleDownlinkNASTransport(nas, pdu_buffer, pdu_length);
++            break;
+           case FGS_SERVICE_ACCEPT: {
+             handle_service_accept(nas, &buffer);
+             break;
+--- a/openair2/COMMON/as_message.h
++++ b/openair2/COMMON/as_message.h
+@@ -459,6 +459,13 @@
+   char dnn[103]; /* 24.501 §9.11.2.1A: max length 102 + 0-byte */
+ } nas_pdu_session_req_t;
+ 
++/* nrlink: a 5GSM message built outside the UE (Remote UE report, TS 24.501 8.3.19) to send in UL NAS transport */
++typedef struct nas_raw_5gsm_req_s {
++  int pdusession_id;
++  int length;
++  uint8_t data[1024];
++} nas_raw_5gsm_req_t;
++
+ /*
+  * SDAP->RRC->NAS - MO UL data pending while UE has no SDAP entity (e.g. 5GMM-IDLE)
+  * Distinct from paging: NAS may start Service Request (TS 24.501 §5.6.1)
+--- a/openair2/COMMON/rrc_messages_def.h
++++ b/openair2/COMMON/rrc_messages_def.h
+@@ -70,6 +70,7 @@
+ // eNB: RLC -> RRC messages
+ MESSAGE_DEF(RLC_SDU_INDICATION,         MESSAGE_PRIORITY_MED,       RlcSduIndication,           rlc_sdu_indication)
+ MESSAGE_DEF(NAS_PDU_SESSION_REQ, MESSAGE_PRIORITY_MED, nas_pdu_session_req_t, nas_pdu_session_req)
++MESSAGE_DEF(NAS_RAW_5GSM_REQ, MESSAGE_PRIORITY_MED, nas_raw_5gsm_req_t, nas_raw_5gsm_req)
+ 
+ // UE: RLC -> RRC messages
+ MESSAGE_DEF(NR_RRC_RLC_MAXRTX,          MESSAGE_PRIORITY_MED,       RlcMaxRtxIndication,        nr_rlc_maxrtx_indication)
+--- a/openair2/COMMON/rrc_messages_types.h
++++ b/openair2/COMMON/rrc_messages_types.h
+@@ -89,6 +89,7 @@
+ #define NRDuDlReq(mSGpTR)      (mSGpTR)->ittiMsg.nr_du_dl_req
+ 
+ #define NAS_PDU_SESSION_REQ(mSGpTR) (mSGpTR)->ittiMsg.nas_pdu_session_req
++#define NAS_RAW_5GSM_REQ(mSGpTR) (mSGpTR)->ittiMsg.nas_raw_5gsm_req
+ 
+ #define NR_RRC_RLC_MAXRTX(mSGpTR) (mSGpTR)->ittiMsg.nr_rlc_maxrtx_indication
+ 

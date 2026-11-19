@@ -30,7 +30,7 @@ ABOUT = {
     "agv-dual-gateway.html": "Two AGVs connected to the gNB as gateways, the third one sidelink hop from either and "
                              "picking one per message: board runs at L1 and L2 across sidelink window widths, with a replay. "
                              "Now live as a platoon with coverage by position: AGVs lose the gNB in a shielded cold store, "
-                             "relay through another AGV one at a time, now as a 3GPP layer-3 relay (configured thresholds, PC5-S link set-up, DHCPv4, a relay PDU session, NAT), "
+                             "relay through another AGV one at a time, now as a 3GPP layer-3 relay (configured thresholds, PC5-S with security, DHCPv4, a relay PDU session, QoS, Remote UE Report to the SMF), "
                              "with no relayed packets lost; every step compared; packet sequence, slot scheme, traffic flows.",
     "nr-tuning.html": "Each NR optimisation step measured on its own: slot rate and one-way delays, "
                       "from 643 ms to 144 ms for a LiDAR scan.",
