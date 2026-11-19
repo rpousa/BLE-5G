@@ -13,6 +13,19 @@ slot clock from the first PSBCH it receives (the nearby UE synchronises on it).
   sl_bridge.py --role master --ue-port 5600 --board 2HOKMMVEX1WMP --channel 0x5A
   sl_bridge.py --role peer   --ue-port 5601 --board GBAMNH4BQ3CSB --channel 0x5A
   sl_bridge.py --role master --ue-port 5600 --air udp --air-port 5700 --peer 127.0.0.1:5701   (no boards)
+
+Daisy chain (option A): relay nodes between master and peer. A relay has no UE: it answers the polls of the link
+above it like a peer and polls the link below it like a master, passing items through. Each hop is a link with its own
+id (carried in the air header) and its own stop-and-wait ARQ; all boards may share one channel, since every bridge
+ignores other links' packets. The relay polls the hop below right after it has answered a poll from above, so the
+chain carries one exchange at a time; the master's polls wait for a quiet channel (--sense, longer than the peer's
+turnaround) so they do not land in the lower hop's exchange.
+
+  master (UE1)  --link 0-->  relay  --link 1-->  peer (UE2)
+  sl_bridge.py --role master --ue-port 5600 --board A --link 0 --sense 0.015
+  sl_bridge.py --role relay  --board B --link 0                  (up: link 0, down: link 1, same board)
+  sl_bridge.py --role peer   --ue-port 5601 --board C --link 1
+  relay with its lower hop over UDP: --down-air udp --down-air-port 5710 --down-peer 127.0.0.1:5711
 """
 import argparse
 import queue
@@ -34,6 +47,7 @@ SLOT_S = 0.0005                     # 30 kHz: 0.5 ms slots
 RUN_MAX = 48000                     # bytes of items per RUN (the UE reads up to 60000)
 AIR_MAX = 20 * 248 - 2              # bytes of items per air message (20 radio packets)
 BACKLOG_MAX = 64000                 # bytes of items waiting for the air; beyond, the oldest are dropped
+air_max = AIR_MAX                   # set by --air-packets
 MAX_AGE = 200                       # slots an item may wait for the air (the receiving UE drops them at 800)
 
 
@@ -50,53 +64,88 @@ def split_items(n, data):
     return out
 
 
-class Air:
-    """One message per (kind, seq) over the boards (fragmented, 255 B packets) or over UDP (no boards)."""
+class AirDev:
+    """A board (fragmented, 255 B packets) or a UDP socket (no boards). Messages carry a link id (the ue_id byte of the
+    air header) and go to that link's queue; one board can serve two links (a relay)."""
 
-    def __init__(self, a):
-        self.q = queue.Queue()
-        self.mode = a.air
+    def __init__(self, mode, board=None, channel=0x5A, power=0x1F, port=None, peer=None):
+        self.mode = mode
+        self.queues = {}
         self.tx_pkts = self.rx_pkts = 0
-        self.last_rx = 0.0       # time of the last radio packet received (a reply may still be coming in)
-        if a.air == "board":
-            self.board = nrlink.Board(a.board)
-            log("board", a.board, self.board.ping())
-            self.board.configure(a.channel, a.power)
+        self.last_rx = 0.0       # time of the last radio packet heard, any link (a reply may still be coming in)
+        self.txlock = threading.Lock()
+        if mode == "board":
+            self.board = nrlink.Board(board)
+            log("board", board, self.board.ping())
+            self.board.configure(channel, power)
             self.reasm = Reassembler()
             threading.Thread(target=self._board_rx, daemon=True).start()
         else:
             self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-            self.sock.bind(("0.0.0.0", a.air_port))
-            host, port = a.peer.rsplit(":", 1)
-            self.peer = (host, int(port))
+            self.sock.bind(("0.0.0.0", port))
+            host, p = peer.rsplit(":", 1)
+            self.peer = (host, int(p))
             threading.Thread(target=self._udp_rx, daemon=True).start()
 
-    def send(self, kind, seq, payload):
-        if self.mode == "board":
-            for p in fragments(kind, 0, seq & 0xFFFF, 0, payload):
-                self.board.tx(p)
+    def queue(self, link):
+        return self.queues.setdefault(link, queue.Queue())
+
+    debug = False
+
+    def send(self, kind, link, seq, payload, sense=0.0):
+        if AirDev.debug:
+            log(f"tx kind {kind} link {link} seq {seq & 0xFFFF} {len(payload)} B")
+        if sense and self.mode == "board":
+            # carrier sense: wait (bounded) until nothing has been heard for `sense` seconds
+            limit = time.monotonic() + 0.1
+            while time.monotonic() < limit and time.monotonic() - self.last_rx < sense:
+                time.sleep(0.0005)
+        with self.txlock:
+            if self.mode == "board":
+                for p in fragments(kind, link, seq & 0xFFFF, 0, payload):
+                    self.board.tx(p)
+                    self.tx_pkts += 1
+            else:
+                self.sock.sendto(struct.pack("<BBH", kind, link, seq & 0xFFFF) + payload, self.peer)
                 self.tx_pkts += 1
-        else:
-            self.sock.sendto(struct.pack("<BH", kind, seq & 0xFFFF) + payload, self.peer)
-            self.tx_pkts += 1
 
     def _board_rx(self):
         while True:
             _rssi, _ts, pkt = self.board.rx.get()
             self.rx_pkts += 1
             self.last_rx = time.monotonic()
+            if AirDev.debug:
+                h = nrlink.AIR_HDR.unpack_from(pkt)
+                log(f"  rx pkt kind {h[0]} link {h[1]} seq {h[2]} frag {h[4]}/{h[5]}")
             got = self.reasm.add(pkt)
             if got:
-                (kind, _uid, seq, _x), msg = got
-                if kind in (AIR_SLM, AIR_SLP):
-                    self.q.put((kind, seq, msg))
+                (kind, link, seq, _x), msg = got
+                if kind in (AIR_SLM, AIR_SLP) and link in self.queues:
+                    self.queues[link].put((kind, seq, msg))
 
     def _udp_rx(self):
         while True:
             data, _ = self.sock.recvfrom(65535)
             self.rx_pkts += 1
-            kind, seq = struct.unpack_from("<BH", data)
-            self.q.put((kind, seq, data[3:]))
+            kind, link, seq = struct.unpack_from("<BBH", data)
+            if link in self.queues:
+                self.queues[link].put((kind, seq, data[4:]))
+
+
+class Air:
+    """One link (hop) on an AirDev: what master() and peer() talk through."""
+
+    def __init__(self, dev, link, sense):
+        self.dev, self.link, self.sense = dev, link, sense
+        self.q = dev.queue(link)
+
+    @property
+    def last_rx(self):
+        return self.dev.last_rx
+
+    def send(self, kind, seq, payload):
+        # polls wait for a quiet channel; replies go at once (the poller is listening)
+        self.dev.send(kind, self.link, seq, payload, self.sense if kind == AIR_SLM else 0.0)
 
 
 class UE:
@@ -192,12 +241,48 @@ class UE:
             # what waited too long would arrive too late to be delivered: drop it here, before it takes airtime
             keep = [x for x in self.outbox if self.slot - ITEM_HDR.unpack_from(x)[1] <= MAX_AGE]
             self.dropped += len(self.outbox) - len(keep)
-            out, self.outbox = take(keep, AIR_MAX)
+            out, self.outbox = take(keep, air_max)
         return out
 
     def give(self, items):
         with self.lock:
             self.inbox += items
+
+
+class RelaySide:
+    """One side of a relay node, standing in for the UE that master() / peer() expect: items given to it (received
+    on this side) go out on the other side; take_outbox() returns what the other side received."""
+
+    def __init__(self):
+        self.lock = threading.Lock()
+        self.outbox = []
+        self.other = None
+        self.t0 = 0.0            # never None: received items are always accepted
+        self.slot = 0
+        self.st = dict(runs=0, slots=0, tx=0, rx=0)
+        self.dropped = 0
+
+    def set_clock(self, slot):
+        pass
+
+    def give(self, items):
+        o, now = self.other, time.monotonic()
+        with o.lock:
+            o.outbox += [(now, x) for x in items]
+            n = sum(len(x) for _t, x in o.outbox)
+            while n > BACKLOG_MAX:
+                n -= len(o.outbox.pop(0)[1])
+                o.dropped += 1
+
+    def take_outbox(self):
+        # as at the ends: what waited too long here would arrive too late to be delivered, so it gets no airtime
+        limit = time.monotonic() - MAX_AGE * SLOT_S
+        with self.lock:
+            keep = [x for t, x in self.outbox if t >= limit]
+            self.dropped += len(self.outbox) - len(keep)
+            out, rest = take(keep, air_max)
+            self.outbox = self.outbox[len(self.outbox) - len(rest):] if rest else []
+        return out
 
 
 def take(items, max_bytes):
@@ -218,15 +303,20 @@ def unpack_items(msg):
     return split_items(n, msg[ITEMS.size:])
 
 
-def master(a, ue, air):
+def master(a, ue, air, trigger=None):
     """Polls the peer. Stop and wait: a poll keeps its sequence number and payload until its reply arrives (late
-    replies count), so items lost with a radio packet are sent again rather than lost."""
+    replies count), so items lost with a radio packet are sent again rather than lost.
+    trigger (relay): poll only after the hop above has been served (or after relay_idle), so the chain carries one
+    exchange at a time instead of the lower hop's idle polls filling the channel."""
     ue.set_clock(0)
     seq, payload, n_out, tries = 0, None, 0, 0
     st = dict(polls=0, replies=0, timeouts=0, resends=0, up=0, down=0, bytes=0)
     t_stat = time.monotonic()
     while True:
         if payload is None:
+            if trigger is not None:
+                trigger.wait(a.relay_idle)
+                trigger.clear()
             out = ue.take_outbox()
             payload, n_out, tries = pack_items(out), len(out), 0
             seq = (seq + 1) & 0xFFFF
@@ -260,7 +350,7 @@ def master(a, ue, air):
         st["down"] += n_out
         idle = n_out == 0 and not got
         payload = None
-        if idle:
+        if idle and trigger is None:
             time.sleep(a.idle_poll)
         now = time.monotonic()
         if now - t_stat >= a.stats:
@@ -275,7 +365,7 @@ def master(a, ue, air):
             t_stat = now
 
 
-def peer(a, ue, air):
+def peer(a, ue, air, on_reply=None):
     """Answers each poll at once; a repeated poll (its reply was lost) gets the same reply again."""
     st = dict(polls=0, repeats=0, up=0, down=0)
     last_seq, last_reply = None, b""
@@ -303,6 +393,8 @@ def peer(a, ue, air):
             out = ue.take_outbox()
             last_seq, last_reply = seq, pack_items(out)
             air.send(AIR_SLP, seq, last_reply)
+            if on_reply:
+                on_reply()
             st["polls"] += 1
             st["down"] += len(its)
             st["up"] += len(out)
@@ -320,8 +412,12 @@ def peer(a, ue, air):
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--role", choices=["master", "peer"], required=True)
-    ap.add_argument("--ue-port", type=int, required=True, help="UDP port the local nrUE's NRLINK_SL points at")
+    ap.add_argument("--role", choices=["master", "peer", "relay"], required=True)
+    ap.add_argument("--ue-port", type=int, help="UDP port the local nrUE's NRLINK_SL points at (master, peer)")
+    ap.add_argument("--link", type=int, default=0, help="link id of this bridge's hop (relay: the hop above it)")
+    ap.add_argument("--sense", type=float, default=0.0,
+                    help="board, master: quiet time before each poll (in a chain, 0.015)")
+    ap.add_argument("--down-sense", type=float, default=0.001, help="relay: quiet time before a poll of the hop below")
     ap.add_argument("--air", choices=["board", "udp"], default="board")
     ap.add_argument("--board", help="board serial (air board)")
     ap.add_argument("--channel", type=lambda x: int(x, 0), default=0x5A, help="GenFSK channel (0x2A = 2402 MHz)")
@@ -332,10 +428,37 @@ def main():
     ap.add_argument("--frag-gap", type=float, default=0.012, help="master: keep waiting while packets arrive this often")
     ap.add_argument("--retries", type=int, default=4, help="master: sends of one poll before giving up on it")
     ap.add_argument("--idle-poll", type=float, default=0.002, help="master: pause after an empty exchange")
+    ap.add_argument("--air-packets", type=int, default=20,
+                    help="radio packets per air message at most (in a chain, about 6: one round of the chain must "
+                         "stay well under the 100 ms an item may wait)")
+    ap.add_argument("--relay-idle", type=float, default=0.05,
+                    help="relay: poll the hop below at least this often when nothing comes from above")
     ap.add_argument("--pace", type=float, default=0.001, help="seconds between RUNs")
     ap.add_argument("--stats", type=float, default=5.0)
+    ap.add_argument("--down-air", choices=["same", "board", "udp"], default="same",
+                    help="relay: the hop below on the same board (default), another board, or UDP")
+    ap.add_argument("--down-board", help="relay, --down-air board: its serial")
+    ap.add_argument("--down-air-port", type=int, default=5710)
+    ap.add_argument("--down-peer", default="127.0.0.1:5711")
+    ap.add_argument("--debug-air", action="store_true", help="log every air message and radio packet")
     a = ap.parse_args()
-    air = Air(a)
+    AirDev.debug = a.debug_air
+    global air_max
+    air_max = a.air_packets * 248 - 2
+    dev = AirDev(a.air, a.board, a.channel, a.power, a.air_port, a.peer)
+    if a.role == "relay":
+        down_dev = {"same": lambda: dev,
+                    "board": lambda: AirDev("board", a.down_board, a.channel, a.power),
+                    "udp": lambda: AirDev("udp", port=a.down_air_port, peer=a.down_peer)}[a.down_air]()
+        up_air, down_air = Air(dev, a.link, 0.0), Air(down_dev, a.link + 1, a.down_sense)
+        up, down = RelaySide(), RelaySide()
+        up.other, down.other = down, up
+        log(f"relay: link {a.link} above ({a.air}), link {a.link + 1} below ({a.down_air})")
+        served = threading.Event()
+        threading.Thread(target=peer, args=(a, up, up_air, served.set), daemon=True).start()
+        master(a, down, down_air, served)
+        return
+    air = Air(dev, a.link, a.sense)
     ue = UE(a.ue_port)
     ue.wait_hello()
     threading.Thread(target=ue.pace, args=(a.pace,), daemon=True).start()

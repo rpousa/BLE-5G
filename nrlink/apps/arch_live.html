@@ -115,7 +115,7 @@ svg .led-gnb { animation: ledgnb 1.6s steps(1) infinite; }
 svg .led-b1 { animation: ledb1 1s steps(1) infinite; }
 svg .led-r2 { animation: ledr2 1s steps(1) infinite; }
 svg .led-g { fill: var(--n3); }
-@keyframes ledgnb { 0% { fill: var(--embb); } 50% { fill: var(--urllc); } }
+@keyframes ledgnb { 0% { fill: #2fa84f; } 66% { fill: #2f6fd6; } }
 @keyframes ledb1 { 0% { fill: var(--embb); } 12% { fill: var(--line); } }
 @keyframes ledr2 { 0% { fill: var(--urllc); } 12% { fill: var(--line); } 24% { fill: var(--urllc); } 36% { fill: var(--line); } }
 svg .ver { font-family: var(--mono); font-size: 10px; font-weight: 600; }
@@ -189,7 +189,7 @@ svg .led.live { animation: none !important; transition: fill .05s; }
         <span class="hint"><b>Live:</b> boxes and links turn red when a container, process, board or Bluetooth link is down. Figures on links are measured now: gnb_bridge and ue_bridge telemetry, pings from ext-dn and the core every 10 s, and the factory flows' medians (<a href="/">Factory Floor Live</a>). Moving dots run faster with more traffic. ↓ is downlink (core → UE) and ↑ uplink. Bluetooth throughput comes from the core's ble1/ble2 tunnel counters (down = core → UE). The LEDs follow the gNB bridge's real LED state.</span>
         <span class="label" style="margin-top:6px">Board LEDs, as on the desk</span>
         <div class="ledkey">
-          <span><i style="background:linear-gradient(90deg,var(--embb) 50%,var(--urllc) 50%)"></i>gNB board: blinks blue (eMBB) and red (URLLC) in turn</span>
+          <span><i style="background:linear-gradient(90deg,#2fa84f 66%,#2f6fd6 66%)"></i>gNB board: flashes green during the NR slots and blue during each sidelink window</span>
           <span><i style="background:var(--embb)"></i>UE1 board: blue, 1 blink</span>
           <span><i style="background:var(--urllc)"></i>UE2 board: red, 2 blinks</span>
           <span><i style="background:var(--n3)"></i>BLE1, BLE2: green while the board can take bytes; it flickers as the HCI RTS line (hci_bb v15)</span>
@@ -873,13 +873,13 @@ function liveDetail() {
   const dl = document.createElement("dl"); dl.className = "livedl"; dl.innerHTML = rows; box.querySelector("h3").after(dl);
 }
 const _select = select; select = s => { _select(s); liveDetail(); };
-// LEDs: the gNB board blinks the colour gnb_bridge reports (one blink per 0.4 s), UE boards blink when served, BLE boards green while connected
+// LEDs: the gNB board shows the slot scheme gnb_bridge reports (green = NR slots, blue = sidelink window), UE boards blink when served, BLE boards green while connected
 const LEDS = {}; document.querySelectorAll("#arch .led").forEach(c => { c.classList.add("live"); LEDS[c.closest(".node").dataset.id] = c; });
 let phase = 0;
 setInterval(() => {
   phase = (phase + 1) % 10;   // 100 ms steps
   const col = { 1: "var(--embb)", 2: "var(--urllc)" }, g = LV.tele.gnb, now = Date.now() / 1000;
-  const gl = LEDS.gbd; if (gl) gl.setAttribute("fill", LV.led.ue && now - LV.led.t < 2 && (phase % 4) < 2 ? col[LV.led.ue] : "var(--line)");
+  const gl = LEDS.gbd; if (gl) gl.setAttribute("fill", now - LV.led.t >= 2 ? "var(--line)" : LV.led.c ? ({ green: "#2fa84f", blue: "#2f6fd6" }[LV.led.c] || "var(--line)") : LV.led.ue && (phase % 4) < 2 ? col[LV.led.ue] : "var(--line)");
   const served = n => g && g.ue && g.ue[n] && (g.ue[n].dl_slots + g.ue[n].ul_slots) > 0;
   if (LEDS.u1b) LEDS.u1b.setAttribute("fill", served("1") && phase < 1 ? col[1] : "var(--line)");
   if (LEDS.u2b) LEDS.u2b.setAttribute("fill", served("2") && (phase === 0 || phase === 2) ? col[2] : "var(--line)");
@@ -892,7 +892,7 @@ function connect() {
     if (e.k === "hello") { Object.assign(LV.health, e.health); Object.assign(LV.tele, e.tele); LV.pings = e.pings || {}; LV.stats = e.stats; LV.dst = e.dst || {}; }
     else if (e.k === "health") LV.health[e.pc] = e;
     else if (e.k === "tele") LV.tele[e.id === "gnb" ? "gnb" : "ue" + e.id] = e;
-    else if (e.k === "led") LV.led = { ue: e.ue, t: Date.now() / 1000 };
+    else if (e.k === "led") LV.led = { ue: e.ue, c: e.c, t: Date.now() / 1000 };
     else if (e.k === "pings") LV.pings = e;
     else if (e.k === "status") { LV.stats = e.stats; LV.dst = e.dst; }
     else return;

@@ -353,10 +353,10 @@ def telemetry_rx():
                 st["tele"]["gnb"] = m
             push(m)
         elif m.get("k") == "led":
-            led = (m["ue"], m["ul"])
+            led = (m["ue"], m["ul"], m.get("c"))
             if led != last_led or time.time() - last_push > 1:
                 last_led, last_push = led, time.time()
-                push({"k": "led", "ue": m["ue"], "ul": m["ul"], "t": m["t"]})
+                push({"k": "led", "ue": m["ue"], "ul": m["ul"], "c": m.get("c"), "t": m["t"]})
 
 
 def ble_rates():

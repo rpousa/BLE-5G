@@ -1,0 +1,142 @@
+--- a/executables/nr-ue.c
++++ b/executables/nr-ue.c
+@@ -1099,8 +1099,14 @@
+       }
+       if (UE->sl_mode == 1 && mac->state == UE_CONNECTED) {
+         pthread_t threads_sl;
+-        threadCreate(&threads_sl, UE_thread_sl, (void *)UE, "UE_thread_sl", -1, OAI_PRIORITY_RT_MAX);
+-        threadCreate(&threads_sl, UE_RU_thread_sl, (void *)UE, "UE_RU_thread_sl", -1, OAI_PRIORITY_RT_MAX);
++        if (getenv("NRLINK_SL")) {
++          /* nrlink: mode 1 sidelink L1 emulated over the nrlink boards (executables/nrlink_sl.c) */
++          extern void *nrlink_sl_thread(void *arg);
++          threadCreate(&threads_sl, nrlink_sl_thread, (void *)UE, "nrlink_sl", -1, OAI_PRIORITY_RT_MAX);
++        } else {
++          threadCreate(&threads_sl, UE_thread_sl, (void *)UE, "UE_thread_sl", -1, OAI_PRIORITY_RT_MAX);
++          threadCreate(&threads_sl, UE_RU_thread_sl, (void *)UE, "UE_RU_thread_sl", -1, OAI_PRIORITY_RT_MAX);
++        }
+         break;
+       }
+     }
+@@ -1409,7 +1415,11 @@
+       threadCreate(&threads[inst], UE_thread, (void *)UE, "UE_thread", -1, OAI_PRIORITY_RT_MAX);
+       threadCreate(&threads[inst], UE_RU_thread, (void *)UE, "UE_RU_thread", -1, OAI_PRIORITY_RT_MAX);
+     }
+-    else {
++    else if (getenv("NRLINK_SL")) {
++      /* nrlink: sidelink L1 emulated over the nrlink boards (executables/nrlink_sl.c) */
++      extern void *nrlink_sl_thread(void *arg);
++      threadCreate(&threads_sl[inst], nrlink_sl_thread, (void *)UE, "nrlink_sl", -1, OAI_PRIORITY_RT_MAX);
++    } else {
+       threadCreate(&threads_sl[inst], UE_thread_sl, (void *)UE, "UE_thread_sl", -1, OAI_PRIORITY_RT_MAX);
+       threadCreate(&threads_sl[inst], UE_RU_thread_sl, (void *)UE, "UE_RU_thread_sl", -1, OAI_PRIORITY_RT_MAX);
+     }
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -2146,6 +2146,7 @@
+ #  ${OPENAIR_BIN_DIR}/messages_xml.h
+   ${OPENAIR_DIR}/executables/nr-uesoftmodem.c
+   ${OPENAIR_DIR}/executables/nr-ue.c
++  ${OPENAIR_DIR}/executables/nrlink_sl.c
+   ${OPENAIR_DIR}/executables/softmodem-common.c
+   ${OPENAIR_DIR}/radio/COMMON/common_lib.c
+   ${OPENAIR_DIR}/radio/COMMON/record_player.c
+--- a/openair2/SDAP/nr_sdap/nr_sdap_entity.c
++++ b/openair2/SDAP/nr_sdap/nr_sdap_entity.c
+@@ -81,7 +81,12 @@
+     int last_octet = bytes[3];
+     LOG_D(SDAP, "The last octet = %d\n", last_octet);
+     // Fix me: The last octet of remote UE IP address was assumed to have 100.
+-    *sdap_drb_id = (last_octet == 100) ? 2 : 1;
++    // nrlink: NRLINK_REMOTE_IP=<a.b.c.d> names the remote UE address instead (it may share the relay UE PDU address)
++    const char *rip = getenv("NRLINK_REMOTE_IP");
++    if (rip)
++      *sdap_drb_id = strcmp(dst_ip, rip) == 0 ? 2 : 1;
++    else
++      *sdap_drb_id = (last_octet == 100) ? 2 : 1;
+   }
+ }
+ 
+--- a/openair3/NAS/NR_UE/nr_nas_msg_sim.c
++++ b/openair3/NAS/NR_UE/nr_nas_msg_sim.c
+@@ -480,6 +480,16 @@
+   initialNasMsg->length = mm_msg_encode(mm_msg, (uint8_t*)(initialNasMsg->data), size);
+   registration_request_len = initialNasMsg->length;
+ 
++  /* nrlink: the full Registration Request in the Security Mode Complete container also carries the
++   * non-cleartext 5GMM capability IE (24.501 8.2.6.3); free5GC rejects the registration without it. */
++  mm_msg->registration_request.presencemask |= REGISTRATION_REQUEST_5GMM_CAPABILITY_PRESENT;
++  mm_msg->registration_request.fgmmcapability.iei = REGISTRATION_REQUEST_5GMM_CAPABILITY_IEI;
++  mm_msg->registration_request.fgmmcapability.length = 1;
++  mm_msg->registration_request.fgmmcapability.value = 0x0;
++  uint8_t *full = malloc16_clear((size + 3) * sizeof(Byte_t));
++  registration_request_len = mm_msg_encode(mm_msg, full, size + 3);
++  registration_request_buf = full;
++
+ }
+ 
+ void generateIdentityResponse(as_nas_info_t *initialNasMsg, uint8_t identitytype, uicc_t* uicc) {
+@@ -747,7 +757,7 @@
+   fgs_deregistration_request_ue_originating_msg *dereg_req = &sp_msg->plain.mm_msg.fgs_deregistration_request_ue_originating;
+   dereg_req->protocoldiscriminator = FGS_MOBILITY_MANAGEMENT_MESSAGE;
+   size += 1;
+-  dereg_req->securityheadertype = INTEGRITY_PROTECTED_AND_CIPHERED_WITH_NEW_SECU_CTX;
++  dereg_req->securityheadertype = INTEGRITY_PROTECTED_AND_CIPHERED; /* nrlink: was ..._WITH_NEW_SECU_CTX, valid only for Security Mode Complete */
+   size += 1;
+   dereg_req->messagetype = FGS_DEREGISTRATION_REQUEST_UE_ORIGINATING;
+   size += 1;
+@@ -805,7 +815,10 @@
+   nas_stream_cipher_t stream_cipher;
+   uint8_t             mac[4];
+   nas_msg.header.protocol_discriminator = FGS_MOBILITY_MANAGEMENT_MESSAGE;
+-  nas_msg.header.security_header_type = INTEGRITY_PROTECTED_AND_CIPHERED_WITH_NEW_SECU_CTX;
++  nas_msg.header.security_header_type = INTEGRITY_PROTECTED_AND_CIPHERED; /* nrlink: was ..._WITH_NEW_SECU_CTX, free5GC rejects it */
++  /* nrlink: one uplink NAS COUNT per security context (24.501 4.4.3.1); the sequence number carries its low byte */
++  uint32_t ul_count = nas->security.mm_counter++;
++  nas_msg.header.sequence_number = ul_count & 0xff;
+   size += 7;
+ 
+   mm_msg = &nas_msg.security_protected.plain.mm_msg;
+@@ -861,7 +874,7 @@
+ 
+   stream_cipher.key        = nas->security.knas_int;
+   stream_cipher.key_length = 16;
+-  stream_cipher.count      = nas->security.sm_counter++;
++  stream_cipher.count      = ul_count;
+   stream_cipher.bearer     = 1;
+   stream_cipher.direction  = 0;
+   stream_cipher.message    = (unsigned char *)(initialNasMsg->data + 6);
+--- a/openair2/RRC/NR_UE/rrc_UE.c
++++ b/openair2/RRC/NR_UE/rrc_UE.c
+@@ -744,7 +744,8 @@
+       default:
+         break;
+     }
+-    nr_rrc_set_sub_state(module_id, RRC_SUB_STATE_IDLE_SIB_COMPLETE_NR);
++    if (NR_UE_rrc_inst[module_id].nrRrcState == RRC_STATE_IDLE_NR) /* nrlink: as above */
++      nr_rrc_set_sub_state(module_id, RRC_SUB_STATE_IDLE_SIB_COMPLETE_NR);
+   }
+   VCD_SIGNAL_DUMPER_DUMP_FUNCTION_BY_NAME(VCD_SIGNAL_DUMPER_FUNCTIONS_RRC_UE_DECODE_SI, VCD_FUNCTION_OUT);
+   return 0;
+@@ -820,6 +821,10 @@
+   NR_UE_RRC_SI_INFO *SI_info = &NR_UE_rrc_inst[module_id].SInfo[gNB_index];
+   VCD_SIGNAL_DUMPER_DUMP_FUNCTION_BY_NAME(VCD_SIGNAL_DUMPER_FUNCTIONS_UE_DECODE_BCCH, VCD_FUNCTION_IN);
+ 
++  /* nrlink: ignore SI while connected. Re-decoding SIB1 frees the structure that the MAC current BWP points into
++   * (use-after-free in get_pucch_tx_power_ue), and the idle sub-state below asserts in RRC CONNECTED. */
++  if (NR_UE_rrc_inst[module_id].nrRrcState != RRC_STATE_IDLE_NR)
++    return 0;
+   nr_rrc_set_sub_state(module_id, RRC_SUB_STATE_IDLE_RECEIVING_SIB_NR);
+ 
+   asn_dec_rval_t dec_rval = uper_decode_complete(NULL,
+@@ -2912,7 +2917,10 @@
+          NR_UE_Timers_Constants_t *timers = &NR_UE_rrc_inst[ue_mod_id].timers_and_constants;
+          nr_rrc_handle_timers(timers);
+          NR_UE_RRC_SI_INFO *SInfo = &NR_UE_rrc_inst[ue_mod_id].SInfo[NRRRC_SLOT_PROCESS (msg_p).gnb_id];
+-         nr_rrc_SI_timers(SInfo);
++         /* nrlink: nr_rrc_SI_timers counts 10 ms per call, but this message comes every slot (and from both the Uu
++          * and the sidelink loops): SIB1 was freed after 9 minutes instead of 3 hours, leaving the MAC pointing into it */
++         if (NRRRC_SLOT_PROCESS (msg_p).slot == 0)
++           nr_rrc_SI_timers(SInfo);
+ #ifdef PERIODIC_UE_ASSISTANCE_INFO
+          if(NRRRC_SLOT_PROCESS (msg_p).frame % 128 == 0 && NRRRC_SLOT_PROCESS (msg_p).slot == 0 && get_NAS_status()) {
+             uint32_t length;

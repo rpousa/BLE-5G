@@ -1,0 +1,130 @@
+17:47:20 board 3TJ2B15JGASV3 nrlink v4
+17:47:20 relay: link 0 above (board), link 1 below (same)
+17:47:25 UE slot 0: 0 slots/s in 0 RUNs/s; air 40 polls/s, 162 replies, 41 timeouts, 31 resends, items out 59 in 0, 2.4 kbit/s, backlog 0, dropped 0
+17:47:25 UE slot 0: 0 slots/s in 0 RUNs/s; air 30 polls/s, 0 repeats, items in 59 out 0, backlog 0, dropped 0
+17:47:30 UE slot 0: 0 slots/s in 0 RUNs/s; air 32 polls/s, 90 replies, 72 timeouts, 54 resends, items out 40 in 1, 2.0 kbit/s, backlog 0, dropped 2
+17:47:30 UE slot 0: 0 slots/s in 0 RUNs/s; air 22 polls/s, 0 repeats, items in 47 out 1, backlog 0, dropped 0
+17:47:35 UE slot 0: 0 slots/s in 0 RUNs/s; air 48 polls/s, 242 replies, 0 timeouts, 0 resends, items out 95 in 1, 3.8 kbit/s, backlog 0, dropped 2
+17:47:35 UE slot 0: 0 slots/s in 0 RUNs/s; air 48 polls/s, 0 repeats, items in 94 out 1, backlog 0, dropped 0
+17:47:40 UE slot 0: 0 slots/s in 0 RUNs/s; air 48 polls/s, 239 replies, 0 timeouts, 0 resends, items out 94 in 1, 3.6 kbit/s, backlog 0, dropped 2
+17:47:40 UE slot 0: 0 slots/s in 0 RUNs/s; air 48 polls/s, 1 repeats, items in 94 out 1, backlog 0, dropped 0
+17:47:45 UE slot 0: 0 slots/s in 0 RUNs/s; air 48 polls/s, 241 replies, 1 timeouts, 1 resends, items out 95 in 0, 3.7 kbit/s, backlog 0, dropped 2
+17:47:45 UE slot 0: 0 slots/s in 0 RUNs/s; air 48 polls/s, 0 repeats, items in 95 out 0, backlog 0, dropped 0
+17:47:50 UE slot 0: 0 slots/s in 0 RUNs/s; air 48 polls/s, 241 replies, 0 timeouts, 0 resends, items out 94 in 0, 3.5 kbit/s, backlog 0, dropped 2
+17:47:50 UE slot 0: 0 slots/s in 0 RUNs/s; air 48 polls/s, 0 repeats, items in 94 out 0, backlog 0, dropped 0
+17:47:55 UE slot 0: 0 slots/s in 0 RUNs/s; air 48 polls/s, 240 replies, 0 timeouts, 0 resends, items out 94 in 1, 3.6 kbit/s, backlog 0, dropped 2
+17:47:55 UE slot 0: 0 slots/s in 0 RUNs/s; air 48 polls/s, 0 repeats, items in 94 out 1, backlog 0, dropped 0
+17:48:00 UE slot 0: 0 slots/s in 0 RUNs/s; air 47 polls/s, 238 replies, 0 timeouts, 0 resends, items out 94 in 0, 3.5 kbit/s, backlog 0, dropped 2
+17:48:00 UE slot 0: 0 slots/s in 0 RUNs/s; air 48 polls/s, 1 repeats, items in 94 out 0, backlog 0, dropped 0
+17:48:05 UE slot 0: 0 slots/s in 0 RUNs/s; air 48 polls/s, 239 replies, 0 timeouts, 0 resends, items out 95 in 0, 3.6 kbit/s, backlog 0, dropped 2
+17:48:05 UE slot 0: 0 slots/s in 0 RUNs/s; air 48 polls/s, 1 repeats, items in 95 out 0, backlog 0, dropped 0
+17:48:10 UE slot 0: 0 slots/s in 0 RUNs/s; air 47 polls/s, 235 replies, 0 timeouts, 0 resends, items out 98 in 5, 5.3 kbit/s, backlog 0, dropped 2
+17:48:10 UE slot 0: 0 slots/s in 0 RUNs/s; air 47 polls/s, 1 repeats, items in 99 out 5, backlog 0, dropped 0
+17:48:15 UE slot 0: 0 slots/s in 0 RUNs/s; air 46 polls/s, 230 replies, 0 timeouts, 0 resends, items out 104 in 10, 7.4 kbit/s, backlog 0, dropped 2
+17:48:15 UE slot 0: 0 slots/s in 0 RUNs/s; air 46 polls/s, 2 repeats, items in 104 out 10, backlog 0, dropped 0
+17:48:20 UE slot 0: 0 slots/s in 0 RUNs/s; air 45 polls/s, 221 replies, 2 timeouts, 2 resends, items out 105 in 10, 14.7 kbit/s, backlog 0, dropped 2
+17:48:20 UE slot 0: 0 slots/s in 0 RUNs/s; air 44 polls/s, 0 repeats, items in 105 out 11, backlog 0, dropped 0
+17:48:25 UE slot 0: 0 slots/s in 0 RUNs/s; air 42 polls/s, 209 replies, 3 timeouts, 3 resends, items out 104 in 11, 21.6 kbit/s, backlog 0, dropped 2
+17:48:25 UE slot 0: 0 slots/s in 0 RUNs/s; air 41 polls/s, 1 repeats, items in 104 out 11, backlog 0, dropped 0
+17:48:30 UE slot 0: 0 slots/s in 0 RUNs/s; air 37 polls/s, 178 replies, 5 timeouts, 4 resends, items out 101 in 11, 47.4 kbit/s, backlog 0, dropped 6
+17:48:30 UE slot 0: 0 slots/s in 0 RUNs/s; air 35 polls/s, 1 repeats, items in 104 out 10, backlog 0, dropped 0
+17:48:35 UE slot 0: 0 slots/s in 0 RUNs/s; air 35 polls/s, 171 replies, 6 timeouts, 5 resends, items out 97 in 10, 56.6 kbit/s, backlog 0, dropped 10
+17:48:35 UE slot 0: 0 slots/s in 0 RUNs/s; air 31 polls/s, 1 repeats, items in 102 out 10, backlog 0, dropped 0
+17:48:40 UE slot 0: 0 slots/s in 0 RUNs/s; air 27 polls/s, 133 replies, 5 timeouts, 5 resends, items out 103 in 40, 76.8 kbit/s, backlog 0, dropped 10
+17:48:40 UE slot 0: 0 slots/s in 0 RUNs/s; air 23 polls/s, 2 repeats, items in 101 out 42, backlog 0, dropped 0
+17:48:45 UE slot 0: 0 slots/s in 0 RUNs/s; air 17 polls/s, 77 replies, 6 timeouts, 6 resends, items out 92 in 63, 110.0 kbit/s, backlog 0, dropped 10
+17:48:45 UE slot 0: 0 slots/s in 0 RUNs/s; air 15 polls/s, 1 repeats, items in 92 out 62, backlog 1, dropped 0
+17:48:50 UE slot 0: 0 slots/s in 0 RUNs/s; air 17 polls/s, 77 replies, 7 timeouts, 7 resends, items out 95 in 63, 109.8 kbit/s, backlog 0, dropped 10
+17:48:50 UE slot 0: 0 slots/s in 0 RUNs/s; air 15 polls/s, 0 repeats, items in 95 out 64, backlog 0, dropped 0
+17:48:55 UE slot 0: 0 slots/s in 0 RUNs/s; air 30 polls/s, 138 replies, 14 timeouts, 13 resends, items out 95 in 36, 61.8 kbit/s, backlog 0, dropped 13
+17:48:55 UE slot 0: 0 slots/s in 0 RUNs/s; air 30 polls/s, 0 repeats, items in 99 out 34, backlog 0, dropped 0
+17:49:00 UE slot 0: 0 slots/s in 0 RUNs/s; air 31 polls/s, 151 replies, 6 timeouts, 6 resends, items out 95 in 38, 61.8 kbit/s, backlog 0, dropped 13
+17:49:00 UE slot 0: 0 slots/s in 0 RUNs/s; air 29 polls/s, 0 repeats, items in 96 out 39, backlog 1, dropped 1
+17:49:05 UE slot 0: 0 slots/s in 0 RUNs/s; air 17 polls/s, 66 replies, 18 timeouts, 18 resends, items out 89 in 66, 115.7 kbit/s, backlog 0, dropped 13
+17:49:06 UE slot 0: 0 slots/s in 0 RUNs/s; air 13 polls/s, 2 repeats, items in 91 out 64, backlog 1, dropped 4
+17:49:10 UE slot 0: 0 slots/s in 0 RUNs/s; air 16 polls/s, 68 replies, 12 timeouts, 12 resends, items out 93 in 68, 117.5 kbit/s, backlog 0, dropped 13
+17:49:11 UE slot 0: 0 slots/s in 0 RUNs/s; air 13 polls/s, 1 repeats, items in 93 out 67, backlog 0, dropped 6
+17:49:15 UE slot 0: 0 slots/s in 0 RUNs/s; air 31 polls/s, 143 replies, 10 timeouts, 10 resends, items out 97 in 38, 64.3 kbit/s, backlog 0, dropped 13
+17:49:16 UE slot 0: 0 slots/s in 0 RUNs/s; air 31 polls/s, 1 repeats, items in 96 out 32, backlog 0, dropped 8
+17:49:20 UE slot 0: 0 slots/s in 0 RUNs/s; air 31 polls/s, 150 replies, 5 timeouts, 5 resends, items out 97 in 40, 64.6 kbit/s, backlog 0, dropped 13
+17:49:21 UE slot 0: 0 slots/s in 0 RUNs/s; air 27 polls/s, 1 repeats, items in 98 out 42, backlog 1, dropped 9
+17:49:25 UE slot 0: 0 slots/s in 0 RUNs/s; air 15 polls/s, 68 replies, 10 timeouts, 10 resends, items out 94 in 68, 117.7 kbit/s, backlog 0, dropped 13
+17:49:26 UE slot 0: 0 slots/s in 0 RUNs/s; air 14 polls/s, 1 repeats, items in 94 out 65, backlog 1, dropped 12
+17:49:30 UE slot 0: 0 slots/s in 0 RUNs/s; air 16 polls/s, 67 replies, 12 timeouts, 12 resends, items out 90 in 67, 116.6 kbit/s, backlog 0, dropped 13
+17:49:31 UE slot 0: 0 slots/s in 0 RUNs/s; air 13 polls/s, 2 repeats, items in 90 out 63, backlog 1, dropped 16
+17:49:35 UE slot 0: 0 slots/s in 0 RUNs/s; air 31 polls/s, 148 replies, 9 timeouts, 9 resends, items out 95 in 35, 58.9 kbit/s, backlog 0, dropped 13
+17:49:36 UE slot 0: 0 slots/s in 0 RUNs/s; air 32 polls/s, 1 repeats, items in 94 out 31, backlog 0, dropped 17
+17:49:40 UE slot 0: 0 slots/s in 0 RUNs/s; air 30 polls/s, 144 replies, 8 timeouts, 8 resends, items out 94 in 40, 65.2 kbit/s, backlog 0, dropped 14
+17:49:41 UE slot 0: 0 slots/s in 0 RUNs/s; air 27 polls/s, 0 repeats, items in 95 out 43, backlog 1, dropped 17
+17:49:45 UE slot 0: 0 slots/s in 0 RUNs/s; air 16 polls/s, 67 replies, 13 timeouts, 13 resends, items out 95 in 67, 117.2 kbit/s, backlog 0, dropped 14
+17:49:46 UE slot 0: 0 slots/s in 0 RUNs/s; air 14 polls/s, 1 repeats, items in 95 out 65, backlog 1, dropped 19
+17:49:50 UE slot 0: 0 slots/s in 0 RUNs/s; air 15 polls/s, 67 replies, 6 timeouts, 6 resends, items out 92 in 67, 116.9 kbit/s, backlog 2, dropped 14
+17:49:51 UE slot 0: 0 slots/s in 0 RUNs/s; air 14 polls/s, 1 repeats, items in 94 out 67, backlog 1, dropped 20
+17:49:55 UE slot 0: 0 slots/s in 0 RUNs/s; air 31 polls/s, 150 replies, 8 timeouts, 8 resends, items out 99 in 36, 60.4 kbit/s, backlog 0, dropped 14
+17:49:56 UE slot 0: 0 slots/s in 0 RUNs/s; air 32 polls/s, 0 repeats, items in 98 out 31, backlog 0, dropped 21
+17:50:01 UE slot 0: 0 slots/s in 0 RUNs/s; air 29 polls/s, 148 replies, 1 timeouts, 1 resends, items out 131 in 6, 64.6 kbit/s, backlog 0, dropped 14
+17:50:01 UE slot 0: 0 slots/s in 0 RUNs/s; air 27 polls/s, 0 repeats, items in 135 out 6, backlog 0, dropped 21
+17:50:06 UE slot 0: 0 slots/s in 0 RUNs/s; air 15 polls/s, 65 replies, 13 timeouts, 10 resends, items out 134 in 0, 108.9 kbit/s, backlog 0, dropped 19
+17:50:06 UE slot 0: 0 slots/s in 0 RUNs/s; air 14 polls/s, 0 repeats, items in 137 out 0, backlog 0, dropped 21
+17:50:11 UE slot 0: 0 slots/s in 0 RUNs/s; air 16 polls/s, 81 replies, 4 timeouts, 3 resends, items out 157 in 0, 108.6 kbit/s, backlog 2, dropped 19
+17:50:11 UE slot 0: 0 slots/s in 0 RUNs/s; air 15 polls/s, 0 repeats, items in 153 out 0, backlog 0, dropped 21
+17:50:16 UE slot 0: 0 slots/s in 0 RUNs/s; air 34 polls/s, 171 replies, 1 timeouts, 1 resends, items out 124 in 4, 50.1 kbit/s, backlog 0, dropped 21
+17:50:16 UE slot 0: 0 slots/s in 0 RUNs/s; air 34 polls/s, 0 repeats, items in 122 out 4, backlog 0, dropped 21
+17:50:21 UE slot 0: 0 slots/s in 0 RUNs/s; air 26 polls/s, 129 replies, 0 timeouts, 0 resends, items out 128 in 6, 78.3 kbit/s, backlog 0, dropped 21
+17:50:21 UE slot 0: 0 slots/s in 0 RUNs/s; air 25 polls/s, 0 repeats, items in 131 out 6, backlog 0, dropped 21
+17:50:26 UE slot 0: 0 slots/s in 0 RUNs/s; air 14 polls/s, 58 replies, 11 timeouts, 9 resends, items out 126 in 0, 113.9 kbit/s, backlog 0, dropped 21
+17:50:26 UE slot 0: 0 slots/s in 0 RUNs/s; air 11 polls/s, 1 repeats, items in 126 out 0, backlog 0, dropped 21
+17:50:31 UE slot 0: 0 slots/s in 0 RUNs/s; air 14 polls/s, 68 replies, 0 timeouts, 0 resends, items out 146 in 0, 118.1 kbit/s, backlog 0, dropped 21
+17:50:31 UE slot 0: 0 slots/s in 0 RUNs/s; air 14 polls/s, 0 repeats, items in 146 out 0, backlog 0, dropped 21
+17:50:36 UE slot 0: 0 slots/s in 0 RUNs/s; air 33 polls/s, 149 replies, 14 timeouts, 11 resends, items out 96 in 4, 49.9 kbit/s, backlog 0, dropped 25
+17:50:36 UE slot 0: 0 slots/s in 0 RUNs/s; air 31 polls/s, 1 repeats, items in 98 out 4, backlog 0, dropped 21
+17:50:41 UE slot 0: 0 slots/s in 0 RUNs/s; air 25 polls/s, 123 replies, 4 timeouts, 3 resends, items out 123 in 6, 78.1 kbit/s, backlog 0, dropped 28
+17:50:41 UE slot 0: 0 slots/s in 0 RUNs/s; air 24 polls/s, 0 repeats, items in 128 out 6, backlog 0, dropped 21
+17:50:46 UE slot 0: 0 slots/s in 0 RUNs/s; air 14 polls/s, 58 replies, 11 timeouts, 9 resends, items out 130 in 0, 113.1 kbit/s, backlog 0, dropped 30
+17:50:46 UE slot 0: 0 slots/s in 0 RUNs/s; air 12 polls/s, 1 repeats, items in 133 out 0, backlog 0, dropped 21
+17:50:51 UE slot 0: 0 slots/s in 0 RUNs/s; air 13 polls/s, 64 replies, 8 timeouts, 6 resends, items out 142 in 0, 115.9 kbit/s, backlog 2, dropped 33
+17:50:51 UE slot 0: 0 slots/s in 0 RUNs/s; air 13 polls/s, 0 repeats, items in 144 out 0, backlog 0, dropped 21
+17:50:56 UE slot 0: 0 slots/s in 0 RUNs/s; air 33 polls/s, 160 replies, 5 timeouts, 4 resends, items out 119 in 6, 52.2 kbit/s, backlog 0, dropped 38
+17:50:56 UE slot 0: 0 slots/s in 0 RUNs/s; air 33 polls/s, 0 repeats, items in 120 out 6, backlog 0, dropped 21
+17:51:01 UE slot 0: 0 slots/s in 0 RUNs/s; air 35 polls/s, 167 replies, 9 timeouts, 9 resends, items out 112 in 21, 51.9 kbit/s, backlog 0, dropped 38
+17:51:01 UE slot 0: 0 slots/s in 0 RUNs/s; air 32 polls/s, 1 repeats, items in 112 out 21, backlog 0, dropped 21
+17:51:06 UE slot 0: 0 slots/s in 0 RUNs/s; air 27 polls/s, 121 replies, 15 timeouts, 15 resends, items out 111 in 26, 80.5 kbit/s, backlog 0, dropped 38
+17:51:06 UE slot 0: 0 slots/s in 0 RUNs/s; air 21 polls/s, 0 repeats, items in 113 out 26, backlog 0, dropped 21
+17:51:11 UE slot 0: 0 slots/s in 0 RUNs/s; air 20 polls/s, 3 repeats, items in 119 out 31, backlog 0, dropped 21
+17:51:11 UE slot 0: 0 slots/s in 0 RUNs/s; air 26 polls/s, 124 replies, 10 timeouts, 10 resends, items out 121 in 31, 86.0 kbit/s, backlog 2, dropped 38
+17:51:17 UE slot 0: 0 slots/s in 0 RUNs/s; air 21 polls/s, 1 repeats, items in 118 out 28, backlog 0, dropped 21
+17:51:17 UE slot 0: 0 slots/s in 0 RUNs/s; air 27 polls/s, 131 replies, 8 timeouts, 8 resends, items out 118 in 28, 83.3 kbit/s, backlog 2, dropped 38
+17:51:22 UE slot 0: 0 slots/s in 0 RUNs/s; air 20 polls/s, 0 repeats, items in 111 out 27, backlog 0, dropped 21
+17:51:22 UE slot 0: 0 slots/s in 0 RUNs/s; air 27 polls/s, 121 replies, 13 timeouts, 13 resends, items out 111 in 27, 81.1 kbit/s, backlog 2, dropped 38
+17:51:27 UE slot 0: 0 slots/s in 0 RUNs/s; air 21 polls/s, 1 repeats, items in 117 out 28, backlog 0, dropped 21
+17:51:27 UE slot 0: 0 slots/s in 0 RUNs/s; air 27 polls/s, 127 replies, 10 timeouts, 10 resends, items out 118 in 28, 82.8 kbit/s, backlog 0, dropped 38
+17:51:32 UE slot 0: 0 slots/s in 0 RUNs/s; air 35 polls/s, 0 repeats, items in 113 out 19, backlog 0, dropped 21
+17:51:32 UE slot 0: 0 slots/s in 0 RUNs/s; air 38 polls/s, 183 replies, 7 timeouts, 7 resends, items out 113 in 19, 43.3 kbit/s, backlog 0, dropped 38
+17:51:37 UE slot 0: 0 slots/s in 0 RUNs/s; air 34 polls/s, 153 replies, 20 timeouts, 20 resends, items out 72 in 11, 16.4 kbit/s, backlog 0, dropped 38
+17:51:37 UE slot 0: 0 slots/s in 0 RUNs/s; air 26 polls/s, 0 repeats, items in 75 out 11, backlog 0, dropped 21
+17:51:42 UE slot 0: 0 slots/s in 0 RUNs/s; air 24 polls/s, 89 replies, 32 timeouts, 32 resends, items out 50 in 7, 22.9 kbit/s, backlog 1, dropped 38
+17:51:42 UE slot 0: 0 slots/s in 0 RUNs/s; air 10 polls/s, 3 repeats, items in 51 out 7, backlog 0, dropped 21
+17:51:47 UE slot 0: 0 slots/s in 0 RUNs/s; air 12 polls/s, 1 repeats, items in 53 out 7, backlog 0, dropped 21
+17:51:47 UE slot 0: 0 slots/s in 0 RUNs/s; air 24 polls/s, 92 replies, 34 timeouts, 33 resends, items out 51 in 7, 34.1 kbit/s, backlog 9, dropped 38
+17:51:52 UE slot 0: 0 slots/s in 0 RUNs/s; air 14 polls/s, 2 repeats, items in 59 out 7, backlog 0, dropped 21
+17:51:52 UE slot 0: 0 slots/s in 0 RUNs/s; air 26 polls/s, 105 replies, 28 timeouts, 28 resends, items out 58 in 7, 23.2 kbit/s, backlog 1, dropped 43
+17:51:57 UE slot 0: 0 slots/s in 0 RUNs/s; air 9 polls/s, 3 repeats, items in 48 out 8, backlog 0, dropped 21
+17:51:57 UE slot 0: 0 slots/s in 0 RUNs/s; air 24 polls/s, 87 replies, 32 timeouts, 32 resends, items out 49 in 8, 31.9 kbit/s, backlog 0, dropped 43
+17:52:02 UE slot 0: 0 slots/s in 0 RUNs/s; air 9 polls/s, 0 repeats, items in 48 out 7, backlog 0, dropped 21
+17:52:02 UE slot 0: 0 slots/s in 0 RUNs/s; air 23 polls/s, 85 replies, 31 timeouts, 31 resends, items out 48 in 7, 26.3 kbit/s, backlog 1, dropped 43
+17:52:07 UE slot 0: 0 slots/s in 0 RUNs/s; air 24 polls/s, 3 repeats, items in 76 out 8, backlog 0, dropped 23
+17:52:07 UE slot 0: 0 slots/s in 0 RUNs/s; air 32 polls/s, 135 replies, 23 timeouts, 22 resends, items out 70 in 10, 29.4 kbit/s, backlog 0, dropped 50
+17:52:12 UE slot 0: 0 slots/s in 0 RUNs/s; air 36 polls/s, 0 repeats, items in 109 out 18, backlog 0, dropped 23
+17:52:12 UE slot 0: 0 slots/s in 0 RUNs/s; air 37 polls/s, 185 replies, 4 timeouts, 4 resends, items out 109 in 19, 45.1 kbit/s, backlog 0, dropped 50
+17:52:17 UE slot 0: 0 slots/s in 0 RUNs/s; air 21 polls/s, 2 repeats, items in 119 out 32, backlog 0, dropped 23
+17:52:17 UE slot 0: 0 slots/s in 0 RUNs/s; air 27 polls/s, 131 replies, 6 timeouts, 6 resends, items out 119 in 32, 83.6 kbit/s, backlog 0, dropped 50
+17:52:22 UE slot 0: 0 slots/s in 0 RUNs/s; air 22 polls/s, 1 repeats, items in 130 out 36, backlog 0, dropped 23
+17:52:22 UE slot 0: 0 slots/s in 0 RUNs/s; air 27 polls/s, 135 replies, 3 timeouts, 3 resends, items out 130 in 36, 85.5 kbit/s, backlog 0, dropped 50
+17:52:27 UE slot 0: 0 slots/s in 0 RUNs/s; air 19 polls/s, 1 repeats, items in 127 out 40, backlog 0, dropped 23
+17:52:27 UE slot 0: 0 slots/s in 0 RUNs/s; air 25 polls/s, 122 replies, 5 timeouts, 5 resends, items out 129 in 39, 90.6 kbit/s, backlog 0, dropped 50
+17:52:32 UE slot 0: 0 slots/s in 0 RUNs/s; air 22 polls/s, 1 repeats, items in 122 out 31, backlog 0, dropped 23
+17:52:32 UE slot 0: 0 slots/s in 0 RUNs/s; air 27 polls/s, 118 replies, 19 timeouts, 19 resends, items out 119 in 31, 82.1 kbit/s, backlog 2, dropped 50
+17:52:37 UE slot 0: 0 slots/s in 0 RUNs/s; air 31 polls/s, 0 repeats, items in 113 out 22, backlog 0, dropped 23
+17:52:37 UE slot 0: 0 slots/s in 0 RUNs/s; air 35 polls/s, 166 replies, 8 timeouts, 8 resends, items out 113 in 22, 54.7 kbit/s, backlog 0, dropped 50
+17:52:42 UE slot 0: 0 slots/s in 0 RUNs/s; air 48 polls/s, 0 repeats, items in 93 out 0, backlog 0, dropped 23
+17:52:42 UE slot 0: 0 slots/s in 0 RUNs/s; air 48 polls/s, 240 replies, 1 timeouts, 1 resends, items out 94 in 0, 3.5 kbit/s, backlog 0, dropped 50

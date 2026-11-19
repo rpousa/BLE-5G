@@ -24,13 +24,21 @@ ABOUT = {
                                 "slot schemes, packet sequences, stress tests and the NR against Bluetooth comparison.",
     "agv-testbed.html": "LiDAR scans over NR and detections over Bluetooth at once: campaign results by load, mode, "
                         "power and fade, with a replay of the tuned run.",
+    "agv-relay-chain.html": "Three AGVs and a gNB pole: the AGV nearest the pole talks to the gNB and relays the "
+                            "others over a sidelink chain, and the role moves as they drive. Simulated with the boards' "
+                            "measured links.",
+    "agv-dual-gateway.html": "Two AGVs connected to the gNB as gateways, the third one sidelink hop from either and "
+                             "picking one per message: board runs at L1 and L2 across sidelink window widths, with a replay. "
+                             "Now live as a platoon with coverage by position: AGVs lose the gNB in a shielded cold store, "
+                             "relay through another AGV one at a time, now as a 3GPP layer-3 relay (discovery, direct link, IP routing and NAT), "
+                             "with no relayed packets lost; every step compared; packet sequence, slot scheme, traffic flows.",
     "nr-tuning.html": "Each NR optimisation step measured on its own: slot rate and one-way delays, "
                       "from 643 ms to 144 ms for a LiDAR scan.",
     "factory-floor-downlink.html": "The factory demo: downlink traffic classes to the UEs and their one-way delays.",
     "mcxw72-hci-flow-control-wiring.html": "How each Bluetooth board's HCI UART is wired through a Raspberry Pi Pico "
                                            "with RTS/CTS flow control.",
 }
-ORDER = ["nrlink-two-pc-split.html", "agv-testbed.html", "nr-tuning.html", "factory-floor-downlink.html",
+ORDER = ["nrlink-two-pc-split.html", "agv-testbed.html", "agv-relay-chain.html", "agv-dual-gateway.html", "nr-tuning.html", "factory-floor-downlink.html",
          "mcxw72-hci-flow-control-wiring.html"]
 
 SHOT = r'''

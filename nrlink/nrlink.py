@@ -12,11 +12,33 @@ import serial
 
 SLIP_END, SLIP_ESC, SLIP_ESC_END, SLIP_ESC_ESC = 0xC0, 0xDB, 0xDC, 0xDD
 MSG_TX, MSG_LED, MSG_CFG, MSG_PING, MSG_STATS = 0x01, 0x02, 0x03, 0x04, 0x05
+MSG_REPEAT, MSG_REPEATOK = 0x07, 0x87       # nrlink v5
 MSG_TXDONE, MSG_RX, MSG_CFGOK, MSG_PONG, MSG_STATSR = 0x81, 0x82, 0x83, 0x84, 0x85
 OFF, RED, GREEN, BLUE = 0, 1, 2, 3
 
 
-def port_of(serial_no):
+PICO_PORTS = os.path.join(os.path.dirname(os.path.abspath(__file__)), "pico_ports.json")
+
+
+def pico_of(serial_no):
+    """Pico USB bridge wired to this board's LPUART0 (nrlink v6), from pico_ports.json {board serial: Pico id}."""
+    try:
+        pid = json.load(open(PICO_PORTS)).get(serial_no)
+    except (OSError, ValueError):
+        return None
+    if not pid:
+        return None
+    hits = glob.glob(f"/dev/serial/by-id/*Pico_{pid.upper()}-if00")
+    return os.path.realpath(hits[0]) if hits else None
+
+
+def port_of(serial_no, vcom=False):
+    """The board's host serial port: its Pico bridge when pico_ports.json names one that is plugged in, else the
+    MCU-Link VCOM (vcom=True always gives the VCOM, e.g. for ISP)."""
+    if not vcom:
+        p = pico_of(serial_no)
+        if p:
+            return p
     hits = glob.glob(f"/dev/serial/by-id/*{serial_no}-if02")
     if not hits:
         raise FileNotFoundError(f"board {serial_no} not connected")
@@ -108,10 +130,20 @@ class Board:
         b = self._wait(MSG_STATSR)
         return struct.unpack("<%dI" % (len(b) // 4), b)
 
+    def repeat(self, rules, to_host=False, gap_us=0):
+        """nrlink v5: repeat packets whose (kind, link) match a rule (kind, from_link, to_link), with the link byte
+        set to to_link; rules=[] turns the repeater off. gap_us: before and between repeated packets (200 us steps,
+        up to 3000; 0 = 800). Returns the number of rules set."""
+        flags = (1 if to_host else 0) | (min(15, (gap_us + 100) // 200) << 4)
+        body = bytes([flags, len(rules)]) + b"".join(bytes(r) for r in rules)
+        self._send(MSG_REPEAT, body)
+        return self._wait(MSG_REPEATOK)[0]
+
 
 # ---- air framing shared by the bridges ----------------------------------------------------------
 # Every radio packet: kind, ue_id, sfn (le16), slot, frag, nfrag, then a chunk of a slot message.
 AIR_DL, AIR_POLL, AIR_UL = 0x01, 0x02, 0x03
+AIR_SLWIN, AIR_CH, AIR_BEACON = 0x08, 0x09, 0x0A   # AGV relay chain: sidelink window (gNB), chain data, beacon
 AIR_HDR = struct.Struct("<BBHBBB")
 AIR_CHUNK = 255 - AIR_HDR.size
 

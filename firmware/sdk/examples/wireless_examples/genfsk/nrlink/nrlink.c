@@ -4,13 +4,24 @@
  * link and the 2.4 GHz radio and drives the LEDs; all NR logic lives on the host.
  *
  * Host link: MCU-Link VCOM (LPUART1) at BOARD_APP_UART_BAUDRATE, SLIP framed (0xC0 END, 0xDB ESC).
+ * v6: also LPUART0 (PTA16 RX = J1-1, PTA17 TX = J1-2, no flow control) at the same rate, for a Raspberry Pi Pico USB
+ * bridge. Each port has its own ring and parser; replies go to the port that last sent a whole frame or text line.
  *   host -> board                                 board -> host
  *   0x01 TX   <radio payload, <= 255 B>           0x81 TXDONE <status>
  *   0x02 LED  <mode><color><arg><dur_lo><dur_hi>  0x82 RX     <rssi:int8><ts:u32 le><radio payload>
  *   0x03 CFG  <channel><tx power level>           0x83 CFGOK
  *   0x04 PING                                     0x84 PONG   <version string>
  *   0x05 STATS   0x06 ISP (enter ROM bootloader)
- *                                                 0x85 STATS  <rx_ok:u32><rx_crc_err:u32><tx:u32>
+ *                                                 0x85 STATS  <rx_ok:u32><rx_crc_err:u32><tx:u32>... (36 B, v5)
+ *   0x07 REPEAT <flags><n>{<kind><from><to>}*n    0x87 REPEATOK <n>
+ *
+ * Repeater (v5, for daisy chains): with n rules set, a received packet whose air header (nrlink.py AIR_HDR:
+ * kind, link, seq:u16, slot, frag, nfrag) matches a rule's kind and link is stored with its link byte set to the
+ * rule's <to>; when the message's last fragment arrives (or 30 ms after the last packet) the stored packets are sent
+ * back to back from RAM, then the radio listens again. A message is forwarded whole, so one radio can repeat at
+ * about half the air rate. Repeated packets go to the host only with flags bit 0; flags bits 4-7 set the gap between
+ * repeated packets, and before the first one, in 200 us steps (0: 800 us; a receiver needs the time to re-arm,
+ * which a host's UART always gave it); n = 0 turns the repeater off.
  * Outside of a SLIP frame, ASCII lines "isp" (jump to the ROM ISP bootloader) and "ver" are accepted,
  * so the board can always be re-flashed remotely (see ~/nxp/board.sh).
  *
@@ -34,8 +45,9 @@
 #include "fwk_platform_genfsk.h"
 #include "genfsk_interface.h"
 #include "fsl_lpuart.h"
+#include "pin_mux.h" /* v6: BOARD_InitPinLPUART0_RX/TX */
 
-#define NRLINK_VERSION "nrlink v4"
+#define NRLINK_VERSION "nrlink v6"
 
 /* Radio: 1 Mbps GFSK, formatted packets with an 8-bit length field (payload <= 255 B), 24-bit CRC. */
 #define RADIO_CHANNEL_DEFAULT   0x2AU /* 2360 MHz + 42 MHz = 2402 MHz */
@@ -59,6 +71,8 @@
 #define MSG_PING   0x04U
 #define MSG_STATS  0x05U
 #define MSG_ISP    0x06U
+#define MSG_REPEAT 0x07U
+#define MSG_REPEATOK 0x87U
 #define MSG_TXDONE 0x81U
 #define MSG_RX     0x82U
 #define MSG_CFGOK  0x83U
@@ -85,12 +99,28 @@
 #define EVT_TICK    (1U << 4)
 #define EVT_ALL     (EVT_UART | EVT_RX_DONE | EVT_RX_FAIL | EVT_TX_DONE | EVT_TICK)
 
-/* Host UART RX ring, filled by uart_irq() (the serial manager's per-byte path dropped bytes at speed) */
+/* Host UART RX rings, filled by the UART ISRs (the serial manager's per-byte path dropped bytes at speed).
+ * v6: port 0 = LPUART1 (MCU-Link VCOM), port 1 = LPUART0 (Pico). Each has its own SLIP / text-line parser. */
 #define UART_RING_SIZE 2048U
-static uint8_t s_uartRing[UART_RING_SIZE];
-static volatile uint32_t s_uartHead;
-static uint32_t s_uartTail;
-static volatile uint32_t s_uartOverrun;
+#define HOST_PORTS     2U
+typedef struct
+{
+    LPUART_Type *uart;
+    uint8_t ring[UART_RING_SIZE];
+    volatile uint32_t head;
+    uint32_t tail;
+    volatile uint32_t overrun;
+    uint8_t frame[RADIO_MAX_PAYLOAD + 8U];
+    uint32_t frameLen;
+    bool inFrame;
+    bool esc;
+    char line[16];
+    uint32_t lineLen;
+    uint32_t window;
+} host_port_t;
+static host_port_t s_port[HOST_PORTS];
+static host_port_t *s_cur = &s_port[0]; /* port whose bytes are being parsed */
+static LPUART_Type *s_hostUart;         /* replies go here */
 static TIMER_MANAGER_HANDLE_DEFINE(s_tick);
 static OSA_EVENT_HANDLE_DEFINE(s_evt);
 static OSA_TASK_HANDLE_DEFINE(s_taskHandle);
@@ -113,13 +143,27 @@ static volatile uint32_t s_cbEvt;
 static volatile uint32_t s_cbRx;
 static volatile uint32_t s_lastEvt;
 
-/* Host frame parser */
-static uint8_t s_frame[RADIO_MAX_PAYLOAD + 8U];
-static uint32_t s_frameLen;
-static bool s_inFrame;
-static bool s_esc;
-static char s_line[16];
-static uint32_t s_lineLen;
+/* Repeater */
+#define REP_RULES_MAX  8U
+#define REP_QUEUE      32U
+#define REP_FLUSH_MS   30U /* > a host's gap between fragments (TX, wait for TXDONE, next: up to ~6 ms) plus the 5 ms tick */
+#define REP_GAP_US     800U
+#define AIR_KIND 0U
+#define AIR_LINK 1U
+#define AIR_FRAG 5U
+#define AIR_NFRAG 6U
+static uint8_t s_repRules[REP_RULES_MAX][3];
+static uint8_t s_repN;
+static uint8_t s_repFlags;
+static uint8_t s_repPkt[REP_QUEUE][RADIO_MAX_PAYLOAD];
+static uint8_t s_repLen[REP_QUEUE];
+static uint8_t s_repCount;     /* packets stored */
+static uint8_t s_repNext;      /* next stored packet to send, while forwarding */
+static bool s_repFwd;          /* forwarding: the radio sends the stored packets */
+static bool s_txFromRep;       /* the packet in the air is a repeated one (no TXDONE to the host) */
+static uint32_t s_repLastMs;
+static uint32_t s_statRep, s_statRepDrop, s_statRepMsgs;
+
 
 /* LED state */
 static uint32_t s_ms;
@@ -280,7 +324,7 @@ static void led_tick(void)
 
 static void host_write_raw(const uint8_t *p, uint32_t len)
 {
-    (void)LPUART_WriteBlocking(LPUART1, p, len);
+    (void)LPUART_WriteBlocking(s_hostUart, p, len);
 }
 
 static void host_send(uint8_t type, const uint8_t *p, uint32_t len)
@@ -367,6 +411,77 @@ static void radio_tx(const uint8_t *payload, uint32_t len)
     s_statTx++;
 }
 
+static void rep_send_next(void)
+{
+    if (s_repNext < s_repCount)
+    {
+        s_txFromRep = true;
+        radio_tx(s_repPkt[s_repNext], s_repLen[s_repNext]);
+        s_repNext++;
+        s_statRep++;
+        if (!s_txBusy) /* start failed: give up on this message */
+        {
+            s_txFromRep = false;
+            s_repFwd = false;
+            s_repCount = 0U;
+        }
+        return;
+    }
+    s_repFwd    = false;
+    s_repCount  = 0U;
+    s_txFromRep = false;
+}
+
+static void rep_gap(void)
+{
+    uint32_t gap = (uint32_t)(s_repFlags >> 4) * 200U;
+    SDK_DelayAtLeastUs((gap != 0U) ? gap : REP_GAP_US, SystemCoreClock);
+}
+
+static void rep_start(void)
+{
+    if (!s_repFwd && (s_repCount != 0U))
+    {
+        /* the other receivers heard the same last packet and must re-arm before the first repeated one */
+        rep_gap();
+        s_repFwd  = true;
+        s_repNext = 0U;
+        s_statRepMsgs++;
+        rep_send_next();
+    }
+}
+
+/* true when the packet was taken by the repeater */
+static bool rep_take(const uint8_t *p, uint32_t len)
+{
+    if ((s_repN == 0U) || (len < 7U) || s_repFwd)
+    {
+        return false;
+    }
+    for (uint32_t i = 0U; i < s_repN; i++)
+    {
+        if ((p[AIR_KIND] == s_repRules[i][0]) && (p[AIR_LINK] == s_repRules[i][1]))
+        {
+            if (s_repCount >= REP_QUEUE)
+            {
+                s_statRepDrop++;
+                return true;
+            }
+            memcpy(s_repPkt[s_repCount], p, len);
+            s_repPkt[s_repCount][AIR_LINK] = s_repRules[i][2];
+            s_repLen[s_repCount]           = (uint8_t)len;
+            s_repCount++;
+            s_repLastMs = s_ms;
+            if ((uint32_t)p[AIR_FRAG] + 1U >= (uint32_t)p[AIR_NFRAG])
+            {
+                rep_start();
+            }
+            return true;
+        }
+    }
+    return false;
+}
+
 static void genfsk_rx_cb(uint8_t *pBuffer, uint16_t bufferLength, uint64_t timestamp, int8_t rssi, uint8_t crcValid)
 {
     (void)pBuffer;
@@ -416,13 +531,27 @@ static void radio_deliver_rx(void)
         return;
     }
     s_statRxOk++;
+    if (rep_take(s_rxPayload, len))
+    {
+        if (!s_repFwd)
+        {
+            radio_rx_start();
+        }
+        if ((s_repFlags & 1U) == 0U)
+        {
+            return;
+        }
+    }
     out[0] = (uint8_t)s_rxRssi;
     out[1] = (uint8_t)s_rxTs;
     out[2] = (uint8_t)(s_rxTs >> 8);
     out[3] = (uint8_t)(s_rxTs >> 16);
     out[4] = (uint8_t)(s_rxTs >> 24);
     memcpy(&out[5], s_rxPayload, len);
-    radio_rx_start(); /* re-arm before the slow host transfer: back-to-back fragments follow */
+    if (!s_repFwd)
+    {
+        radio_rx_start(); /* re-arm before the slow host transfer: back-to-back fragments follow */
+    }
     host_send(MSG_RX, out, 5U + len);
 }
 
@@ -436,7 +565,7 @@ static void enter_isp(void)
     void (*runBootloader)(void *arg) = *(void (**)(void *))ROM_API_TREE_ADDR;
 
     host_write_raw((const uint8_t *)"ISP\r\n", 5U);
-    while ((LPUART_GetStatusFlags(LPUART1) & kLPUART_TransmissionCompleteFlag) == 0U)
+    while ((LPUART_GetStatusFlags(s_hostUart) & kLPUART_TransmissionCompleteFlag) == 0U)
     {
     }
     (void)GENFSK_AbortAll();
@@ -451,10 +580,14 @@ static void enter_isp(void)
         NVIC->ICER[i] = 0xFFFFFFFFU;
         NVIC->ICPR[i] = 0xFFFFFFFFU;
     }
-    LPUART1->CTRL  = 0U;
-    LPUART1->FIFO  = LPUART_FIFO_TXFLUSH_MASK | LPUART_FIFO_RXFLUSH_MASK;
-    LPUART1->WATER = 0U;
-    LPUART1->STAT  = LPUART1->STAT; /* clear w1c flags */
+    for (uint32_t i = 0U; i < HOST_PORTS; i++)
+    {
+        LPUART_Type *u = s_port[i].uart;
+        u->CTRL  = 0U;
+        u->FIFO  = LPUART_FIFO_TXFLUSH_MASK | LPUART_FIFO_RXFLUSH_MASK;
+        u->WATER = 0U;
+        u->STAT  = u->STAT; /* clear w1c flags */
+    }
     SCB->VTOR      = 0U;
     __DSB();
     __ISB();
@@ -466,7 +599,7 @@ static void enter_isp(void)
 
 static void handle_frame(const uint8_t *f, uint32_t len)
 {
-    uint8_t reply[24];
+    uint8_t reply[36];
 
     if (len == 0U)
     {
@@ -494,6 +627,30 @@ static void handle_frame(const uint8_t *f, uint32_t len)
         case MSG_ISP:
             enter_isp();
             break;
+        case MSG_REPEAT:
+            s_repN = 0U;
+            if (len >= 3U)
+            {
+                uint32_t n = f[2];
+                if (n > REP_RULES_MAX)
+                {
+                    n = REP_RULES_MAX;
+                }
+                if (len < 3U + 3U * n)
+                {
+                    n = (len - 3U) / 3U;
+                }
+                for (uint32_t i = 0U; i < n; i++)
+                {
+                    memcpy(s_repRules[i], &f[3U + 3U * i], 3U);
+                }
+                s_repFlags = f[1];
+                s_repCount = 0U;
+                s_repN     = (uint8_t)n;
+            }
+            reply[0] = s_repN;
+            host_send(MSG_REPEATOK, reply, 1U);
+            break;
         case MSG_STATS:
             memcpy(&reply[0], &s_statRxOk, 4U);
             memcpy(&reply[4], &s_statRxCrcErr, 4U);
@@ -501,7 +658,10 @@ static void handle_frame(const uint8_t *f, uint32_t len)
             memcpy(&reply[12], (const void *)&s_cbEvt, 4U);
             memcpy(&reply[16], (const void *)&s_cbRx, 4U);
             memcpy(&reply[20], (const void *)&s_lastEvt, 4U);
-            host_send(MSG_STATSR, reply, 24U);
+            memcpy(&reply[24], &s_statRep, 4U);
+            memcpy(&reply[28], &s_statRepDrop, 4U);
+            memcpy(&reply[32], &s_statRepMsgs, 4U);
+            host_send(MSG_STATSR, reply, 36U);
             break;
         default:
             break;
@@ -510,72 +670,81 @@ static void handle_frame(const uint8_t *f, uint32_t len)
 
 static void handle_text_byte(uint8_t c)
 {
+    host_port_t *p = s_cur;
+
     if ((c == '\r') || (c == '\n'))
     {
-        s_line[s_lineLen] = '\0';
-        if (strcmp(s_line, "isp") == 0)
+        p->line[p->lineLen] = '\0';
+        if (strcmp(p->line, "isp") == 0)
         {
+            s_hostUart = p->uart;
             enter_isp();
         }
-        else if (strcmp(s_line, "ver") == 0)
+        else if (strcmp(p->line, "ver") == 0)
         {
+            s_hostUart = p->uart;
             host_write_raw((const uint8_t *)NRLINK_VERSION "\r\n", sizeof(NRLINK_VERSION) + 1U);
         }
-        s_lineLen = 0U;
+        p->lineLen = 0U;
     }
-    else if (s_lineLen < sizeof(s_line) - 1U)
+    else if (p->lineLen < sizeof(p->line) - 1U)
     {
-        s_line[s_lineLen++] = (char)c;
+        p->line[p->lineLen++] = (char)c;
     }
     else
     {
-        s_lineLen = 0U;
+        p->lineLen = 0U;
     }
 }
 
 static void host_rx_byte(uint8_t c)
 {
-    static uint32_t window;
+    host_port_t *p = s_cur;
 
-    window = (window << 8) | c;
-    if (window == (('i' << 24) | ('s' << 16) | ('p' << 8) | '\r'))
+    p->window = (p->window << 8) | c;
+    if (p->window == (('i' << 24) | ('s' << 16) | ('p' << 8) | '\r'))
     {
+        s_hostUart = p->uart;
         enter_isp();
     }
     if (c == SLIP_END)
     {
-        if (s_inFrame && (s_frameLen > 0U))
+        if (p->inFrame && (p->frameLen > 0U))
         {
-            handle_frame(s_frame, s_frameLen);
+            if ((p->frame[0] >= MSG_TX) && (p->frame[0] <= MSG_REPEAT)) /* a noise frame must not steal the replies */
+            {
+                s_hostUart = p->uart;
+            }
+            handle_frame(p->frame, p->frameLen);
         }
-        s_inFrame  = true; /* END both terminates and starts a frame */
-        s_frameLen = 0U;
-        s_esc      = false;
-        s_lineLen  = 0U;
+        p->inFrame  = true; /* END both terminates and starts a frame */
+        p->frameLen = 0U;
+        p->esc      = false;
+        p->lineLen  = 0U;
         return;
     }
-    if (!s_inFrame)
+    if (!p->inFrame)
     {
         handle_text_byte(c);
         return;
     }
-    if (s_esc)
+    if (p->esc)
     {
-        c     = (c == SLIP_ESC_END) ? SLIP_END : ((c == SLIP_ESC_ESC) ? SLIP_ESC : c);
-        s_esc = false;
+        c      = (c == SLIP_ESC_END) ? SLIP_END : ((c == SLIP_ESC_ESC) ? SLIP_ESC : c);
+        p->esc = false;
     }
     else if (c == SLIP_ESC)
     {
-        s_esc = true;
+        p->esc = true;
         return;
     }
-    if (s_frameLen < sizeof(s_frame))
+    if (p->frameLen < sizeof(p->frame))
     {
-        s_frame[s_frameLen++] = c;
+        p->frame[p->frameLen++] = c;
     }
     else
     {
-        s_inFrame = false; /* oversize: drop and resync on next END */
+        p->inFrame = false; /* oversize: drop and resync on next END */
     }
 }
 
@@ -583,22 +752,34 @@ static void host_rx_byte(uint8_t c)
  * Task
  ******************************************************************************/
 
-static void uart_irq(void)
+static void uart_rx_drain(host_port_t *p)
 {
-    uint32_t stat = LPUART1->STAT;
+    LPUART_Type *u = p->uart;
+    uint32_t stat  = u->STAT;
 
     if ((stat & LPUART_STAT_OR_MASK) != 0U)
     {
-        LPUART1->STAT = LPUART_STAT_OR_MASK;
-        s_uartOverrun++;
+        u->STAT = LPUART_STAT_OR_MASK;
+        p->overrun++;
     }
-    while ((LPUART1->WATER & LPUART_WATER_RXCOUNT_MASK) != 0U)
+    while ((u->WATER & LPUART_WATER_RXCOUNT_MASK) != 0U)
     {
-        uint32_t head = s_uartHead;
-        s_uartRing[head]  = (uint8_t)LPUART1->DATA;
-        s_uartHead        = (head + 1U) & (UART_RING_SIZE - 1U);
+        uint32_t head = p->head;
+        p->ring[head] = (uint8_t)u->DATA;
+        p->head       = (head + 1U) & (UART_RING_SIZE - 1U);
     }
     (void)OSA_EventSet((osa_event_handle_t)s_evt, EVT_UART);
+}
+
+static void uart_irq(void) /* LPUART1, VCOM */
+{
+    uart_rx_drain(&s_port[0]);
+    SDK_ISR_EXIT_BARRIER;
+}
+
+static void uart0_irq(void) /* LPUART0, Pico */
+{
+    uart_rx_drain(&s_port[1]);
     SDK_ISR_EXIT_BARRIER;
 }
 
@@ -606,7 +787,11 @@ static void uart_init(void)
 {
     lpuart_config_t cfg;
 
-    BOARD_InitAppConsole(); /* clock source + pins */
+    s_port[0].uart = LPUART1;
+    s_port[1].uart = LPUART0;
+    s_hostUart     = LPUART1;
+
+    BOARD_InitAppConsole(); /* LPUART1: clock source + pins */
     LPUART_GetDefaultConfig(&cfg);
     cfg.baudRate_Bps    = BOARD_APP_UART_BAUDRATE;
     cfg.enableTx        = true;
@@ -619,6 +804,19 @@ static void uart_init(void)
                                          (uint32_t)kLPUART_RxOverrunInterruptEnable);
     NVIC_SetPriority(LPUART1_IRQn, 1U);
     (void)EnableIRQ(LPUART1_IRQn);
+
+    /* v6: LPUART0 for the Pico. PTA16/17 are not used by the LEDs (PTA19..21), so the RGB LED keeps working;
+     * there is no RTS (PTA19 is the green LED): the Pico bridge runs without CTS. */
+    CLOCK_SetIpSrc(kCLOCK_Lpuart0, (clock_ip_src_t)BOARD_UART_CLKSRC);
+    CLOCK_EnableClockLPMode(kCLOCK_Lpuart0, kCLOCK_IpClkControl_fun3);
+    BOARD_InitPinLPUART0_RX();
+    BOARD_InitPinLPUART0_TX();
+    (void)LPUART_Init(LPUART0, &cfg, CLOCK_GetIpFreq(kCLOCK_Lpuart0));
+    (void)InstallIRQHandler(LPUART0_IRQn, (uint32_t)uart0_irq);
+    LPUART_EnableInterrupts(LPUART0, (uint32_t)kLPUART_RxDataRegFullInterruptEnable |
+                                         (uint32_t)kLPUART_RxOverrunInterruptEnable);
+    NVIC_SetPriority(LPUART0_IRQn, 1U);
+    (void)EnableIRQ(LPUART0_IRQn);
 }
 
 static void tick_cb(void *param)
@@ -678,6 +876,9 @@ static void nrlink_init(void)
     radio_rx_start();
 
     host_write_raw((const uint8_t *)"\r\n" NRLINK_VERSION " ready\r\n", sizeof(NRLINK_VERSION) + 9U);
+    s_hostUart = LPUART0;
+    host_write_raw((const uint8_t *)"\r\n" NRLINK_VERSION " ready\r\n", sizeof(NRLINK_VERSION) + 9U);
+    s_hostUart = LPUART1;
 
     /* boot indication: one blue blink */
     led_command((const uint8_t[]){1U, 3U, 1U, 0U, 0U}, 5U);
@@ -693,33 +894,64 @@ static void nrlink_handle(osa_event_flags_t flags, uint8_t *buf, uint32_t bufSiz
             (void)buf;
             (void)bufSize;
             (void)n;
-            while (s_uartTail != s_uartHead)
+            for (uint32_t i = 0U; i < HOST_PORTS; i++)
             {
-                uint8_t c   = s_uartRing[s_uartTail];
-                s_uartTail = (s_uartTail + 1U) & (UART_RING_SIZE - 1U);
-                host_rx_byte(c);
+                host_port_t *p = &s_port[i];
+                s_cur          = p;
+                while (p->tail != p->head)
+                {
+                    uint8_t c = p->ring[p->tail];
+                    p->tail   = (p->tail + 1U) & (UART_RING_SIZE - 1U);
+                    host_rx_byte(c);
+                }
             }
         }
         if ((flags & EVT_RX_DONE) != 0U)
         {
             radio_deliver_rx();
-            radio_rx_start(); /* no-op if radio_deliver_rx() already re-armed */
+            if (!s_repFwd)
+            {
+                radio_rx_start(); /* no-op if radio_deliver_rx() already re-armed */
+            }
         }
         if ((flags & EVT_RX_FAIL) != 0U)
         {
-            radio_rx_start();
+            if (!s_repFwd)
+            {
+                radio_rx_start();
+            }
         }
         if ((flags & EVT_TX_DONE) != 0U)
         {
             uint8_t status = (s_txStatus == gGenfskSuccess) ? 0U : 2U;
+            bool rep       = s_txFromRep;
             s_txBusy       = false;
-            host_send(MSG_TXDONE, &status, 1U);
-            radio_rx_start();
+            if (rep)
+            {
+                if (s_repNext < s_repCount)
+                {
+                    rep_gap();
+                }
+                rep_send_next(); /* the next stored packet, or the end of the message */
+            }
+            else
+            {
+                host_send(MSG_TXDONE, &status, 1U);
+            }
+            if (!s_repFwd)
+            {
+                radio_rx_start();
+            }
         }
         if ((flags & EVT_TICK) != 0U)
         {
             s_ms += TICK_MS;
             led_tick();
+            /* a message whose last fragment was lost: forward what arrived */
+            if (!s_repFwd && (s_repCount != 0U) && ((s_ms - s_repLastMs) >= REP_FLUSH_MS))
+            {
+                rep_start();
+            }
         }
     }
 }

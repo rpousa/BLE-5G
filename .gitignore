@@ -5,3 +5,8 @@ nrlink/media/
 deploy/free5gc/cert/
 *.elf
 nrlink/ble_rate_kbps
+# AGV runs: raw logs are kept as results/agv_chain/raw_logs.tar.xz; generator backups stay local
+results/agv_chain/*.jsonl
+results/agv_chain/*.log
+*.pre-*
+*.pre-*.*

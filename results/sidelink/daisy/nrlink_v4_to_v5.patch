@@ -1,0 +1,279 @@
+--- a/nrlink.c
++++ b/nrlink.c
+@@ -10,7 +10,16 @@
+  *   0x03 CFG  <channel><tx power level>           0x83 CFGOK
+  *   0x04 PING                                     0x84 PONG   <version string>
+  *   0x05 STATS   0x06 ISP (enter ROM bootloader)
+- *                                                 0x85 STATS  <rx_ok:u32><rx_crc_err:u32><tx:u32>
++ *                                                 0x85 STATS  <rx_ok:u32><rx_crc_err:u32><tx:u32>... (36 B, v5)
++ *   0x07 REPEAT <flags><n>{<kind><from><to>}*n    0x87 REPEATOK <n>
++ *
++ * Repeater (v5, for daisy chains): with n rules set, a received packet whose air header (nrlink.py AIR_HDR:
++ * kind, link, seq:u16, slot, frag, nfrag) matches a rule's kind and link is stored with its link byte set to the
++ * rule's <to>; when the message's last fragment arrives (or 30 ms after the last packet) the stored packets are sent
++ * back to back from RAM, then the radio listens again. A message is forwarded whole, so one radio can repeat at
++ * about half the air rate. Repeated packets go to the host only with flags bit 0; flags bits 4-7 set the gap between
++ * repeated packets, and before the first one, in 200 us steps (0: 800 us; a receiver needs the time to re-arm,
++ * which a host's UART always gave it); n = 0 turns the repeater off.
+  * Outside of a SLIP frame, ASCII lines "isp" (jump to the ROM ISP bootloader) and "ver" are accepted,
+  * so the board can always be re-flashed remotely (see ~/nxp/board.sh).
+  *
+@@ -35,7 +44,7 @@
+ #include "genfsk_interface.h"
+ #include "fsl_lpuart.h"
+ 
+-#define NRLINK_VERSION "nrlink v4"
++#define NRLINK_VERSION "nrlink v5"
+ 
+ /* Radio: 1 Mbps GFSK, formatted packets with an 8-bit length field (payload <= 255 B), 24-bit CRC. */
+ #define RADIO_CHANNEL_DEFAULT   0x2AU /* 2360 MHz + 42 MHz = 2402 MHz */
+@@ -59,6 +68,8 @@
+ #define MSG_PING   0x04U
+ #define MSG_STATS  0x05U
+ #define MSG_ISP    0x06U
++#define MSG_REPEAT 0x07U
++#define MSG_REPEATOK 0x87U
+ #define MSG_TXDONE 0x81U
+ #define MSG_RX     0x82U
+ #define MSG_CFGOK  0x83U
+@@ -113,6 +124,27 @@
+ static volatile uint32_t s_cbRx;
+ static volatile uint32_t s_lastEvt;
+ 
++/* Repeater */
++#define REP_RULES_MAX  8U
++#define REP_QUEUE      32U
++#define REP_FLUSH_MS   30U /* > a host's gap between fragments (TX, wait for TXDONE, next: up to ~6 ms) plus the 5 ms tick */
++#define REP_GAP_US     800U
++#define AIR_KIND 0U
++#define AIR_LINK 1U
++#define AIR_FRAG 5U
++#define AIR_NFRAG 6U
++static uint8_t s_repRules[REP_RULES_MAX][3];
++static uint8_t s_repN;
++static uint8_t s_repFlags;
++static uint8_t s_repPkt[REP_QUEUE][RADIO_MAX_PAYLOAD];
++static uint8_t s_repLen[REP_QUEUE];
++static uint8_t s_repCount;     /* packets stored */
++static uint8_t s_repNext;      /* next stored packet to send, while forwarding */
++static bool s_repFwd;          /* forwarding: the radio sends the stored packets */
++static bool s_txFromRep;       /* the packet in the air is a repeated one (no TXDONE to the host) */
++static uint32_t s_repLastMs;
++static uint32_t s_statRep, s_statRepDrop, s_statRepMsgs;
++
+ /* Host frame parser */
+ static uint8_t s_frame[RADIO_MAX_PAYLOAD + 8U];
+ static uint32_t s_frameLen;
+@@ -367,6 +399,77 @@
+     s_statTx++;
+ }
+ 
++static void rep_send_next(void)
++{
++    if (s_repNext < s_repCount)
++    {
++        s_txFromRep = true;
++        radio_tx(s_repPkt[s_repNext], s_repLen[s_repNext]);
++        s_repNext++;
++        s_statRep++;
++        if (!s_txBusy) /* start failed: give up on this message */
++        {
++            s_txFromRep = false;
++            s_repFwd = false;
++            s_repCount = 0U;
++        }
++        return;
++    }
++    s_repFwd    = false;
++    s_repCount  = 0U;
++    s_txFromRep = false;
++}
++
++static void rep_gap(void)
++{
++    uint32_t gap = (uint32_t)(s_repFlags >> 4) * 200U;
++    SDK_DelayAtLeastUs((gap != 0U) ? gap : REP_GAP_US, SystemCoreClock);
++}
++
++static void rep_start(void)
++{
++    if (!s_repFwd && (s_repCount != 0U))
++    {
++        /* the other receivers heard the same last packet and must re-arm before the first repeated one */
++        rep_gap();
++        s_repFwd  = true;
++        s_repNext = 0U;
++        s_statRepMsgs++;
++        rep_send_next();
++    }
++}
++
++/* true when the packet was taken by the repeater */
++static bool rep_take(const uint8_t *p, uint32_t len)
++{
++    if ((s_repN == 0U) || (len < 7U) || s_repFwd)
++    {
++        return false;
++    }
++    for (uint32_t i = 0U; i < s_repN; i++)
++    {
++        if ((p[AIR_KIND] == s_repRules[i][0]) && (p[AIR_LINK] == s_repRules[i][1]))
++        {
++            if (s_repCount >= REP_QUEUE)
++            {
++                s_statRepDrop++;
++                return true;
++            }
++            memcpy(s_repPkt[s_repCount], p, len);
++            s_repPkt[s_repCount][AIR_LINK] = s_repRules[i][2];
++            s_repLen[s_repCount]           = (uint8_t)len;
++            s_repCount++;
++            s_repLastMs = s_ms;
++            if ((uint32_t)p[AIR_FRAG] + 1U >= (uint32_t)p[AIR_NFRAG])
++            {
++                rep_start();
++            }
++            return true;
++        }
++    }
++    return false;
++}
++
+ static void genfsk_rx_cb(uint8_t *pBuffer, uint16_t bufferLength, uint64_t timestamp, int8_t rssi, uint8_t crcValid)
+ {
+     (void)pBuffer;
+@@ -416,13 +519,27 @@
+         return;
+     }
+     s_statRxOk++;
++    if (rep_take(s_rxPayload, len))
++    {
++        if (!s_repFwd)
++        {
++            radio_rx_start();
++        }
++        if ((s_repFlags & 1U) == 0U)
++        {
++            return;
++        }
++    }
+     out[0] = (uint8_t)s_rxRssi;
+     out[1] = (uint8_t)s_rxTs;
+     out[2] = (uint8_t)(s_rxTs >> 8);
+     out[3] = (uint8_t)(s_rxTs >> 16);
+     out[4] = (uint8_t)(s_rxTs >> 24);
+     memcpy(&out[5], s_rxPayload, len);
+-    radio_rx_start(); /* re-arm before the slow host transfer: back-to-back fragments follow */
++    if (!s_repFwd)
++    {
++        radio_rx_start(); /* re-arm before the slow host transfer: back-to-back fragments follow */
++    }
+     host_send(MSG_RX, out, 5U + len);
+ }
+ 
+@@ -466,7 +583,7 @@
+ 
+ static void handle_frame(const uint8_t *f, uint32_t len)
+ {
+-    uint8_t reply[24];
++    uint8_t reply[36];
+ 
+     if (len == 0U)
+     {
+@@ -494,6 +611,30 @@
+         case MSG_ISP:
+             enter_isp();
+             break;
++        case MSG_REPEAT:
++            s_repN = 0U;
++            if (len >= 3U)
++            {
++                uint32_t n = f[2];
++                if (n > REP_RULES_MAX)
++                {
++                    n = REP_RULES_MAX;
++                }
++                if (len < 3U + 3U * n)
++                {
++                    n = (len - 3U) / 3U;
++                }
++                for (uint32_t i = 0U; i < n; i++)
++                {
++                    memcpy(s_repRules[i], &f[3U + 3U * i], 3U);
++                }
++                s_repFlags = f[1];
++                s_repCount = 0U;
++                s_repN     = (uint8_t)n;
++            }
++            reply[0] = s_repN;
++            host_send(MSG_REPEATOK, reply, 1U);
++            break;
+         case MSG_STATS:
+             memcpy(&reply[0], &s_statRxOk, 4U);
+             memcpy(&reply[4], &s_statRxCrcErr, 4U);
+@@ -501,7 +642,10 @@
+             memcpy(&reply[12], (const void *)&s_cbEvt, 4U);
+             memcpy(&reply[16], (const void *)&s_cbRx, 4U);
+             memcpy(&reply[20], (const void *)&s_lastEvt, 4U);
+-            host_send(MSG_STATSR, reply, 24U);
++            memcpy(&reply[24], &s_statRep, 4U);
++            memcpy(&reply[28], &s_statRepDrop, 4U);
++            memcpy(&reply[32], &s_statRepMsgs, 4U);
++            host_send(MSG_STATSR, reply, 36U);
+             break;
+         default:
+             break;
+@@ -703,23 +847,49 @@
+         if ((flags & EVT_RX_DONE) != 0U)
+         {
+             radio_deliver_rx();
+-            radio_rx_start(); /* no-op if radio_deliver_rx() already re-armed */
++            if (!s_repFwd)
++            {
++                radio_rx_start(); /* no-op if radio_deliver_rx() already re-armed */
++            }
+         }
+         if ((flags & EVT_RX_FAIL) != 0U)
+         {
+-            radio_rx_start();
++            if (!s_repFwd)
++            {
++                radio_rx_start();
++            }
+         }
+         if ((flags & EVT_TX_DONE) != 0U)
+         {
+             uint8_t status = (s_txStatus == gGenfskSuccess) ? 0U : 2U;
++            bool rep       = s_txFromRep;
+             s_txBusy       = false;
+-            host_send(MSG_TXDONE, &status, 1U);
+-            radio_rx_start();
++            if (rep)
++            {
++                if (s_repNext < s_repCount)
++                {
++                    rep_gap();
++                }
++                rep_send_next(); /* the next stored packet, or the end of the message */
++            }
++            else
++            {
++                host_send(MSG_TXDONE, &status, 1U);
++            }
++            if (!s_repFwd)
++            {
++                radio_rx_start();
++            }
+         }
+         if ((flags & EVT_TICK) != 0U)
+         {
+             s_ms += TICK_MS;
+             led_tick();
++            /* a message whose last fragment was lost: forward what arrived */
++            if (!s_repFwd && (s_repCount != 0U) && ((s_ms - s_repLastMs) >= REP_FLUSH_MS))
++            {
++                rep_start();
++            }
+         }
+     }
+ }

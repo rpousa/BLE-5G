@@ -1,0 +1,36 @@
+== ping 56 B
+20 packets transmitted, 20 received, 0% packet loss, time 9519ms
+rtt min/avg/max/mdev = 16.354/21.290/25.801/3.019 ms
+== ping 500 B
+20 packets transmitted, 20 received, 0% packet loss, time 9511ms
+rtt min/avg/max/mdev = 16.724/25.364/35.475/4.884 ms
+== ping 1400 B
+20 packets transmitted, 20 received, 0% packet loss, time 9519ms
+rtt min/avg/max/mdev = 19.371/26.458/34.748/4.643 ms
+== UDP up 3M
+[  5]   0.00-15.00  sec  5.36 MBytes  3.00 Mbits/sec  0.000 ms  0/5625 (0%)  sender
+[  5]   0.00-15.07  sec  5.36 MBytes  2.99 Mbits/sec  2.661 ms  0/5625 (0%)  receiver
+== UDP up 6M
+[  5]   0.00-15.00  sec  10.7 MBytes  6.00 Mbits/sec  0.000 ms  0/11250 (0%)  sender
+[  5]   0.00-15.08  sec  10.7 MBytes  5.97 Mbits/sec  2.142 ms  0/11250 (0%)  receiver
+== UDP up 10M
+[  5]   0.00-15.00  sec  17.9 MBytes  10.0 Mbits/sec  0.000 ms  0/18749 (0%)  sender
+[  5]   0.00-24.29  sec  17.9 MBytes  6.18 Mbits/sec  1.337 ms  0/18749 (0%)  receiver
+== UDP down 3M
+[  5]   0.00-15.07  sec  5.39 MBytes  3.00 Mbits/sec  0.000 ms  0/0 (0%)  sender
+[  5]   0.00-15.00  sec  5.39 MBytes  3.01 Mbits/sec  3.533 ms  0/5647 (0%)  receiver
+== UDP down 6M
+[  5]   0.00-15.06  sec  10.8 MBytes  6.00 Mbits/sec  0.000 ms  0/0 (0%)  sender
+[  5]   0.00-15.00  sec  10.6 MBytes  5.92 Mbits/sec  1.848 ms  0/11095 (0%)  receiver
+== UDP down 10M
+[  5]   0.00-15.08  sec  18.0 MBytes  10.0 Mbits/sec  0.000 ms  0/0 (0%)  sender
+[  5]   0.00-15.00  sec  10.6 MBytes  5.93 Mbits/sec  1.336 ms  0/11115 (0%)  receiver
+== TCP up 30 s
+[  5]   0.00-30.00  sec  25.0 MBytes  6.99 Mbits/sec    0             sender
+[  5]   0.00-33.62  sec  24.7 MBytes  6.15 Mbits/sec                  receiver
+== TCP down 30 s
+[  5]   0.00-30.04  sec  22.4 MBytes  6.26 Mbits/sec   30             sender
+[  5]   0.00-30.00  sec  19.6 MBytes  5.49 Mbits/sec                  receiver
+== ping 56 B under TCP up
+30 packets transmitted, 30 received, 0% packet loss, time 14609ms
+rtt min/avg/max/mdev = 321.081/1453.153/3600.250/1021.592 ms, pipe 6

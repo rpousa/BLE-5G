@@ -5,8 +5,9 @@ Per slot: broadcast the DL_SLOT message over the air, and when the slot has UL P
 for what its UE transmits in that slot. The collected UL items go back to the PNF as UL_RESULT, which
 also releases the PNF to the next slot.
 
-LEDs on the gNB board: RGB = traffic class of the UE being served in the slot (eMBB blue, URLLC red,
-mMTC green), LED1 on for an uplink allocation, off for downlink.
+LEDs on the gNB board follow the slot scheme: green while the NR slots run (normal communication), blue during each
+sidelink window (--sl-window). Every phase is one flash with a short dark gap before the next, so each period shows as
+a green flash then a blue flash. Without sidelink windows it flashes green every 0.4 s while slots flow.
 """
 import argparse
 import queue
@@ -17,7 +18,7 @@ import time
 
 sys.path.insert(0, __import__("os").path.dirname(__file__))
 import config  # noqa: E402
-from nrlink import (AIR_DL, AIR_POLL, AIR_UL, Board, Reassembler, fragments, items, MSG_HDR, NRLINK_MAGIC,  # noqa: E402
+from nrlink import (GREEN, BLUE, AIR_DL, AIR_POLL, AIR_UL, AIR_SLWIN, AIR_HDR, Board, Reassembler, fragments, items, MSG_HDR, NRLINK_MAGIC,  # noqa: E402
                     NRLINK_DL_SLOT, NRLINK_UL_RESULT, IT_TB, IT_ULGRANT, IT_PUSCH, OFF, telemetry)
 
 
@@ -43,6 +44,8 @@ class GnbBridge:
         self.t_stats = time.time()
         self.tele = self.new_tele()
         self.t_tele = self.t_led = time.time()
+        self.nr_t0 = None     # start of the current NR stretch (end of the last sidelink window)
+        self.nr_ms = 40.0     # length of the last NR stretch, for the green flash
 
     @staticmethod
     def new_tele():
@@ -93,27 +96,41 @@ class GnbBridge:
             if kind == AIR_UL and uid == ue_id and (rsfn, rslot) == (sfn, slot):
                 return msg
 
-    def show_leds(self, served_dl, served_ul):
-        """served_*: ue_id -> bytes in this slot. The board blinks the colour of each UE served in the last second
-        in turn, every 0.4 s: blue for eMBB (nrUE1), red for URLLC (nrUE2), so with both active it alternates."""
+    GAP_MS = 6   # dark gap at the end of each flash, so consecutive green/blue phases read as separate flashes
+
+    def led_phase(self, color, dur_ms):
+        """Light the gNB board LED in <color> for dur_ms (minus the gap), and mirror it to the dashboard."""
+        self.board.led_solid(color, False, max(5, int(dur_ms) - self.GAP_MS))
+        self.led = (color, False)
         now = time.time()
-        for u in set(served_dl) | set(served_ul):
-            self.recent[u] = now
+        if now - self.t_led >= 0.1:   # mirror for the dashboard, at most 10 Hz
+            self.t_led = now
+            telemetry(k="led", ue=0, ul=False, c={GREEN: "green", BLUE: "blue"}.get(color, "off"))
+
+    def show_leds(self, served_dl, served_ul):
+        """Slot scheme LED: green = NR slots. With sidelink windows the NR stretch is flashed when it starts (right
+        after a window, see sl_window_led), so here only the no-sidelink case: one green flash every 0.4 s."""
+        if self.args.sl_window > 0:
+            if self.nr_t0 is None:   # first slot: start the green phase
+                self.nr_t0 = time.time()
+                self.led_phase(GREEN, self.nr_ms)
+            return
+        now = time.time()
         if now - self.led_t >= 0.4:
             self.led_t = now
-            active = sorted(u for u, t in self.recent.items() if now - t < 1.0)
-            if active:
-                self.rr = (self.rr + 1) % len(active)
-                u = active[self.rr]
-                color = config.CLASS_LED[config.UES[u][2]][0]
-                self.board.led_blink(color, 1)
-                self.led = (color, u in served_ul)
-            else:
-                self.led = (OFF, False)
-        if now - self.t_led >= 0.1:  # mirror of the board LEDs for the dashboard, 10 Hz
-            self.t_led = now
-            ue = next((u for u in config.UES if config.CLASS_LED[config.UES[u][2]][0] == self.led[0]), 0)
-            telemetry(k="led", ue=ue if self.led[0] != OFF else 0, ul=bool(self.led[1]))
+            self.led_phase(GREEN, 200)
+
+    def sl_window_led(self, start):
+        """Called when a sidelink window starts (start=True: blue for the window) and when it ends (green for the
+        NR stretch that follows, as long as the last one lasted)."""
+        now = time.time()
+        if start:
+            if self.nr_t0 is not None:
+                self.nr_ms = 0.7 * self.nr_ms + 0.3 * (now - self.nr_t0) * 1e3
+            self.led_phase(BLUE, self.args.sl_window)
+        else:
+            self.nr_t0 = now
+            self.led_phase(GREEN, self.nr_ms)
 
     def handle_slot(self, msg, addr):
         t_in = time.perf_counter()
@@ -177,6 +194,14 @@ class GnbBridge:
         acc = self.slot_ms[flags & 1]
         acc[0] += (time.perf_counter() - t_in) * 1e3
         acc[1] += 1
+        if self.args.sl_window > 0 and slot % 10 == 9:
+            # AGV relay chain: after the period's last uplink slot, grant the sidelink a quiet window (as a mode 1
+            # resource pool would): announce it, then stay off the air. The PNF waits for UL_RESULT meanwhile.
+            self.air_send([AIR_HDR.pack(AIR_SLWIN, 0, sfn, slot, 0, 1) + struct.pack("<H", self.args.sl_window)])
+            self.sl_window_led(True)
+            time.sleep(self.args.sl_window / 1000)
+            self.sl_window_led(False)
+            self.stats["sl_windows"] = self.stats.get("sl_windows", 0) + 1
 
     def timing(self, dt):
         """'slot ms DL x UL y rest z': bridge time per DL-only slot and per slot with UL, and the rest of each
@@ -195,7 +220,7 @@ class GnbBridge:
         s = self.stats
         print(f"[gnb] {s['slots'] / dt:5.1f} slots/s  DL {s['dl_bytes'] * 8 / dt / 1e3:6.1f} kb/s  "
               f"UL {s['ul_bytes'] * 8 / dt / 1e3:6.1f} kb/s  air {s['air_pkts'] / dt:5.0f} pkt/s  "
-              f"polls {s['polls']} (timeouts {s['poll_timeouts']})  {self.timing(dt)}  skipped {s.get('skipped', 0)}  rnti->ue {self.rnti_ue}", flush=True)
+              f"polls {s['polls']} (timeouts {s['poll_timeouts']})  {self.timing(dt)}  skipped {s.get('skipped', 0)}  sl windows {s.get('sl_windows', 0)}  rnti->ue {self.rnti_ue}", flush=True)
         self.stats = {k: 0 for k in s}
         self.t_stats = now
 
@@ -224,6 +249,8 @@ if __name__ == "__main__":
     ap.add_argument("--stats", type=float, default=5.0, help="statistics period in seconds")
     ap.add_argument("--skip-empty", action="store_true", help="dynamic slotting: do not broadcast empty "
                     "downlink-only slots; the nrUEs fill them in themselves")
+    ap.add_argument("--sl-window", type=int, default=0, help="ms of quiet for the sidelink after slot 9 of every "
+                    "period, announced on the air (AGV relay chain); 0 = off")
     ap.add_argument("--ues", default="", help="UE ids to poll, e.g. 1,2 (default: every UE in config.UES). A UE that is "
                     "not on the air costs two poll timeouts every UL slot")
     GnbBridge(ap.parse_args()).run()

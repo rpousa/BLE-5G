@@ -1,0 +1,932 @@
+<title>AGV Relay Chain</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Semi+Condensed:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+<style>
+/* Layout: the same control-room board as the two-PC and AGV testbed pages. Architecture strip, then the floor with the
+   AGVs and their chain, live charts beside and below, then the model's sources. Blue = Uu (NR to the gNB), amber = PC5 (sidelink). */
+:root {
+  --bg: #eef1f4; --panel: #ffffff; --panel-2: #f5f7f9; --line: #d3d9e0;
+  --ink: #17202b; --ink-2: #4b5866; --ink-3: #7a8693;
+  --uu: #1f63d6; --pc5: #b86e00; --core: #0d857c; --bad: #d0342c; --ok: #0f7a55;
+  --rpivot: #1f63d6; --rrelay: #1d8a3c; --rremote: #d0342c; --rack: #c9d0d8; --floor: #f8fafb;
+  --display: "Barlow Semi Condensed", "Arial Narrow", "Roboto Condensed", system-ui, sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+  --r: 6px;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0e141b; --panel: #151d26; --panel-2: #1b2530; --line: #2a3644; --ink: #e6ebf0; --ink-2: #a9b4bf; --ink-3: #74808c;
+    --uu: #5b93f5; --pc5: #f0a830; --core: #2fc0b3; --bad: #f0605a; --ok: #3dbb72;
+    --rpivot: #5b93f5; --rrelay: #45c06a; --rremote: #f0605a; --rack: #2c3846; --floor: #111921; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0e141b; --panel: #151d26; --panel-2: #1b2530; --line: #2a3644; --ink: #e6ebf0; --ink-2: #a9b4bf; --ink-3: #74808c;
+  --uu: #5b93f5; --pc5: #f0a830; --core: #2fc0b3; --bad: #f0605a; --ok: #3dbb72;
+  --rpivot: #5b93f5; --rrelay: #45c06a; --rremote: #f0605a; --rack: #2c3846; --floor: #111921; color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body { background: var(--bg); color: var(--ink); font-family: var(--display); font-size: 15px; line-height: 1.4; }
+.wrap { max-width: 1480px; margin: 0 auto; padding-block: 14px 40px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); display: grid; gap: 14px; }
+h1, h2, h3 { margin: 0; font-weight: 600; text-wrap: balance; }
+h1 { font-size: 1.55rem; }
+h2 { font-size: 1.15rem; }
+h3 { font-size: 1rem; }
+p { margin: 0; max-width: 100ch; }
+.mono { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+.label { font-size: .72rem; letter-spacing: .09em; text-transform: uppercase; color: var(--ink-3); font-weight: 600; }
+.hint { font-size: .84rem; color: var(--ink-3); }
+code { font-family: var(--mono); font-size: .8rem; background: var(--panel-2); padding: 1px 5px; border-radius: 4px; overflow-wrap: anywhere; }
+header.top { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 22px; }
+header.top .title { display: grid; gap: 4px; margin-right: auto; min-width: 0; max-width: 820px; }
+header.top .sub { color: var(--ink-2); font-size: .95rem; }
+.pill { display: inline-flex; align-items: center; gap: 7px; padding: 4px 11px; border-radius: 999px; font-family: var(--mono); font-size: .78rem; font-weight: 600; border: 1px solid var(--line); background: var(--panel); }
+.pill .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--pc5); }
+.card { background: var(--panel); border: 1px solid var(--line); border-radius: var(--r); min-width: 0; }
+.card > .hd { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 12px; padding: 11px 14px 9px; border-bottom: 1px solid var(--line); }
+.card > .hd .meta { margin-left: auto; color: var(--ink-3); font-size: .82rem; }
+.bd { padding: 12px 14px; display: grid; gap: 12px; min-width: 0; }
+.scroll { overflow-x: auto; }
+.arch { display: block; width: 100%; min-width: 980px; height: auto; }
+.arch text { font-family: var(--mono); font-size: 11px; fill: var(--ink-2); }
+.arch .bt { font-family: var(--display); font-size: 15px; font-weight: 600; fill: var(--ink); }
+.arch .bx { fill: var(--panel-2); stroke: var(--line); stroke-width: 1.3; }
+.arch .fr { fill: none; stroke: var(--ink-3); stroke-width: 1.3; stroke-dasharray: 7 5; }
+.arch .ft { font-family: var(--display); font-size: 13px; font-weight: 700; letter-spacing: .06em; fill: var(--ink-2); }
+.arch .ll { font-weight: 600; }
+
+/* simulation */
+.ctl { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 18px; padding: 10px 14px; border-bottom: 1px solid var(--line); }
+.ctl label { display: inline-flex; align-items: center; gap: 8px; font-size: .88rem; color: var(--ink-2); }
+.ctl output { font-family: var(--mono); font-size: .82rem; color: var(--ink); min-width: 5.5ch; }
+.ctl select, .ctl button { font: 600 .9rem var(--display); color: var(--ink); background: var(--panel-2); border: 1px solid var(--line); border-radius: 5px; padding: 5px 10px; cursor: pointer; }
+.ctl button:hover, .ctl select:hover { border-color: var(--ink-3); }
+.ctl button:focus-visible, .ctl select:focus-visible, .ctl input:focus-visible, .tl:focus-visible { outline: 2px solid var(--pc5); outline-offset: 1px; }
+.ctl input[type=range] { width: 120px; accent-color: var(--pc5); }
+.ctl .clock { margin-left: auto; font-family: var(--mono); font-size: .85rem; color: var(--ink-2); }
+.simgrid { display: grid; grid-template-columns: minmax(0, 1.7fr) minmax(260px, 1fr); }
+.floorwrap { padding: 12px 14px; border-right: 1px solid var(--line); min-width: 0; }
+canvas { display: block; width: 100%; }
+#floor { aspect-ratio: 48 / 31; max-width: 100%; border-radius: 4px; }
+.side { padding: 12px 14px; display: grid; gap: 10px; align-content: start; min-width: 0; }
+.agv { display: grid; grid-template-columns: auto 1fr auto; gap: 2px 10px; align-items: center; padding: 9px 11px; border: 1px solid var(--line); border-radius: 5px; background: var(--panel-2); }
+.agv .sw { width: 12px; height: 12px; border-radius: 3px; background: var(--c); grid-row: span 2; }
+.agv .nm { font-weight: 600; font-size: 1rem; }
+.agv .sub { grid-column: 2 / 4; font-family: var(--mono); font-size: .76rem; color: var(--ink-3); }
+.realgrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 10px 24px; }
+.realgrid ul { margin: 4px 0 0; padding-left: 18px; color: var(--ink-2); font-size: .9rem; display: grid; gap: 3px; }
+.agv .rep { grid-column: 1 / 4; font-family: var(--mono); font-size: .76rem; color: var(--ink-2); margin-top: 4px; }
+.agv .rep b { color: var(--ink); font-weight: 600; }
+.agv dl { grid-column: 1 / 4; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 2px 8px; margin: 6px 0 0; }
+.agv dt { font-size: .68rem; letter-spacing: .07em; text-transform: uppercase; color: var(--ink-3); }
+.agv dd { margin: 0; font-family: var(--mono); font-size: .82rem; font-variant-numeric: tabular-nums; }
+.chip { font-family: var(--mono); font-size: .72rem; font-weight: 600; padding: 2px 8px; border-radius: 999px; border: 1.5px solid; white-space: nowrap; }
+.chip.pivot { background: var(--rpivot); border-color: var(--rpivot); color: var(--panel); }
+.chip.relay { background: var(--rrelay); border-color: var(--rrelay); color: var(--panel); }
+.chip.remote { background: var(--rremote); border-color: var(--rremote); color: var(--panel); }
+.key { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: .8rem; color: var(--ink-2); }
+.key i { display: inline-block; width: 20px; height: 0; border-top: 3px solid; vertical-align: middle; margin-right: 6px; }
+.charts { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); border-top: 1px solid var(--line); }
+.charts > div { padding: 12px 14px; display: grid; gap: 6px; min-width: 0; }
+.charts > div + div { border-left: 1px solid var(--line); }
+#timeline { height: 132px; }
+#scatter { height: 220px; }
+table { border-collapse: collapse; width: 100%; font-size: .88rem; }
+th { text-align: left; font-size: .7rem; letter-spacing: .09em; text-transform: uppercase; color: var(--ink-3); font-weight: 600; padding: 6px 10px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+td { padding: 6px 10px; border-bottom: 1px solid var(--line); vertical-align: top; }
+td.n { font-family: var(--mono); font-size: .82rem; font-variant-numeric: tabular-nums; white-space: nowrap; }
+tr:last-child td { border-bottom: 0; }
+td.bad { color: var(--bad); font-weight: 600; }
+.two { display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr); border-top: 1px solid var(--line); }
+.two > div { min-width: 0; }
+.two > div + div { border-left: 1px solid var(--line); }
+.log { font-family: var(--mono); font-size: .78rem; color: var(--ink-2); display: grid; gap: 3px; max-height: 236px; overflow-y: auto; padding: 10px 14px; margin: 0; list-style: none; }
+.log li b { color: var(--ink); font-weight: 600; }
+.src td:nth-child(3) { min-width: 240px; }
+.tag { font-family: var(--mono); font-size: .7rem; font-weight: 600; padding: 1px 6px; border-radius: 4px; white-space: nowrap; }
+.tag.m { background: color-mix(in srgb, var(--ok) 16%, transparent); color: var(--ok); }
+.tag.f { background: color-mix(in srgb, var(--uu) 14%, transparent); color: var(--uu); }
+.tag.a { background: color-mix(in srgb, var(--pc5) 18%, transparent); color: var(--pc5); }
+ol.plan { margin: 0; padding-left: 20px; display: grid; gap: 7px; color: var(--ink-2); font-size: .92rem; max-width: 110ch; }
+ol.plan b { color: var(--ink); font-weight: 600; }
+@media (max-width: 1000px) { .simgrid, .charts, .two { grid-template-columns: minmax(0, 1fr); } .floorwrap, .charts > div + div, .two > div + div { border-left: 0; border-right: 0; } .charts > div + div, .two > div + div, .side { border-top: 1px solid var(--line); } }
+
+
+
+.ledg { display: inline-block; width: 9px; height: 9px; border-radius: 50%; background: var(--c); box-shadow: 0 0 6px var(--c); vertical-align: -1px; margin-right: 4px; }
+
+
+
+
+
+
+/* slot scheme and sequence */
+.slotsvg { display: block; width: 100%; min-width: 760px; height: auto; }
+.slotsvg text { font-family: var(--mono); font-size: 11px; fill: var(--ink-2); }
+.slotsvg .t { font-family: var(--display); font-size: 13px; font-weight: 600; fill: var(--ink); }
+.slotsvg .lab { font-family: var(--display); font-size: 12px; font-weight: 600; fill: var(--ink); }
+.slotsvg .in { fill: #fff; font-weight: 600; }
+.seqsvg { display: block; width: 100%; min-width: 900px; height: auto; }
+.seqsvg text { font-family: var(--mono); font-size: 11px; fill: var(--ink-2); }
+.seqsvg .ln { font-family: var(--display); font-size: 13px; font-weight: 600; fill: var(--ink); }
+.seqsvg .ls { font-size: 10px; fill: var(--ink-3); }
+.seqsvg .lh { fill: var(--panel-2); stroke: var(--line); }
+.seqsvg .ll { stroke: var(--line); stroke-width: 1.5; stroke-dasharray: 2 4; }
+.seqsvg .ml { fill: var(--ink); }
+.seqsvg .nt { fill: var(--ink-3); font-style: italic; }
+.seqsvg .m { stroke-width: 1.6; fill: none; }
+.seqsvg .m.sl, .seqsvg .mk.sl { stroke: var(--pc5); fill: var(--pc5); }
+.seqsvg .m.ul, .seqsvg .mk.ul { stroke: var(--ok); fill: var(--ok); }
+.seqsvg .m.dl, .seqsvg .mk.dl { stroke: var(--uu); fill: var(--uu); }
+.seqsvg .m.ctl, .seqsvg .mk.ctl { stroke: var(--ink-3); fill: var(--ink-3); }
+.seqsvg .bd { fill-opacity: .14; stroke-width: 1.5; }
+.seqsvg .bd.w { fill: var(--pc5); stroke: var(--pc5); } .seqsvg .bd.u { fill: var(--ok); stroke: var(--ok); }
+.seqsvg .bd.d { fill: var(--uu); stroke: var(--uu); } .seqsvg .bd.c { fill: var(--ink-3); stroke: var(--ink-3); }
+.seqsvg .bd.a { fill: var(--rpivot); stroke: var(--rpivot); stroke-dasharray: 4 3; }
+.seqsvg .bn { font-family: var(--display); font-size: 13px; font-weight: 600; fill: var(--ink); }
+.seqsvg .bs { fill: var(--ink-2); }
+.seqsvg .rb { fill: var(--panel-2); opacity: .55; }
+.seqfig { margin: 0; display: grid; gap: 8px; }
+.seqfig figcaption { font-size: .84rem; color: var(--ink-3); max-width: 110ch; }
+
+/* element architecture */
+.archsvg { display: block; width: 100%; min-width: 900px; height: auto; }
+.archsvg text { font-family: var(--mono); font-size: 11px; fill: var(--ink-2); }
+.archsvg .ph { font-family: var(--display); font-size: 12px; font-weight: 700; letter-spacing: .06em; fill: var(--ink); }
+.archsvg .an { font-family: var(--display); font-size: 12.5px; font-weight: 600; fill: var(--ink); }
+.archsvg .as { font-size: 10.5px; fill: var(--ink-3); }
+.archsvg .al { fill: var(--ink); font-size: 10.5px; }
+.archsvg .pc { fill: var(--bg); stroke: var(--line); stroke-width: 1.5; }
+.archsvg .ctl { fill: var(--panel-2); stroke: var(--line); stroke-dasharray: 4 3; }
+.archsvg .ab { fill: var(--panel); stroke: var(--line); stroke-width: 1.2; }
+.archsvg .ab.in { fill: var(--panel-2); }
+.archsvg .ab.off { fill: none; stroke: var(--ink-3); }
+.archsvg .ab.hw { fill: var(--panel-2); stroke: var(--ink-3); }
+.archsvg .air { fill: var(--pc5); fill-opacity: .07; stroke: var(--pc5); stroke-dasharray: 2 5; }
+.archsvg .led { stroke: var(--panel); stroke-width: 2; filter: drop-shadow(0 0 4px currentColor); }
+.archsvg .aw { fill: none; stroke-width: 2; stroke-linejoin: round; }
+.archsvg .aw.usb { stroke: var(--ink-3); } .archsvg .mk.usb { fill: var(--ink-3); }
+.archsvg .aw.sl { stroke: var(--pc5); } .archsvg .mk.sl { fill: var(--pc5); }
+.archsvg .aw.ul { stroke: var(--ok); } .archsvg .mk.ul { fill: var(--ok); }
+.archsvg .aw.ip { stroke: var(--core); } .archsvg .mk.ip { fill: var(--core); }
+.archsvg .aw.usb { stroke-dasharray: 3 3; }
+.archsvg .mk { stroke: none; }
+.archsvg .nb { stroke: var(--panel); stroke-width: 1.5; }
+.archsvg .nb.usb { fill: var(--ink-3); } .archsvg .nb.sl { fill: var(--pc5); } .archsvg .nb.ul { fill: var(--ok); } .archsvg .nb.ip { fill: var(--core); }
+.archsvg .nn { fill: #fff; font-weight: 700; font-size: 10.5px; }
+</style>
+
+<div class="wrap">
+  <header class="top">
+    <div class="title">
+      <h1>AGV Relay Chain</h1>
+      <div class="sub">Three AGVs, one gNB on a pole. The AGV nearest the pole is the <b>pivot</b>: it talks to the gNB over NR (Uu) and relays for the others over the sidelink (PC5). The next one relays for the last, so the chain is gNB → pivot → relay → remote. Every AGV broadcasts its position on the sidelink, and as they drive the roles move from AGV to AGV.</div>
+    </div>
+    <span class="pill"><span class="dot"></span>simulation · delays and capacities from the board runs of 11–12 Nov 2026 · board runs: <a href="#boards">recorded 12 Nov, replayed below</a></span>
+  </header>
+
+  <section class="card" aria-label="Architecture">
+    <div class="hd"><h2>Architecture</h2><span class="meta">roles as drawn are one moment; the simulation below reassigns them as the AGVs move</span></div>
+    <div class="bd scroll">
+      <svg class="arch" viewBox="0 0 1180 300" role="img" aria-label="The edge application and the 5G core on the core PC reach the gNB on the pole; the gNB talks NR Uu only to the pivot AGV; the pivot forwards over sidelink hop 0 to the relay AGV, which forwards over hop 1 to the remote AGV; all three AGVs broadcast their position on the sidelink">
+        <defs>
+          <marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--ink-3)"/></marker>
+        </defs>
+        <rect x="8" y="22" width="508" height="168" rx="6" class="fr"/>
+        <text x="20" y="16" class="ft">CORE PC</text>
+        <rect x="560" y="22" width="612" height="168" rx="6" class="fr"/>
+        <text x="572" y="16" class="ft">ON THE FLOOR · ONE BOARD PER AGV</text>
+
+        <rect x="22" y="56" width="140" height="104" rx="5" class="bx"/>
+        <text x="92" y="82" text-anchor="middle" class="bt">Edge app</text>
+        <text x="92" y="100" text-anchor="middle">ext-dn</text>
+        <text x="92" y="116" text-anchor="middle">fleet control</text>
+        <text x="92" y="132" text-anchor="middle">positions, LiDAR in</text>
+        <text x="92" y="148" text-anchor="middle">commands out</text>
+
+        <rect x="196" y="56" width="140" height="104" rx="5" class="bx" style="stroke:var(--core)"/>
+        <text x="266" y="82" text-anchor="middle" class="bt">5G core</text>
+        <text x="266" y="100" text-anchor="middle">free5GC · UPF</text>
+        <text x="266" y="116" text-anchor="middle">one PDU session</text>
+        <text x="266" y="132" text-anchor="middle">per AGV UE</text>
+
+        <rect x="370" y="56" width="136" height="104" rx="5" class="bx" style="stroke:var(--uu)"/>
+        <text x="438" y="82" text-anchor="middle" class="bt">gNB on the pole</text>
+        <text x="438" y="100" text-anchor="middle">OAI VNF + PNF</text>
+        <text x="438" y="116" text-anchor="middle">gnb_bridge</text>
+        <text x="438" y="132" text-anchor="middle">gNB board</text>
+        <text x="438" y="148" text-anchor="middle">nrlink 2402 MHz</text>
+
+        <line x1="164" y1="108" x2="194" y2="108" stroke="var(--ink-3)" stroke-width="2"/>
+        <text x="179" y="100" text-anchor="middle">N6</text>
+        <line x1="338" y1="108" x2="368" y2="108" stroke="var(--core)" stroke-width="2"/>
+        <text x="353" y="100" text-anchor="middle">N3</text>
+
+        <rect x="600" y="56" width="160" height="104" rx="5" class="bx" style="stroke:var(--rpivot);stroke-width:2.4"/>
+        <text x="680" y="82" text-anchor="middle" class="bt">Pivot AGV</text>
+        <text x="680" y="100" text-anchor="middle">nearest the pole</text>
+        <text x="680" y="116" text-anchor="middle">Uu + PC5</text>
+        <text x="680" y="132" text-anchor="middle">relays both others</text>
+        <text x="680" y="148" text-anchor="middle">(UE-to-network relay)</text>
+
+        <rect x="806" y="56" width="160" height="104" rx="5" class="bx" style="stroke:var(--rrelay);stroke-width:2.4"/>
+        <text x="886" y="82" text-anchor="middle" class="bt">Relay AGV</text>
+        <text x="886" y="100" text-anchor="middle">second nearest</text>
+        <text x="886" y="116" text-anchor="middle">PC5 up and down</text>
+        <text x="886" y="132" text-anchor="middle">forwards the remote</text>
+        <text x="886" y="148" text-anchor="middle">+ its own traffic</text>
+
+        <rect x="1004" y="56" width="156" height="104" rx="5" class="bx" style="stroke:var(--rremote);stroke-width:2.4"/>
+        <text x="1082" y="82" text-anchor="middle" class="bt">Remote AGV</text>
+        <text x="1082" y="100" text-anchor="middle">farthest</text>
+        <text x="1082" y="116" text-anchor="middle">PC5 only</text>
+        <text x="1082" y="132" text-anchor="middle">2 sidelink hops</text>
+        <text x="1082" y="148" text-anchor="middle">+ Uu to the core</text>
+
+        <path d="M508,108 q11,-12 22,0 t22,0 t22,0 t22,0" fill="none" stroke="var(--uu)" stroke-width="2.6"/>
+        <text x="554" y="88" text-anchor="middle" class="ll" style="fill:var(--uu)">Uu</text>
+        <text x="554" y="134" text-anchor="middle">2402</text>
+        <path d="M762,108 q11,-12 22,0 t21,0" fill="none" stroke="var(--pc5)" stroke-width="2.6"/>
+        <text x="783" y="88" text-anchor="middle" class="ll" style="fill:var(--pc5)">hop 0</text>
+        <path d="M968,108 q9,-12 18,0 t18,0" fill="none" stroke="var(--pc5)" stroke-width="2.6"/>
+        <text x="985" y="88" text-anchor="middle" class="ll" style="fill:var(--pc5)">hop 1</text>
+        <text x="880" y="180" text-anchor="middle">PC5 on 2450 MHz, both hops on one channel: one board talks at a time</text>
+
+        <line x1="40" y1="212" x2="1150" y2="212" stroke="var(--ink-3)" stroke-width="1.6" marker-end="url(#ah)"/>
+        <text x="46" y="204">downlink: commands, edge → core → gNB → pivot → (relay) → AGV</text>
+        <line x1="1150" y1="234" x2="40" y2="234" stroke="var(--ink-3)" stroke-width="1.6" marker-end="url(#ah)"/>
+        <text x="46" y="252">uplink: positioning + detections, LiDAR scans, AGV → (relay) → pivot → gNB → core → edge</text>
+        <path d="M700,272 L1160,272" stroke="var(--pc5)" stroke-width="1.6" stroke-dasharray="3 5" fill="none"/>
+        <text x="1160" y="264" text-anchor="end" style="fill:var(--pc5)">every 100 ms each AGV broadcasts its position on PC5</text>
+        <text x="1160" y="290" text-anchor="end">all apply one rule: nearest = pivot, next = relay, farthest = remote (with hysteresis)</text>
+      </svg>
+    </div>
+    <div class="bd" style="border-top:1px solid var(--line);padding-top:10px">
+      <p class="hint">Only the pivot uses the gNB's air time, so Uu carries all three AGVs' traffic through one UE. When the order of distances changes, the chain is rebuilt: the new pivot takes over the Uu traffic and the sidelink pairs are set up again. Planned boards: gNB board 3TJ2B15JGASV3 on the pole; AGV A on the UE1 board 2HOKMMVEX1WMP, AGV B on the UE2 board GBAMNH4BQ3CSB, AGV C on the BLE1 board 3VWLILYT2A1AK, reflashed to nrlink. Each board&#x27;s LED shows its AGV&#x27;s role in the colours used on this page: blue pivot, green relay, red remote.</p>
+    </div>
+  </section>
+
+  <section class="card" aria-label="On the boards, element by element" id="elements">
+    <div class="hd"><h2>On the boards, element by element</h2><span class="meta">a UE per AGV, two attached · roles as at one moment: A pivot, B relay, C remote</span></div>
+    <div class="bd">
+      <p class="hint" style="max-width:110ch">Each AGV is one board and has its own OAI UE: A nrUE1, B nrUE2, C nrUE3. The two AGVs nearest the pole (pivot and relay) are in the gNB&#x27;s coverage, and their UEs are attached. The fleet&#x27;s traffic leaves through the pivot&#x27;s UE. The relay&#x27;s UE is a warm standby: it sends nothing, and the gNB still grants it a small block every TDD period, so its uplink stays ready (MCS 2, the configured maximum). On a pivot change, if the relay becomes pivot, its UE is already up and the traffic switches at once. Otherwise the old pivot&#x27;s UE keeps carrying the traffic until the new pivot&#x27;s UE has attached (make before break), and only then stops. The remote&#x27;s UE is stopped, and its board answers the gNB&#x27;s polls with nothing, as a UE that isn&#x27;t there would. agv_chain.py on the UE PC plays the AGVs&#x27; computers. It sends hops only inside the gNB&#x27;s windows, one board at a time, and each board&#x27;s RGB LED shows its role: <b style="color:var(--rpivot)">blue pivot</b>, <b style="color:var(--rrelay)">green relay</b>, <b style="color:var(--rremote)">red remote</b>. A pivot&#x27;s LED blinks while its UE attaches. The numbers follow a positioning message from the remote AGV C to the edge server.</p>
+      <div style="overflow-x:auto"><svg class="archsvg" viewBox="0 0 1100 584" role="img" aria-label="Every element on the boards: the UE PC with oai-nrue1 and its forwarder, the controller that plays the three AGVs and nrUE1&#x27;s radio, the three AGV boards with their role LEDs, the air, the gNB board, and on the core PC gnb_bridge, the PNF, the VNF, the UPF and the edge; numbered arrows follow the remote AGV&#x27;s positioning message through all of them"><defs><marker id="ar-usb" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="mk usb"/></marker><marker id="ar-sl" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="mk sl"/></marker><marker id="ar-ul" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="mk ul"/></marker><marker id="ar-ip" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="mk ip"/></marker></defs><rect x="10" y="28" width="1080" height="208" rx="10" class="pc"/><text x="1078" y="47" text-anchor="end" class="ph">UE PC  ·  192.168.10.232</text><rect x="30" y="58" width="200" height="116" rx="6" class="ab " style="stroke:var(--uu);stroke-width:2"/><text x="40" y="76" text-anchor="start" class="an">oai-nrue1 · AGV A&#x27;s UE</text><text x="40" y="91" text-anchor="start" class="as">attached: carries the</text><text x="40" y="104" text-anchor="start" class="as">fleet&#x27;s traffic now</text><rect x="42" y="118" width="162" height="48" rx="6" class="ab in"/><text x="52" y="136" text-anchor="start" class="an">agvc-fwd1</text><text x="52" y="151" text-anchor="start" class="as">sidecar, UDP on oaitun_ue1</text><rect x="30" y="180" width="200" height="22" rx="5" class="ab" style="stroke:var(--rrelay);stroke-width:2"/><text x="40" y="195" text-anchor="start" class="as">oai-nrue2 · B: attached, standby</text><rect x="30" y="206" width="200" height="22" rx="5" class="ab off" stroke-dasharray="4 3"/><text x="40" y="221" text-anchor="start" class="as">oai-nrue3 · C: stopped</text><rect x="252" y="58" width="826" height="102" rx="8" class="ctl"/><text x="264" y="76" text-anchor="start" class="an">agv_chain.py ue: one process plays the three AGVs&#x27; computers</text><rect x="268" y="88" width="160" height="62" rx="6" class="ab "/><text x="278" y="106" text-anchor="start" class="an">Uu radios</text><text x="278" y="121" text-anchor="start" class="as">UDP :5001-5003, one per</text><text x="278" y="134" text-anchor="start" class="as">UE, via its AGV&#x27;s board</text><rect x="450" y="88" width="170" height="62" rx="6" class="ab " style="stroke:var(--rpivot);stroke-width:2"/><text x="460" y="106" text-anchor="start" class="an">AGV A node · pivot</text><text x="460" y="121" text-anchor="start" class="as">motion, traffic, next hop</text><text x="460" y="134" text-anchor="start" class="as">from the current chain</text><rect x="670" y="88" width="170" height="62" rx="6" class="ab " style="stroke:var(--rrelay);stroke-width:2"/><text x="680" y="106" text-anchor="start" class="an">AGV B node · relay</text><text x="680" y="121" text-anchor="start" class="as">motion, traffic, next hop</text><text x="680" y="134" text-anchor="start" class="as">from the current chain</text><rect x="890" y="88" width="170" height="62" rx="6" class="ab " style="stroke:var(--rremote);stroke-width:2"/><text x="900" y="106" text-anchor="start" class="an">AGV C node · remote</text><text x="900" y="121" text-anchor="start" class="as">motion, traffic, next hop</text><text x="900" y="134" text-anchor="start" class="as">from the current chain</text><text x="22" y="258" text-anchor="start" class="as">USB · MCU-Link VCOM · 1 Mbaud SLIP</text><rect x="465" y="266" width="140" height="56" rx="6" class="ab hw"/><text x="475" y="284" text-anchor="start" class="an">UE1 board</text><text x="475" y="299" text-anchor="start" class="as">FRDM-MCXW72</text><circle cx="585" cy="288" r="9" style="fill:var(--rpivot)" class="led"/><text x="600" y="313" text-anchor="end" class="as">LED blue</text><rect x="685" y="266" width="140" height="56" rx="6" class="ab hw"/><text x="695" y="284" text-anchor="start" class="an">UE2 board</text><text x="695" y="299" text-anchor="start" class="as">FRDM-MCXW72</text><circle cx="805" cy="288" r="9" style="fill:var(--rrelay)" class="led"/><text x="820" y="313" text-anchor="end" class="as">LED green</text><rect x="905" y="266" width="140" height="56" rx="6" class="ab hw"/><text x="915" y="284" text-anchor="start" class="an">BLE1 board</text><text x="915" y="299" text-anchor="start" class="as">FRDM-MCXW72</text><circle cx="1025" cy="288" r="9" style="fill:var(--rremote)" class="led"/><text x="1040" y="313" text-anchor="end" class="as">LED red</text><rect x="10" y="334" width="1080" height="44" rx="8" class="air"/><text x="22" y="352" text-anchor="start" class="ph">air  ·  2402 MHz  ·  GFSK 1 Mbit/s</text><text x="22" y="368" text-anchor="start" class="as">one channel: the gNB&#x27;s slots, then 25 ms windows for the hops</text><rect x="40" y="392" width="160" height="50" rx="6" class="ab hw"/><text x="50" y="410" text-anchor="start" class="an">gNB board</text><text x="50" y="425" text-anchor="start" class="as">on the pole · nrlink v4</text><rect x="10" y="456" width="1080" height="118" rx="10" class="pc"/><text x="1078" y="475" text-anchor="end" class="ph">core PC  ·  192.168.10.223</text><rect x="30" y="488" width="180" height="70" rx="6" class="ab "/><text x="40" y="506" text-anchor="start" class="an">gnb_bridge.py</text><text x="40" y="521" text-anchor="start" class="as">slots ↔ air, polls</text><text x="40" y="534" text-anchor="start" class="as">--sl-window 25</text><rect x="240" y="488" width="180" height="70" rx="6" class="ab "/><text x="250" y="506" text-anchor="start" class="an">oai-pnf</text><text x="250" y="521" text-anchor="start" class="as">nFAPI PNF</text><text x="250" y="534" text-anchor="start" class="as">waits for each slot</text><rect x="450" y="488" width="180" height="70" rx="6" class="ab "/><text x="460" y="506" text-anchor="start" class="an">oai-vnf</text><text x="460" y="521" text-anchor="start" class="as">gNB MAC … CU</text><text x="460" y="534" text-anchor="start" class="as">schedules UL grants</text><rect x="660" y="488" width="180" height="70" rx="6" class="ab " style="stroke:var(--core);stroke-width:2"/><text x="670" y="506" text-anchor="start" class="an">free5GC UPF</text><text x="670" y="521" text-anchor="start" class="as">N3 GTP-U in</text><text x="670" y="534" text-anchor="start" class="as">N6 out</text><rect x="870" y="488" width="180" height="70" rx="6" class="ab " style="stroke:var(--core);stroke-width:2"/><text x="880" y="506" text-anchor="start" class="an">agvc-edge</text><text x="880" y="521" text-anchor="start" class="as">oai-ext-dn netns</text><text x="880" y="534" text-anchor="start" class="as">UDP :6501, cmds 2 Hz</text><path d="M960,150 L960,266" class="aw usb" marker-end="url(#ar-usb)"/><circle cx="960" cy="208" r="9" class="nb usb"/><text x="960" y="212" text-anchor="middle" class="nn">1</text><text x="950" y="205" text-anchor="end" class="al">positioning: 1 packet</text><path d="M905,288 L825,288" class="aw sl" marker-end="url(#ar-sl)"/><circle cx="865" cy="288" r="9" class="nb sl"/><text x="865" y="292" text-anchor="middle" class="nn">2</text><text x="865" y="278" text-anchor="middle" class="al">hop 1</text><path d="M745,266 L745,150" class="aw usb" marker-end="url(#ar-usb)"/><circle cx="745" cy="208" r="9" class="nb usb"/><text x="745" y="212" text-anchor="middle" class="nn">3</text><path d="M785,150 L785,266" class="aw usb" marker-end="url(#ar-usb)"/><circle cx="785" cy="208" r="9" class="nb usb"/><text x="785" y="212" text-anchor="middle" class="nn">4</text><path d="M685,302 L605,302" class="aw sl" marker-end="url(#ar-sl)"/><circle cx="645" cy="302" r="9" class="nb sl"/><text x="645" y="306" text-anchor="middle" class="nn">5</text><text x="645" y="292" text-anchor="middle" class="al">hop 2</text><path d="M525,266 L525,150" class="aw usb" marker-end="url(#ar-usb)"/><circle cx="525" cy="208" r="9" class="nb usb"/><text x="525" y="212" text-anchor="middle" class="nn">6</text><path d="M470,150 L470,168 L244,168 L244,142 L206,142" class="aw ip" marker-end="url(#ar-ip)"/><circle cx="334" cy="168" r="9" class="nb ip"/><text x="334" y="172" text-anchor="middle" class="nn">7</text><path d="M216,118 L216,100" class="aw ip" marker-end="url(#ar-ip)"/><circle cx="216" cy="109" r="9" class="nb ip"/><text x="216" y="113" text-anchor="middle" class="nn">8</text><path d="M230,110 L268,110" class="aw ul" marker-end="url(#ar-ul)"/><circle cx="249" cy="110" r="9" class="nb ul"/><text x="249" y="114" text-anchor="middle" class="nn">9</text><path d="M400,150 L400,246 L565,246 L565,266" class="aw ul" marker-end="url(#ar-ul)"/><circle cx="499" cy="246" r="9" class="nb ul"/><text x="499" y="250" text-anchor="middle" class="nn">10</text><path d="M565,322 L565,384 L180,384 L180,392" class="aw ul" marker-end="url(#ar-ul)"/><circle cx="372" cy="384" r="9" class="nb ul"/><text x="372" y="388" text-anchor="middle" class="nn">11</text><path d="M120,442 L120,488" class="aw ul" marker-end="url(#ar-ul)"/><circle cx="120" cy="465" r="9" class="nb ul"/><text x="120" y="469" text-anchor="middle" class="nn">12</text><path d="M210,523 L240,523" class="aw ul" marker-end="url(#ar-ul)"/><circle cx="225" cy="523" r="9" class="nb ul"/><text x="225" y="527" text-anchor="middle" class="nn">13</text><path d="M420,523 L450,523" class="aw ul" marker-end="url(#ar-ul)"/><circle cx="435" cy="523" r="9" class="nb ul"/><text x="435" y="527" text-anchor="middle" class="nn">14</text><path d="M630,523 L660,523" class="aw ip" marker-end="url(#ar-ip)"/><circle cx="645" cy="523" r="9" class="nb ip"/><text x="645" y="527" text-anchor="middle" class="nn">15</text><path d="M840,523 L870,523" class="aw ip" marker-end="url(#ar-ip)"/><circle cx="855" cy="523" r="9" class="nb ip"/><text x="855" y="527" text-anchor="middle" class="nn">16</text></svg></div>
+      <div class="key"><span><i style="border-color:var(--pc5);border-top-width:3px"></i>sidelink hop on the air</span><span><i style="border-color:var(--ok);border-top-width:3px"></i>Uu uplink: slots, poll, answer</span><span><i style="border-color:var(--core);border-top-width:3px"></i>IP: the PDU session and the core</span><span><i style="border-color:var(--ink-3);border-top-width:3px"></i>USB between a board and its PC</span></div>
+      <div class="scroll"><table>
+        <thead><tr><th>#</th><th>From → to</th><th>Over</th><th>What happens</th></tr></thead>
+        <tbody><tr><td class="n">1</td><td>AGV C node → C board</td><td>USB</td><td>The remote AGV&#x27;s positioning message (≈ 90 B, one air packet) is queued, then sent by its board in the next window.</td></tr><tr><td class="n">2</td><td>C board → B board</td><td>air · PC5 hop 1</td><td>AIR_CH to the relay&#x27;s link id. Every board hears it; only B takes it. No retransmission.</td></tr><tr><td class="n">3</td><td>B board → B node</td><td>USB</td><td>B&#x27;s node reads it and picks the next hop from the chain as it is now.</td></tr><tr><td class="n">4</td><td>B node → B board</td><td>USB</td><td>Queued for a window again: the same one if it fits, else ≈ 70 ms later.</td></tr><tr><td class="n">5</td><td>B board → A board</td><td>air · PC5 hop 2</td><td>AIR_CH to the pivot.</td></tr><tr><td class="n">6</td><td>A board → A node</td><td>USB</td><td>The pivot&#x27;s node has it: the sidelink part is over.</td></tr><tr><td class="n">7</td><td>A node → agvc-fwd1</td><td>unix socket</td><td>Into the network namespace of nrUE1, AGV A&#x27;s own UE: the pivot&#x27;s.</td></tr><tr><td class="n">8</td><td>agvc-fwd1 → nrUE1</td><td>UDP on oaitun_ue1</td><td>An IP packet in nrUE1&#x27;s PDU session, to the edge 192.168.70.132:6501. nrUE1 buffers it and asks for a grant.</td></tr><tr><td class="n">9</td><td>nrUE1 → its radio</td><td>UDP :5001</td><td>In the next U slot, nrUE1&#x27;s UL_SLOT (PUSCH) goes to the controller, which plays the UEs&#x27; radios.</td></tr><tr><td class="n">10</td><td>Uu radio → A board</td><td>USB</td><td>Through AGV A&#x27;s own board. B&#x27;s board answers for nrUE2, the standby; C&#x27;s board answers with nothing (out of coverage).</td></tr><tr><td class="n">11</td><td>A board → gNB board</td><td>air · Uu</td><td>AIR_UL, the answer to the gNB board&#x27;s AIR_POLL for UE 1.</td></tr><tr><td class="n">12</td><td>gNB board → gnb_bridge</td><td>USB</td><td>The bridge has been waiting on this poll: the PNF&#x27;s slot is held until it arrives.</td></tr><tr><td class="n">13</td><td>gnb_bridge → oai-pnf</td><td>UDP</td><td>The UL slot, as the PHY would report it.</td></tr><tr><td class="n">14</td><td>oai-pnf → oai-vnf</td><td>nFAPI</td><td>RX_DATA, CRC, UCI: the gNB&#x27;s MAC decodes it.</td></tr><tr><td class="n">15</td><td>oai-vnf → UPF</td><td>N3 · GTP-U</td><td>Up the PDU session.</td></tr><tr><td class="n">16</td><td>UPF → agvc-edge</td><td>N6 · UDP</td><td>Logged with its send time: L2 p50 255 ms for the remote, 200 ms relay, 124 ms pivot.</td></tr></tbody>
+      </table></div>
+    </div>
+  </section>
+
+  <section class="card" aria-label="Simulation">
+    <div class="hd"><h2>Simulation</h2><span class="meta">the AGV testbed's floor and route · three AGVs a third of the loop apart · seeded, so a reset replays the same run</span></div>
+    <p class="hint" style="padding:8px 14px 0;margin:0">This simulation runs in your browser, from the model below. It does not drive the boards. The board runs further down used the same motion model, run by the controller on the UE PC. What you see there is a recording, replayed.</p>
+    <div class="ctl">
+      <button type="button" id="play">Pause</button>
+      <label for="speed">Speed <select id="speed"><option value="1">1×</option><option value="2" selected>2×</option><option value="5">5×</option><option value="10">10×</option></select></label>
+      <label for="level">Load <select id="level"><option value="L1">L1 · LiDAR 1 Hz, detections 5 Hz</option><option value="L2" selected>L2 · LiDAR 2 Hz, detections 10 Hz</option><option value="L3">L3 · LiDAR 4 Hz, detections 20 Hz</option></select></label>
+      <label for="hyst">Hysteresis <input type="range" id="hyst" min="0" max="6" step="0.5" value="2"><output id="hystv">2 m</output></label>
+      <label for="gap">Switch gap <input type="range" id="gap" min="0" max="2000" step="100" value="300"><output id="gapv">300 ms</output></label>
+      <label for="cov">UEs attached <select id="cov"><option value="2" selected>2: pivot + relay</option><option value="1">1: pivot only</option></select></label>
+      <label for="att">Pivot attach <input type="range" id="att" min="0" max="8000" step="100" value="3300"><output id="attv">3.3 s</output></label>
+      <button type="button" id="reset">Reset</button>
+      <span class="clock" id="clock">t = 0 s</span>
+    </div>
+    <div class="simgrid">
+      <div class="floorwrap">
+        <canvas id="floor" role="img" aria-label="Factory floor, 48 by 30 m: racks, the AGV route, the gNB pole, three AGVs and the current chain from the pole through the pivot and relay to the remote AGV"></canvas>
+        <div class="key" style="margin-top:8px">
+          <span><i style="border-color:var(--uu)"></i>Uu, gNB ↔ pivot</span>
+          <span><i style="border-color:var(--pc5)"></i>PC5 hop</span>
+          <span><i style="border-color:var(--ink-3);border-top-style:dashed;border-top-width:2px"></i>distance to the pole, rings every 5 m</span>
+          <span>AGV colour = its role: <b style="color:var(--rpivot)">pivot</b>, <b style="color:var(--rrelay)">relay</b>, <b style="color:var(--rremote)">remote</b>, as the board LEDs</span>
+          <span>dots: messages in flight on that hop</span>
+        </div>
+      </div>
+      <div class="side" id="agvs" aria-live="off"></div>
+    </div>
+    <div class="charts">
+      <div>
+        <span class="label">Roles over the last 120 s</span>
+        <canvas id="timeline" role="img" aria-label="Role of each AGV over the last two minutes"></canvas>
+        <div class="key"><span><i style="border-color:var(--rpivot);border-top-width:8px"></i>pivot</span><span><i style="border-color:var(--rrelay);border-top-width:8px"></i>relay</span><span><i style="border-color:var(--rremote);border-top-width:8px"></i>remote</span><span>ticks: chain rebuilt</span></div>
+      </div>
+      <div>
+        <span class="label">One-way delay, every message, last 60 s</span>
+        <canvas id="scatter" role="img" aria-label="One-way delay of every message in the last minute, by AGV, on a log scale"></canvas>
+        <div class="key"><span>colour: the sender&#x27;s role (commands: the receiver&#x27;s) · ● LiDAR scan · • positioning + detections · ◦ command (down) · × dropped</span></div>
+      </div>
+    </div>
+    <div class="two">
+      <div class="scroll">
+        <table>
+          <thead><tr><th>Since reset · by role</th><th>Flow</th><th>Messages</th><th>p50</th><th>p90</th><th>Lost</th></tr></thead>
+          <tbody id="live"></tbody>
+        </table>
+        <p class="hint" style="padding:6px 10px 10px">The role is the sender&#x27;s (or, for commands, the receiver&#x27;s) when the message was made. Lost: dropped at a sidelink hop after 100 ms waiting for the air, or at the Uu queue after 5 s.</p>
+      </div>
+      <div>
+        <div style="padding:10px 14px 0"><span class="label">Chain changes</span></div>
+        <ul class="log" id="log"></ul>
+      </div>
+    </div>
+  </section>
+
+  <section class="card" aria-label="By load level">
+    <div class="hd"><h2>Ten minutes at each load</h2><span class="meta">computed when this page opens · hysteresis 2 m, switch gap 300 ms, 2 UEs attached · same seed</span></div>
+    <div class="scroll">
+      <table>
+        <thead><tr><th>Load</th><th>Role</th><th>Positioning + detections p50 / p90</th><th>LiDAR p50 / p90</th><th>Command (down) p50 / p90</th><th>Lost</th><th>Uu busy</th><th>PC5 busy</th><th>Chain changes</th></tr></thead>
+        <tbody id="levels"></tbody>
+      </table>
+    </div>
+    <div class="bd" style="border-top:1px solid var(--line)">
+      <p class="hint" id="levelnote">Delays in ms. For comparison, the AGV testbed on 11 Nov (one AGV, its own UE straight to the gNB, tuned NR) measured positioning + detections 59–74 ms and LiDAR about 142 ms at the median. At L3 the pivot&#x27;s Uu has to carry about 112 kbit/s, three AGVs&#x27; worth, against the roughly 100 it delivers: its queue fills to the 5 s limit, and the sidelink, busier too, starts dropping items that wait over 100 ms.</p>
+    </div>
+  </section>
+
+  <section class="card" aria-label="Model">
+    <div class="hd"><h2>What the simulation uses</h2><span class="meta">every figure is either measured on the boards, fitted to those measurements, or an assumption, as tagged</span></div>
+    <div class="scroll">
+      <table class="src">
+        <thead><tr><th>Part</th><th>Model</th><th>From</th></tr></thead>
+        <tbody>
+          <tr><td>Floor, route, motion</td><td>48 × 30 m hall, the testbed&#x27;s loop of 124 m and six checkpoints, 1.2 m/s, 1–4 s stops; an AGV keeps 3 m behind the one ahead. Pole at (22, 10.5) m.</td><td><span class="tag m">reused</span> <code>apps/agv.py</code></td></tr>
+          <tr><td>Traffic</td><td>Per AGV: positioning + detections (58–98 B IP), LiDAR scans (780 B IP) at the testbed&#x27;s levels; a 68 B command down every 0.5 s.</td><td><span class="tag m">reused</span> AGV testbed message formats and rates</td></tr>
+          <tr><td>Uu uplink, pivot → gNB</td><td>A FIFO at 100 kbit/s, then 46 ms + 0.04 ms/B with ±22 % lognormal jitter: 59 ms for a detection, 139 ms for a LiDAR scan when idle.</td><td><span class="tag f">fitted</span> AGV testbed, tuned NR, 11 Nov: 59–74 / 142 ms medians; uplink saturates at 91–109 kbit/s</td></tr>
+          <tr><td>Uu downlink, gNB → pivot</td><td>A FIFO at 190 kbit/s, then 33 ms + 0.02 ms/B, ±20 %.</td><td><span class="tag f">fitted</span> 96 ms ping round trip minus the uplink half; 192 kbit/s delivered down</td></tr>
+          <tr><td>PC5 hop</td><td>One shared channel for both hops (one board talks at a time): each hop holds it 4 ms + 0.029 ms/B, then 8 ms to the far bridge. A relaying AGV adds 18 ms. Items that wait over 100 ms for the air are dropped, as <code>sl_bridge</code> does.</td><td><span class="tag f">fitted</span> two-hop chain over three boards (option A): ping 94 / 147 / 250 ms at 56 / 500 / 1400 B, about 100 kbit/s delivered at saturation</td></tr>
+          <tr><td>Position beacons</td><td>48 B per AGV every 100 ms, riding the sidelink exchanges (1.4 ms of air each).</td><td><span class="tag a">assumed</span></td></tr>
+          <tr><td>Pivot election</td><td>Nearest to the pole. A new pivot takes over when it is nearer by more than the hysteresis for 0.3 s; relay and remote swap the same way.</td><td><span class="tag a">assumed</span> rule, applied by every AGV from the same beacons</td></tr>
+          <tr><td>Pivot attach</td><td>On a pivot change the new pivot&#x27;s UE attaches; no Uu until its session is up, and messages reaching the pivot meanwhile are dropped.</td><td><span class="tag m">measured</span> board runs, a UE per AGV: 3.3 s median over 63 attaches (2.4–5.6 s, 10th–90th percentile)</td></tr>
+          <tr><td>Switch gap</td><td>After a change, new messages wait this long for the chain (new PC5 pairs, the new pivot&#x27;s relay path); messages already on their way finish on the old one.</td><td><span class="tag a">assumed</span> not measured: OAI&#x27;s relay discovery and PC5 setup were not timed in step C</td></tr>
+          <tr><td>Pivot forwarding, core</td><td>1 ms at the pivot between PC5 and Uu; 1 ms through UPF and ext-dn.</td><td><span class="tag m">measured</span> N3/N6 pings under 0.3 ms; host forwarding</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="bd" style="border-top:1px solid var(--line)">
+      <p class="hint">Not modelled: radio loss (the boards&#x27; links were clean at these distances in the testbed), collisions between the gNB&#x27;s 2402 MHz and the sidelink&#x27;s 2450 MHz, and the gNB polling the two idle AGV UEs. The Uu figures come from a gNB that polled two UEs per uplink slot; with only the pivot active it could be somewhat faster.</p>
+    </div>
+  </section>
+
+  <section class="card" aria-label="Slot scheme and packet sequence" id="slots">
+    <div class="hd"><h2>Slot scheme and packet sequence</h2><span class="meta">as the boards ran it · timings from the recorded runs</span></div>
+    <div class="bd">
+      <h3>Slot scheme: OAI&#x27;s slots, then a window for the sidelink</h3>
+      <p class="hint" style="max-width:110ch">The gNB side is the nFAPI split of the two-PC testbed: 30 kHz subcarriers, a TDD period of 10 slots (7 D, 1 S, 2 U), slowed down because the PNF waits for gnb_bridge to put each slot on the air. Empty D slots are not sent. With a UE per AGV the bridge polls all three; only the pivot&#x27;s UE answers with its uplink (the other boards answer at once with nothing), and an uplink slot takes 12.6–14.1 ms. In the fleet runs it polled one UE, through whichever board was pivot (about 10.4 ms). After slot 9 of every period it broadcasts AIR_SLWIN and stays silent for 25 ms: the sidelink&#x27;s air, granted by the gNB as a mode 1 resource pool would be. Inside the window the AGV boards send one at a time: hops, then position beacons every 0.5 s.</p>
+      <div style="overflow-x:auto"><svg class="slotsvg" viewBox="0 0 1100 352" role="img" aria-label="One TDD period on the boards at L2, about 74 ms: seven downlink slots, a special and two uplink slots that each poll the pivot&#x27;s board, then a 25 ms sidelink window; and one window at three times the scale, with each packet coloured by the sending board&#x27;s role, unpaced and paced"><text x="0" y="16" text-anchor="start" class="t">One TDD period on the boards at L2: OAI&#x27;s 10 slots, slowed down, then the sidelink window</text><text x="0" y="47" text-anchor="start" class="lab">gNB</text><text x="0" y="61" text-anchor="start" class="lab">slots</text><rect x="92.0" y="32.0" width="35.5" height="30.0" rx="2" style="fill:var(--uu)"/><text x="110" y="52" text-anchor="middle" class="in">D</text><rect x="129.5" y="32.0" width="7.7" height="30.0" rx="2" style="fill:var(--line)"/><rect x="139.3" y="32.0" width="35.5" height="30.0" rx="2" style="fill:var(--uu)"/><text x="157" y="52" text-anchor="middle" class="in">D</text><rect x="176.8" y="32.0" width="7.7" height="30.0" rx="2" style="fill:var(--line)"/><rect x="186.6" y="32.0" width="35.5" height="30.0" rx="2" style="fill:var(--uu)"/><text x="204" y="52" text-anchor="middle" class="in">D</text><rect x="224.1" y="32.0" width="7.7" height="30.0" rx="2" style="fill:var(--line)"/><rect x="233.8" y="32.0" width="35.5" height="30.0" rx="2" style="fill:var(--uu)"/><text x="252" y="52" text-anchor="middle" class="in">D</text><rect x="271.4" y="32.0" width="152.3" height="30.0" rx="2" style="fill:var(--ink-3)"/><text x="348" y="52" text-anchor="middle" class="in">S</text><rect x="271.4" y="66.0" width="26.8" height="9.0" rx="2" style="fill:var(--uu)" opacity=".8"/><rect x="299.2" y="66.0" width="115.8" height="9.0" rx="2" style="fill:var(--rpivot)" opacity=".45"/><rect x="425.7" y="32.0" width="152.3" height="30.0" rx="2" style="fill:var(--ok)"/><text x="502" y="52" text-anchor="middle" class="in">U</text><rect x="425.7" y="66.0" width="26.8" height="9.0" rx="2" style="fill:var(--uu)" opacity=".8"/><rect x="453.5" y="66.0" width="115.8" height="9.0" rx="2" style="fill:var(--rpivot)" opacity=".45"/><rect x="580.0" y="32.0" width="152.3" height="30.0" rx="2" style="fill:var(--ok)"/><text x="656" y="52" text-anchor="middle" class="in">U</text><rect x="580.0" y="66.0" width="26.8" height="9.0" rx="2" style="fill:var(--uu)" opacity=".8"/><rect x="607.9" y="66.0" width="115.8" height="9.0" rx="2" style="fill:var(--rpivot)" opacity=".45"/><rect x="734.4" y="32.0" width="16.7" height="30.0" rx="2" style="fill:var(--ink-2)"/><rect x="751.1" y="32.0" width="328.9" height="30.0" rx="2" style="fill:var(--panel-2)" stroke="var(--pc5)" stroke-width="1.5" stroke-dasharray="4 3"/><text x="908" y="47" text-anchor="middle" style="fill:var(--pc5);font-weight:600">sidelink window, 25 ms</text><text x="908" y="60" text-anchor="middle">the gNB stays silent</text><line x1="92.0" x2="92.0" y1="86" y2="90" stroke="var(--ink-3)"/><text x="92" y="102" text-anchor="middle">0 ms</text><line x1="231.0" x2="231.0" y1="86" y2="90" stroke="var(--ink-3)"/><text x="231" y="102" text-anchor="middle">10 ms</text><line x1="370.1" x2="370.1" y1="86" y2="90" stroke="var(--ink-3)"/><text x="370" y="102" text-anchor="middle">20 ms</text><line x1="509.1" x2="509.1" y1="86" y2="90" stroke="var(--ink-3)"/><text x="509" y="102" text-anchor="middle">30 ms</text><line x1="648.2" x2="648.2" y1="86" y2="90" stroke="var(--ink-3)"/><text x="648" y="102" text-anchor="middle">40 ms</text><line x1="787.2" x2="787.2" y1="86" y2="90" stroke="var(--ink-3)"/><text x="787" y="102" text-anchor="middle">50 ms</text><line x1="926.3" x2="926.3" y1="86" y2="90" stroke="var(--ink-3)"/><text x="926" y="102" text-anchor="middle">60 ms</text><line x1="1065.3" x2="1065.3" y1="86" y2="90" stroke="var(--ink-3)"/><text x="1065" y="102" text-anchor="middle">70 ms</text><line x1="92" x2="1082" y1="86" y2="86" stroke="var(--line)"/><text x="92" y="122" text-anchor="start">D with content ≈ 2.7 ms, empty D (grey) 0.7 ms. S and U ≈ 11 ms: the slot broadcast (blue bar under it), then a poll</text><text x="92" y="137" text-anchor="start">of the pivot&#x27;s board (light bar), which waits up to 15 ms for nrUE1&#x27;s uplink. The split is estimated from the slot timings;</text><text x="92" y="152" text-anchor="start">the period is measured: 13–15 windows a second, 67–77 ms.</text><text x="0" y="182" text-anchor="start" class="t">Inside one window, at 3× the scale: one board at a time; colour = the sender&#x27;s role, as its LED</text><text x="0" y="211" text-anchor="start" class="lab">unpaced</text><rect x="92.0" y="196.0" width="47.5" height="22.0" rx="2" style="fill:var(--ink-2)"/><rect x="765.2" y="196.0" width="315.8" height="22.0" rx="2" style="fill:var(--line)" opacity=".55"/><rect x="155.4" y="196.0" width="78.0" height="22.0" rx="2" style="fill:var(--rremote)"/><text x="159" y="211" text-anchor="start" class="in">positioning</text><rect x="235.4" y="196.0" width="78.0" height="22.0" rx="2" style="fill:var(--rrelay)"/><text x="239" y="211" text-anchor="start" class="in">fwd</text><rect x="315.3" y="196.0" width="146.1" height="22.0" rx="2" style="fill:var(--rrelay)"/><text x="319" y="211" text-anchor="start" class="in">own LiDAR 1/4</text><rect x="463.4" y="196.0" width="146.1" height="22.0" rx="2" style="fill:var(--rrelay)"/><text x="467" y="211" text-anchor="start" class="in">2/4</text><rect x="611.6" y="196.0" width="68.5" height="22.0" rx="2" style="fill:var(--rpivot)"/><text x="616" y="211" text-anchor="start" class="in">cmd</text><text x="688" y="211" text-anchor="start">5 packets fit</text><text x="0" y="257" text-anchor="start" class="lab">paced</text><rect x="92.0" y="242.0" width="47.5" height="22.0" rx="2" style="fill:var(--ink-2)"/><rect x="765.2" y="242.0" width="315.8" height="22.0" rx="2" style="fill:var(--line)" opacity=".55"/><rect x="155.4" y="242.0" width="78.0" height="22.0" rx="2" style="fill:var(--rremote)"/><text x="159" y="257" text-anchor="start" class="in">positioning</text><rect x="278.9" y="242.0" width="78.0" height="22.0" rx="2" style="fill:var(--rrelay)"/><text x="283" y="257" text-anchor="start" class="in">fwd</text><rect x="402.5" y="242.0" width="146.1" height="22.0" rx="2" style="fill:var(--rrelay)"/><text x="406" y="257" text-anchor="start" class="in">own LiDAR 1/4</text><text x="665" y="257" text-anchor="start">3 packets fit, the rest waits</text><line x1="92.0" x2="92.0" y1="284" y2="288" stroke="var(--ink-3)"/><text x="92" y="300" text-anchor="middle">0 ms</text><line x1="290.0" x2="290.0" y1="284" y2="288" stroke="var(--ink-3)"/><text x="290" y="300" text-anchor="middle">5 ms</text><line x1="488.0" x2="488.0" y1="284" y2="288" stroke="var(--ink-3)"/><text x="488" y="300" text-anchor="middle">10 ms</text><line x1="686.0" x2="686.0" y1="284" y2="288" stroke="var(--ink-3)"/><text x="686" y="300" text-anchor="middle">15 ms</text><line x1="884.0" x2="884.0" y1="284" y2="288" stroke="var(--ink-3)"/><text x="884" y="300" text-anchor="middle">20 ms</text><line x1="1082.0" x2="1082.0" y1="284" y2="288" stroke="var(--ink-3)"/><text x="1082" y="300" text-anchor="middle">25 ms</text><rect x="92.0" y="314.0" width="14.0" height="10.0" rx="2" style="fill:var(--ink-2)"/><text x="112" y="324" text-anchor="start">AIR_SLWIN from the gNB board: the window opens</text><rect x="542.0" y="314.0" width="14.0" height="10.0" rx="2" style="fill:var(--line)"/><text x="562" y="324" text-anchor="start">last 8 ms: no new packet (2 ms margin + 6 ms for one packet)</text><rect x="92.0" y="332.0" width="14.0" height="10.0" rx="2" style="fill:var(--rpivot)"/><text x="112" y="342" text-anchor="start">pivot&#x27;s board sends</text><rect x="312.0" y="332.0" width="14.0" height="10.0" rx="2" style="fill:var(--rrelay)"/><text x="332" y="342" text-anchor="start">relay&#x27;s board sends</text><rect x="532.0" y="332.0" width="14.0" height="10.0" rx="2" style="fill:var(--rremote)"/><text x="552" y="342" text-anchor="start">remote&#x27;s board sends</text></svg></div>
+      <span class="hint">At L2 the window carried about 5 packets (66 a second), 13 ms of its 17 usable ms on average; at L1, 3 packets in 6 ms. Paced, each packet also waits for the receivers&#x27; host transfer of the one before (≈ 10 µs a byte), which fills about 18 ms and leaves no room at peaks: about 150 messages a run waited past 250 ms and were dropped.</span>
+      <h3>Packet sequence: a remote AGV&#x27;s positioning message, and a command back</h3>
+      <figure class="seqfig">
+        <div style="overflow-x:auto"><svg class="seqsvg" viewBox="0 0 1100 822" role="img" aria-label="Sequence of a remote AGV&#x27;s positioning message: two sidelink hops in the gNB&#x27;s windows, from the remote&#x27;s board to the relay&#x27;s and on to the pivot&#x27;s; into nrUE1&#x27;s session; granted and polled through the pivot&#x27;s board in the next TDD period; out through the gNB and core to the edge; and a command back down the same chain"><defs><marker id="sqc-sl" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="mk sl"/></marker><marker id="sqc-ul" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="mk ul"/></marker><marker id="sqc-dl" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="mk dl"/></marker><marker id="sqc-ctl" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="mk ctl"/></marker></defs><rect x="146" y="6" width="128" height="40" rx="5" class="lh" style="stroke:var(--rremote);stroke-width:2"/><text x="210" y="23" text-anchor="middle" class="ln">remote AGV</text><text x="210" y="38" text-anchor="middle" class="ls">board · LED red</text><line x1="210" x2="210" y1="46" y2="818" class="ll"/><rect x="282" y="6" width="128" height="40" rx="5" class="lh" style="stroke:var(--rrelay);stroke-width:2"/><text x="346" y="23" text-anchor="middle" class="ln">relay AGV</text><text x="346" y="38" text-anchor="middle" class="ls">board · LED green</text><line x1="346" x2="346" y1="46" y2="818" class="ll"/><rect x="417" y="6" width="128" height="40" rx="5" class="lh" style="stroke:var(--rpivot);stroke-width:2"/><text x="481" y="23" text-anchor="middle" class="ln">pivot AGV</text><text x="481" y="38" text-anchor="middle" class="ls">board · LED blue</text><line x1="481" x2="481" y1="46" y2="818" class="ll"/><rect x="553" y="6" width="128" height="40" rx="5" class="lh"/><text x="617" y="23" text-anchor="middle" class="ln">pivot&#x27;s nrUE</text><text x="617" y="38" text-anchor="middle" class="ls">its own session</text><line x1="617" x2="617" y1="46" y2="818" class="ll"/><rect x="689" y="6" width="128" height="40" rx="5" class="lh"/><text x="753" y="23" text-anchor="middle" class="ln">gNB board</text><text x="753" y="38" text-anchor="middle" class="ls">gnb_bridge</text><line x1="753" x2="753" y1="46" y2="818" class="ll"/><rect x="824" y="6" width="128" height="40" rx="5" class="lh"/><text x="888" y="23" text-anchor="middle" class="ln">OAI gNB</text><text x="888" y="38" text-anchor="middle" class="ls">PNF + VNF, nFAPI</text><line x1="888" x2="888" y1="46" y2="818" class="ll"/><rect x="960" y="6" width="128" height="40" rx="5" class="lh"/><text x="1024" y="23" text-anchor="middle" class="ln">core → edge</text><text x="1024" y="38" text-anchor="middle" class="ls">UPF · ext-dn :6501</text><line x1="1024" x2="1024" y1="46" y2="818" class="ll"/><rect x="8" y="56" width="128" height="128" rx="4" class="bd w"/><rect x="142" y="56" width="950" height="128" rx="4" class="rb w"/><text x="18" y="73" text-anchor="start" class="bn">window k</text><text x="18" y="89" text-anchor="start" class="bs">after slot 9;</text><text x="18" y="103" text-anchor="start" class="bs">the gNB is</text><text x="18" y="117" text-anchor="start" class="bs">silent 25 ms</text><line x1="749" y1="76" x2="214" y2="76" class="m ctl" stroke-dasharray="5 4" marker-end="url(#sqc-ctl)"/><text x="481" y="71" text-anchor="middle" class="ml">AIR_SLWIN 25 ms: every board hears it</text><line x1="214" y1="106" x2="342" y2="106" class="m sl" marker-end="url(#sqc-sl)"/><text x="352" y="110" text-anchor="start" class="ml">AIR_CH hop 1: positioning, 1 packet</text><text x="354" y="130" text-anchor="start" class="nt">the relay&#x27;s node picks the next hop from the current chain and queues it</text><line x1="350" y1="156" x2="477" y2="156" class="m sl" marker-end="url(#sqc-sl)"/><text x="487" y="160" text-anchor="start" class="ml">AIR_CH hop 2, to pivot</text><text x="489" y="176" text-anchor="start" class="nt">same window if it fits, else the next one (≈ 70 ms later)</text><rect x="8" y="188" width="128" height="70" rx="4" class="bd u"/><rect x="142" y="188" width="950" height="70" rx="4" class="rb u"/><text x="18" y="205" text-anchor="start" class="bn">to nrUE1</text><text x="18" y="221" text-anchor="start" class="bs">≈ 1 ms</text><line x1="485" y1="212" x2="613" y2="212" class="m ul" marker-end="url(#sqc-ul)"/><text x="623" y="216" text-anchor="start" class="ml">unix socket → forwarder → UDP on oaitun_ue1</text><text x="625" y="238" text-anchor="start" class="nt">nrUE1 queues it in RLC and reports a buffer status (BSR)</text><rect x="8" y="262" width="128" height="196" rx="4" class="bd d"/><rect x="142" y="262" width="950" height="196" rx="4" class="rb d"/><text x="18" y="279" text-anchor="start" class="bn">next period</text><text x="18" y="295" text-anchor="start" class="bs">D: grant</text><text x="18" y="309" text-anchor="start" class="bs">U: poll</text><text x="18" y="323" text-anchor="start" class="bs">≈ 20–40 ms</text><line x1="884" y1="282" x2="757" y2="282" class="m dl" marker-end="url(#sqc-dl)"/><text x="747" y="286" text-anchor="end" class="ml">DL_SLOT: DCI with the UL grant</text><line x1="749" y1="306" x2="485" y2="306" class="m dl" marker-end="url(#sqc-dl)"/><text x="759" y="310" text-anchor="start" class="ml">AIR_DL: only the pivot&#x27;s board takes it</text><line x1="485" y1="328" x2="613" y2="328" class="m dl" marker-end="url(#sqc-dl)"/><text x="549" y="323" text-anchor="middle" class="ml">UDP: the slot</text><line x1="749" y1="354" x2="485" y2="354" class="m ctl" stroke-dasharray="5 4" marker-end="url(#sqc-ctl)"/><text x="617" y="349" text-anchor="middle" class="ml">AIR_POLL ue 1, in the U slot</text><line x1="613" y1="376" x2="485" y2="376" class="m ul" marker-end="url(#sqc-ul)"/><text x="549" y="371" text-anchor="middle" class="ml">UL_SLOT, ≤ 15 ms</text><line x1="485" y1="398" x2="749" y2="398" class="m ul" marker-end="url(#sqc-ul)"/><text x="617" y="393" text-anchor="middle" class="ml">AIR_UL: PUSCH data</text><line x1="757" y1="420" x2="884" y2="420" class="m ul" marker-end="url(#sqc-ul)"/><text x="894" y="424" text-anchor="start" class="ml">UL_SLOT → PNF → VNF</text><line x1="892" y1="444" x2="1020" y2="444" class="m ul" marker-end="url(#sqc-ul)"/><text x="882" y="448" text-anchor="end" class="ml">GTP-U → UPF → edge</text><rect x="8" y="462" width="128" height="150" rx="4" class="bd c"/><rect x="142" y="462" width="950" height="150" rx="4" class="rb c"/><text x="18" y="479" text-anchor="start" class="bn">command</text><text x="18" y="495" text-anchor="start" class="bs">edge → AGV,</text><text x="18" y="509" text-anchor="start" class="bs">every 0.5 s</text><line x1="1020" y1="484" x2="892" y2="484" class="m dl" marker-end="url(#sqc-dl)"/><text x="882" y="488" text-anchor="end" class="ml">UDP to the fleet&#x27;s address</text><line x1="884" y1="508" x2="485" y2="508" class="m dl" marker-end="url(#sqc-dl)"/><text x="685" y="503" text-anchor="middle" class="ml">next D slot: AIR_DL to the pivot&#x27;s board</text><line x1="485" y1="530" x2="613" y2="530" class="m dl" marker-end="url(#sqc-dl)"/><text x="549" y="525" text-anchor="middle" class="ml">UDP: the slot</text><line x1="613" y1="552" x2="485" y2="552" class="m dl" marker-end="url(#sqc-dl)"/><text x="623" y="556" text-anchor="start" class="ml">forwarder → pivot&#x27;s node</text><line x1="477" y1="576" x2="350" y2="576" class="m sl" marker-end="url(#sqc-sl)"/><text x="487" y="580" text-anchor="start" class="ml">next window: hop to relay</text><line x1="342" y1="600" x2="214" y2="600" class="m sl" marker-end="url(#sqc-sl)"/><text x="352" y="604" text-anchor="start" class="ml">a window later: hop to remote</text><rect x="8" y="616" width="128" height="196" rx="4" class="bd a"/><rect x="142" y="616" width="950" height="196" rx="4" class="rb a"/><text x="18" y="633" text-anchor="start" class="bn">pivot change</text><text x="18" y="649" text-anchor="start" class="bs">the new pivot&#x27;s</text><text x="18" y="663" text-anchor="start" class="bs">UE attaches:</text><text x="18" y="677" text-anchor="start" class="bs">3.3 s median</text><line x1="485" y1="638" x2="613" y2="638" class="m ctl" stroke-dasharray="5 4" marker-end="url(#sqc-ctl)"/><text x="623" y="642" text-anchor="start" class="ml">elected: in coverage, its UE starts (0.2 s)</text><text x="473" y="658" text-anchor="end" class="nt">LED blinks blue until the session is up</text><line x1="749" y1="680" x2="621" y2="680" class="m dl" marker-end="url(#sqc-dl)"/><text x="759" y="684" text-anchor="start" class="ml">SSB in the slots: synchronised at 0.35 s</text><line x1="621" y1="704" x2="884" y2="704" class="m ul" marker-end="url(#sqc-ul)"/><text x="611" y="708" text-anchor="end" class="ml">PRACH, Msg3: random access done at 0.9 s</text><line x1="884" y1="728" x2="621" y2="728" class="m dl" marker-end="url(#sqc-dl)"/><text x="753" y="723" text-anchor="middle" class="ml">RRC Setup, security, NAS</text><line x1="621" y1="752" x2="1020" y2="752" class="m ul" marker-end="url(#sqc-ul)"/><text x="821" y="747" text-anchor="middle" class="ml">Registration (AMF), PDU session (SMF, UPF)</text><line x1="1020" y1="776" x2="621" y2="776" class="m dl" marker-end="url(#sqc-dl)"/><text x="821" y="771" text-anchor="middle" class="ml">session up at 3.3 s (2.4-5.6 s)</text><text x="625" y="800" text-anchor="start" class="nt">old pivot&#x27;s UE stopped: UL failure, RRC Release ≈ 1.3 s later</text><text x="150" y="800" text-anchor="start" class="nt">two UEs attached: the relay&#x27;s is already up, so no wait</text></svg></div>
+        <figcaption>Lanes are roles, not boards: when the chain changes, the next hop is chosen from the new chain at whichever node holds the message. With a UE per AGV, the pivot&#x27;s nrUE is the pivot&#x27;s own UE, and a new pivot&#x27;s UE must attach first (last band; times from the 63 attaches of the board runs). Messages that reach the pivot during the attach are dropped. Solid: data; dashed: control (the window, the poll). Hop colour (amber) is the sidelink, blue the gNB&#x27;s downlink, green uplink. Measured one-way at L2 (p50): remote positioning 255 ms, relay positioning 200 ms, pivot positioning 124 ms; command to the remote 146 ms, to the pivot 59 ms.</figcaption>
+      </figure>
+    </div>
+  </section>
+
+  <section class="card" aria-label="Board run" id="boards">
+    <div class="hd"><h2>On the boards: recorded runs</h2><span class="meta" id="runmeta">12 Nov 2026 · four nrlink boards, OAI gNB (nFAPI), nrUE1–3 · ten minutes a run: hops over OAI&#x27;s sidelink; a UE per AGV with 2 or 1 attached; one fleet UE · L1 and L2</span></div>
+    <div class="bd" style="border-bottom:1px solid var(--line)">
+      <span class="label">What is real in these runs, and what is simulated</span>
+      <div class="realgrid">
+        <div><b>Real</b><ul>
+          <li>Radio packets on 2402 MHz between the four boards: the gNB&#x27;s slots, polls and answers, the sidelink windows, the hops between AGVs, the position beacons.</li>
+          <li>OAI&#x27;s gNB (VNF and PNF) and OAI nrUEs with the full NR stack above the PHY: RRC, NAS, PDCP, RLC, MAC, random access, link adaptation.</li>
+          <li>The free5GC core: registrations, PDU sessions, GTP-U through the UPF, IP packets to an edge server, commands back.</li>
+          <li>Attaches and releases: a UE leaving coverage is detected by the gNB (uplink failure) and released.</li>
+          <li>Every delay and loss on this page from the boards: one-way, end to end, measured across the two PCs.</li>
+          <li>The board LEDs, set by the controller at every role change.</li>
+        </ul></div>
+        <div><b>Simulated</b><ul>
+          <li>The AGVs&#x27; motion and positions: the page&#x27;s model, run in Python on the UE PC (same route, stops, spacing and seed).</li>
+          <li>The application data: positioning messages, detections and LiDAR scans of the testbed&#x27;s sizes, carrying the simulated position and a timestamp; the rest is padding.</li>
+          <li>Coverage: who is in coverage follows from the positions (the pivot, or the pivot and relay). A UE out of coverage is stopped, not faded.</li>
+          <li>The PHY: no NR waveform. GFSK packets carry each slot&#x27;s contents between OAI&#x27;s MAC and the boards.</li>
+          <li>The hops between AGVs: in the &quot;OAI sidelink&quot; runs, OAI&#x27;s NR sidelink (mode 2) with an IP relay in each AGV&#x27;s computer; in all other runs, the controller&#x27;s own packets. Either way the sidelink PHY is emulated: GFSK packets carry its slots&#x27; contents.</li>
+        </ul></div>
+      </div>
+    </div>
+    <div class="ctl">
+      <label for="run">Run <select id="run"></select></label>
+      <button type="button" id="rplay">Pause</button>
+      <label for="rspeed">Speed <select id="rspeed"><option value="1">1×</option><option value="2">2×</option><option value="5" selected>5×</option><option value="10">10×</option></select></label>
+      <label for="rpos" style="flex:1 1 220px">Time <input type="range" id="rpos" min="0" max="1000" value="0" style="width:100%"></label>
+      <span class="clock" id="rclock">t = 0 s</span>
+    </div>
+    <div class="simgrid">
+      <div class="floorwrap">
+        <canvas id="floor2" style="aspect-ratio:48/31" role="img" aria-label="Replay of the board run: AGV positions, roles and the chain, with sidelink hops as they were received"></canvas>
+        <div class="key" style="margin-top:8px"><span>AGV colour = its role, as the board&#x27;s LED showed it</span><span>dots: sidelink hops as the boards received them</span></div>
+      </div>
+      <div class="side" id="agvs2"></div>
+    </div>
+    <div class="charts">
+      <div>
+        <span class="label">Roles over the last 120 s</span>
+        <canvas id="timeline2" style="height:132px" role="img" aria-label="Roles of the AGVs during the board run"></canvas>
+      </div>
+      <div>
+        <span class="label">One-way delay, every message, last 60 s</span>
+        <canvas id="scatter2" style="height:220px" role="img" aria-label="Measured one-way delay of every message in the board run, by role"></canvas>
+      </div>
+    </div>
+    <div class="scroll" style="border-top:1px solid var(--line)">
+      <table>
+        <thead><tr><th>Load</th><th>Role</th><th>Flow</th><th>Boards: messages</th><th>p50</th><th>p90</th><th>Lost</th><th>Model p50 / p90</th></tr></thead>
+        <tbody id="cmp"></tbody>
+      </table>
+      <p class="hint" style="padding:6px 10px 10px" id="cmpnote">From minute 1 of each run, except the paced fleet run, which counts from 3.5 min: its first 200 s drained an uplink backlog that two short test runs left in nrUE1. One-way delays are measured across the two PCs, with the UE PC&#x27;s clock set to the core&#x27;s by UDP clock pings every 30 s (round trip under 1 ms). Model: the simulation above, ten minutes at the same load, with two UEs attached, so no Uu gap on a pivot change. Set &quot;UEs attached&quot; to 1 above to see the gaps of the one-UE runs.</p>
+    </div>
+    <div class="bd" style="border-top:1px solid var(--line)">
+      <span class="label">How it runs</span>
+      <ol class="plan">
+        <li><b>Four boards on one channel.</b> The gNB board on the pole (core PC). AGV A on the UE1 board, B on the UE2 board, C on the BLE1 board, reflashed to nrlink v4 for the run (its Bluetooth firmware is backed up). All on 2402 MHz.</li>
+        <li><b>The gNB grants the sidelink its air.</b> After slot 9 of every TDD period, gnb_bridge announces a 25 ms window on the air and stays silent, as a mode 1 resource pool would. The chain transmits only inside those windows, one board at a time. The boards saw 13–15 windows a second: with the window, a TDD period lasted 67–77 ms.</li>
+        <li><b>OAI&#x27;s NR sidelink between the AGVs (option 3, the latest runs).</b> The hops go over six OAI sidelink UEs, a pair for each pair of AGVs, carried by the boards in the gNB&#x27;s windows; Uu as with two UEs attached. See &quot;Option 3&quot; below.</li>
+        <li><b>Live on the testbed.</b> The chain can run continuously as the testbed&#x27;s live scenario (<code>nrlink.sh live start --scenario chain</code> on both PCs): option 3 at L1 with 25 ms windows. The core PC&#x27;s live page (port 8090, on the LAN) then shows this page with a live card on top: the AGVs moving, the roles, every message&#x27;s delay, and each board with the colour its LED shows. It was live on 12 Nov until the <a href="https://claude.ai/artifact/Nk7rtKbDe2bC2ijmqRwJ88">dual gateway</a> took its place (<code>--scenario dual</code>).</li>
+        <li><b>Two UEs attached (make before break).</b> The pivot&#x27;s and the relay&#x27;s UEs are both attached; the fleet&#x27;s traffic leaves through the nearest AGV whose session is up (the egress). If the relay becomes pivot, its UE is already up; otherwise the old pivot&#x27;s UE carries on until the new one has attached, and only then stops. The standby UE sends nothing: the gNB grants every attached UE a small block each TDD period anyway (<code>ulsch_max_frame_inactivity = 0</code>), which keeps its uplink at MCS 2. A first pair of runs had the standby send 60 B every 0.2 s; that only cost uplink, see below.</li>
+        <li><b>A UE per AGV, one attached.</b> AGV A has nrUE1, B nrUE2 and C nrUE3, each over its own board, with its own IMSI and PDU session. Only the pivot&#x27;s UE is in coverage. When the pivot changes, the old pivot&#x27;s UE is stopped, and the gNB declares uplink failure and releases it. The new pivot&#x27;s UE starts and attaches through its own board. Out-of-coverage boards answer their UE&#x27;s polls with nothing, so the gNB polls three UEs and an uplink slot takes 12.6–14.1 ms instead of 10.4. Messages that reach the pivot before its session is up are dropped.</li>
+        <li><b>One fleet UE (the first runs).</b> A single nrUE held the fleet&#x27;s session, and its radio moved to whichever board was pivot, so a pivot change cost nothing on Uu. This is easier on the numbers but not what a fleet would do; it shows the chain alone.</li>
+        <li><b>Real hops between the AGVs.</b> A relay&#x27;s and a remote&#x27;s messages cross the air board to board (up to 4 packets of 248 B), hop by hop, toward the pivot; commands go the other way. No retransmission on the hops, so a lost packet loses its message. A message that waits more than 250 ms for a window is dropped.</li>
+        <li><b>Paced hops (all runs but the first two fleet ones).</b> Every board hears every packet and spends about 10 µs a byte passing it to its PC before it is ready for the next one. In the paced run, the chain waits that long after each packet, plus 0.2 ms, before the next board sends.</li>
+        <li><b>Positions on the air.</b> Each board broadcasts its AGV&#x27;s position every 0.5 s (every 100 ms in the model: the windows cannot carry that). The pivot applies the rule to the positions it heard, and each board&#x27;s LED shows its role: blue pivot, green relay, red remote.</li>
+      </ol>
+    </div>
+    <div class="bd" style="border-top:1px solid var(--line)" id="says">
+      <span class="label">What the boards say</span>
+      <ul class="plan" style="padding-left:18px">
+        <li><b>Two UEs attached: pivot changes lose nothing at L1.</b> Every flow lost 0–1.2 %, against about 19 % with one UE attached, and over 41 chain changes no message was dropped for want of a session. The delays are those of one UE attached (pivot positioning messages 133 ms at p50, relay 201 ms, remote 270 ms, against 130, 200, 270). The new UEs attached more slowly (median 4.9 s), but nothing waited for them.</li>
+        <li><b>The standby needs no keepalive.</b> The first two-UE runs had the standby send 60 B every 0.2 s, to keep its uplink rate up. The gNB&#x27;s statistics show that was never needed: every attached UE was at MCS 2, the configured maximum, within one statistics interval of attaching. With <code>ulsch_max_frame_inactivity = 0</code> the gNB grants each attached UE a block every TDD period whether it sends or not. The keepalive only made the standby use its grants: in a 5-minute A/B at L2 it took 8.5 kbit/s of uplink against 2.9 kbit/s without, and the pivot&#x27;s positioning messages took 1.26 s at p50 against 0.35 s. It is now off. At L1 the pivot&#x27;s positioning messages dropped from 161 to 133 ms.</li>
+        <li><b>L2 hits two limits.</b> Uplink: the pivot&#x27;s own positioning messages never touch the sidelink, and spent 375 ms at p50 between the pivot&#x27;s UE and the edge (129 ms at L1). The boards&#x27; uplink carried 62–65 kbit/s at most (80 at peaks) against about 60 kbit/s of L2 traffic with headers, so the standby&#x27;s grants push it close to full. That ceiling is about half of what 106 PRBs at MCS 2 in 13 symbols would carry: grants averaged 190–280 B a slot. Whether OAI&#x27;s grant sizing or the 1 Mbit/s board link sets it is not yet known. Sidelink: two UEs answering each uplink slot lengthen the TDD period, so the sidelink got 10.4 windows a second, against 12.0 with one UE attached. 3,263 messages aged out on the hops, and the remote lost 29 % of its positioning messages and 33 % of its commands.</li>
+        <li><b>With one UE attached, every pivot change is a real attach: median 3.3 s.</b> All 57 attaches in those two runs succeeded. The container was up in 0.2 s, the UE synchronised on the SSB in 0.35 s and finished random access in 0.9 s. Registration and the PDU session took the remaining ~2.4 s, over the slowed slots. The 10th and 90th percentiles were 2.4 and 5.6 s, the worst 10.5 s. The gNB detected uplink failure on the UE that left after 10–12 missed PUSCH and released it about 1.3 s later.</li>
+        <li><b>The attaches cost about a fifth of the traffic.</b> The pivot changed about 3 times a minute, so the fleet had no Uu for roughly 17 % of the time. At L1, about 19 % of every flow was lost (18.5–19.7 %), almost all of it dropped at the pivot for want of a session. Once a new UE had settled (8 s after its attach), pivot positioning messages took 119 ms at p50, as in the fleet runs. Over the whole run, relay and remote positioning messages took 200 and 270 ms.</li>
+        <li><b>A new UE starts slow.</b> The gNB starts a new UE at uplink MCS 0 and raises it to the testbed&#x27;s cap of 2 as its error rate stays low. L1 fits within the starting rate. L2 does not: after each attach the pivot&#x27;s delay climbed for about 8 s, to 2.4 s, and took about 18 s to drain. With a pivot change every ~20 s, L2&#x27;s positioning and LiDAR medians end at 1.2–1.7 s. A gNB that kept the link settings of a known UE, or a pivot that changes less often (more hysteresis), would avoid it.</li>
+        <li><b>The role order holds on real air.</b> In every run of both designs, every flow is fastest for the pivot, slower for the relay and slowest for the remote. Each PC5 hop added 45–110 ms to a positioning message message, against 17–35 ms in the model: the boards got only 12–15 sidelink windows a second, so a hop mostly waits for the next window.</li>
+        <li><b>The pivot&#x27;s own traffic matches Uu alone.</b> Pivot commands took 57–64 ms at p50 in every run. Fleet-UE pivot positioning messages took 96–124 ms. Neither the sidelink windows nor the moving radio end of the fleet&#x27;s session shows up in the pivot&#x27;s numbers.</li>
+        <li><b>Unpaced hops lose small messages at L2.</b> In the fleet runs without pacing, 10 % of the remote&#x27;s positioning messages and 16 % of its commands were lost, almost all on the second hop. LiDAR scans barely lost anything. Pacing the hops by the receivers&#x27; host transfer time cut those losses to 1.5–1.8 %. It cost window capacity: remote delays rose by 65–95 ms, and about 150 messages waited past the 250 ms limit.</li>
+        <li><b>The roles changed 3–4 times a minute</b> with 2 m of hysteresis, close to the model&#x27;s rate. The board LEDs followed each change: blue pivot, green relay, red remote.</li>
+      </ul>
+    </div>
+  </section>
+  <section class="card" aria-label="Option 3" id="option3">
+    <div class="hd"><h2>Option 3: OAI&#x27;s NR sidelink between the AGVs</h2><span class="meta">built and run on the boards · sidelink mode 2 · layer-3 relay · roles as at one moment: A pivot, B relay, C remote</span></div>
+    <div class="bd">
+      <p class="hint" style="max-width:110ch">The hops between the AGVs go over OAI&#x27;s NR sidelink: SDAP, PDCP, RLC and MAC, SCI 1-A and SCI 2 with each transport block, PSBCH for sync. Each pair of AGVs has a PC5 link made of two sidelink UEs from OAI&#x27;s sidelink release, one on each AGV: a sync reference and a nearby UE. That is three links and six sidelink UEs, two per AGV. A hop is an IP packet over the link&#x27;s tun. Each AGV&#x27;s computer routes it on, toward the pivot or toward the AGV a command is for. As in step B, the PHY is replaced by nrlink_sl.c: the controller runs each UE&#x27;s slots in real time and carries what it transmits between the AGV boards, inside the gNB&#x27;s sidelink windows. All three links stay up, so a role change only re-routes; no sidelink UE restarts. Uu is option 2: a UE per AGV, the pivot&#x27;s and the relay&#x27;s attached. The numbers follow a positioning message from the remote AGV C to the edge server.</p>
+      <div style="overflow-x:auto"><svg class="archsvg" viewBox="0 0 1100 552" role="img" aria-label="Option 3 on the boards: each AGV&#x27;s computer with its node, its Uu UE and its two OAI sidelink UEs (one per PC5 pair), the three boards, the air, the gNB board and the core; numbered arrows follow the remote AGV&#x27;s positioning message over two OAI sidelink hops to the pivot and up its Uu UE"><defs><marker id="o3-usb" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="mk usb"/></marker><marker id="o3-sl" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="mk sl"/></marker><marker id="o3-ul" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="mk ul"/></marker><marker id="o3-ip" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="mk ip"/></marker></defs><rect x="10" y="28" width="1080" height="250" rx="10" class="pc"/><text x="1078" y="47" text-anchor="end" class="ph">UE PC  ·  192.168.10.232</text><text x="22" y="47" text-anchor="start" class="as">agv_chain.py --pc5 oai: the AGVs&#x27; computers route; their sidelink UEs are OAI&#x27;s</text><rect x="30" y="58" width="326" height="208" rx="8" class="ctl"/><rect x="40" y="66" width="180" height="36" rx="6" class="ab " style="stroke:var(--rpivot);stroke-width:2"/><text x="50" y="84" text-anchor="start" class="an">AGV A node · pivot</text><rect x="230" y="66" width="116" height="36" rx="6" class="ab " style="stroke:var(--uu);stroke-width:2"/><text x="240" y="84" text-anchor="start" class="an">oai-nrue1</text><text x="240" y="99" text-anchor="start" class="as">Uu · egress</text><rect x="40" y="132" width="130" height="86" rx="6" class="ab " stroke-dasharray="5 4"/><text x="50" y="150" text-anchor="start" class="an">agvc-sl2p · C–A</text><text x="50" y="165" text-anchor="start" class="as">nearby UE</text><text x="50" y="178" text-anchor="start" class="as">10.0.0.100 · idle</text><text x="50" y="191" text-anchor="start" class="as">SDAP PDCP RLC MAC</text><text x="50" y="204" text-anchor="start" class="as">PHY: nrlink_sl.c</text><rect x="180" y="132" width="130" height="86" rx="6" class="ab " style="stroke:var(--pc5);stroke-width:2"/><text x="190" y="150" text-anchor="start" class="an">agvc-sl0m · A–B</text><text x="190" y="165" text-anchor="start" class="as">sync reference</text><text x="190" y="178" text-anchor="start" class="as">10.0.0.1</text><text x="190" y="191" text-anchor="start" class="as">SDAP PDCP RLC MAC</text><text x="190" y="204" text-anchor="start" class="as">PHY: nrlink_sl.c</text><rect x="40" y="228" width="306" height="28" rx="5" class="ab in"/><text x="50" y="246" text-anchor="start" class="as">pacer</text><text x="252" y="246" text-anchor="start" class="as">RUN each ms</text><rect x="115" y="292" width="140" height="50" rx="6" class="ab hw"/><text x="125" y="310" text-anchor="start" class="an">UE1 board</text><text x="125" y="325" text-anchor="start" class="as">FRDM-MCXW72</text><circle cx="235" cy="314" r="9" style="fill:var(--rpivot)" class="led"/><text x="250" y="337" text-anchor="end" class="as">LED blue</text><rect x="395" y="58" width="326" height="208" rx="8" class="ctl"/><rect x="405" y="66" width="180" height="36" rx="6" class="ab " style="stroke:var(--rrelay);stroke-width:2"/><text x="415" y="84" text-anchor="start" class="an">AGV B node · relay</text><rect x="595" y="66" width="116" height="36" rx="6" class="ab " style="stroke:var(--uu);stroke-width:2"/><text x="605" y="84" text-anchor="start" class="an">oai-nrue2</text><text x="605" y="99" text-anchor="start" class="as">Uu · standby</text><rect x="405" y="132" width="130" height="86" rx="6" class="ab " style="stroke:var(--pc5);stroke-width:2"/><text x="415" y="150" text-anchor="start" class="an">agvc-sl0p · A–B</text><text x="415" y="165" text-anchor="start" class="as">nearby UE</text><text x="415" y="178" text-anchor="start" class="as">10.0.0.100</text><text x="415" y="191" text-anchor="start" class="as">SDAP PDCP RLC MAC</text><text x="415" y="204" text-anchor="start" class="as">PHY: nrlink_sl.c</text><rect x="545" y="132" width="130" height="86" rx="6" class="ab " style="stroke:var(--pc5);stroke-width:2"/><text x="555" y="150" text-anchor="start" class="an">agvc-sl1m · B–C</text><text x="555" y="165" text-anchor="start" class="as">sync reference</text><text x="555" y="178" text-anchor="start" class="as">10.0.0.1</text><text x="555" y="191" text-anchor="start" class="as">SDAP PDCP RLC MAC</text><text x="555" y="204" text-anchor="start" class="as">PHY: nrlink_sl.c</text><rect x="405" y="228" width="306" height="28" rx="5" class="ab in"/><text x="415" y="246" text-anchor="start" class="as">pacer</text><text x="617" y="246" text-anchor="start" class="as">RUN each ms</text><rect x="480" y="292" width="140" height="50" rx="6" class="ab hw"/><text x="490" y="310" text-anchor="start" class="an">UE2 board</text><text x="490" y="325" text-anchor="start" class="as">FRDM-MCXW72</text><circle cx="600" cy="314" r="9" style="fill:var(--rrelay)" class="led"/><text x="615" y="337" text-anchor="end" class="as">LED green</text><rect x="760" y="58" width="326" height="208" rx="8" class="ctl"/><rect x="770" y="66" width="180" height="36" rx="6" class="ab " style="stroke:var(--rremote);stroke-width:2"/><text x="780" y="84" text-anchor="start" class="an">AGV C node · remote</text><rect x="960" y="66" width="116" height="36" rx="6" class="ab off" stroke-dasharray="5 4"/><text x="970" y="84" text-anchor="start" class="an">oai-nrue3</text><text x="970" y="99" text-anchor="start" class="as">Uu · stopped</text><rect x="770" y="132" width="130" height="86" rx="6" class="ab " style="stroke:var(--pc5);stroke-width:2"/><text x="780" y="150" text-anchor="start" class="an">agvc-sl1p · B–C</text><text x="780" y="165" text-anchor="start" class="as">nearby UE</text><text x="780" y="178" text-anchor="start" class="as">10.0.0.100</text><text x="780" y="191" text-anchor="start" class="as">SDAP PDCP RLC MAC</text><text x="780" y="204" text-anchor="start" class="as">PHY: nrlink_sl.c</text><rect x="910" y="132" width="130" height="86" rx="6" class="ab " stroke-dasharray="5 4"/><text x="920" y="150" text-anchor="start" class="an">agvc-sl2m · C–A</text><text x="920" y="165" text-anchor="start" class="as">sync reference</text><text x="920" y="178" text-anchor="start" class="as">10.0.0.1 · idle</text><text x="920" y="191" text-anchor="start" class="as">SDAP PDCP RLC MAC</text><text x="920" y="204" text-anchor="start" class="as">PHY: nrlink_sl.c</text><rect x="770" y="228" width="306" height="28" rx="5" class="ab in"/><text x="780" y="246" text-anchor="start" class="as">pacer</text><text x="982" y="246" text-anchor="start" class="as">RUN each ms</text><rect x="845" y="292" width="140" height="50" rx="6" class="ab hw"/><text x="855" y="310" text-anchor="start" class="an">BLE1 board</text><text x="855" y="325" text-anchor="start" class="as">FRDM-MCXW72</text><circle cx="965" cy="314" r="9" style="fill:var(--rremote)" class="led"/><text x="980" y="337" text-anchor="end" class="as">LED red</text><rect x="10" y="356" width="1080" height="44" rx="8" class="air"/><text x="1078" y="374" text-anchor="end" class="ph">air  ·  2402 MHz  ·  GFSK 1 Mbit/s</text><text x="1078" y="390" text-anchor="end" class="as">the gNB&#x27;s slots, then 25 ms windows: one AIR_SLX message per board, both of its sidelink UEs&#x27; items</text><rect x="40" y="414" width="180" height="44" rx="6" class="ab hw"/><text x="50" y="432" text-anchor="start" class="an">gNB board</text><text x="50" y="447" text-anchor="start" class="as">on the pole · nrlink v4</text><rect x="10" y="486" width="1080" height="56" rx="10" class="pc"/><text x="1078" y="504" text-anchor="end" class="ph">core PC  ·  192.168.10.223</text><text x="22" y="508" text-anchor="start" class="an">gnb_bridge.py → oai-pnf → oai-vnf (OAI gNB, nFAPI) → free5GC UPF → agvc-edge :6501</text><text x="22" y="526" text-anchor="start" class="as">as in option 2: the pivot&#x27;s UE carries the fleet&#x27;s uplink; commands come back the same way</text><path d="M855,102 L855,132" class="aw ip" marker-end="url(#o3-ip)"/><circle cx="855" cy="117" r="9" class="nb ip"/><text x="855" y="121" text-anchor="middle" class="nn">1</text><path d="M855,218 L855,292" class="aw usb" marker-end="url(#o3-usb)"/><circle cx="855" cy="255" r="9" class="nb usb"/><text x="855" y="259" text-anchor="middle" class="nn">2</text><text x="862" y="280" text-anchor="start" class="al">SCI + TB</text><path d="M845,306 L620,306" class="aw sl" marker-end="url(#o3-sl)"/><circle cx="732" cy="306" r="9" class="nb sl"/><text x="732" y="310" text-anchor="middle" class="nn">3</text><text x="732" y="296" text-anchor="middle" class="al">PC5 hop 1</text><path d="M610,292 L610,218" class="aw usb" marker-end="url(#o3-usb)"/><circle cx="610" cy="255" r="9" class="nb usb"/><text x="610" y="259" text-anchor="middle" class="nn">4</text><path d="M570,132 L570,102" class="aw ip" marker-end="url(#o3-ip)"/><circle cx="570" cy="117" r="9" class="nb ip"/><text x="570" y="121" text-anchor="middle" class="nn">5</text><path d="M480,102 L480,132" class="aw ip" marker-end="url(#o3-ip)"/><circle cx="480" cy="117" r="9" class="nb ip"/><text x="480" y="121" text-anchor="middle" class="nn">6</text><path d="M500,218 L500,292" class="aw usb" marker-end="url(#o3-usb)"/><circle cx="500" cy="255" r="9" class="nb usb"/><text x="500" y="259" text-anchor="middle" class="nn">7</text><path d="M480,328 L255,328" class="aw sl" marker-end="url(#o3-sl)"/><circle cx="368" cy="328" r="9" class="nb sl"/><text x="368" y="332" text-anchor="middle" class="nn">8</text><text x="367" y="318" text-anchor="middle" class="al">PC5 hop 2</text><path d="M240,292 L240,218" class="aw usb" marker-end="url(#o3-usb)"/><circle cx="240" cy="255" r="9" class="nb usb"/><text x="240" y="259" text-anchor="middle" class="nn">9</text><path d="M210,132 L210,102" class="aw ip" marker-end="url(#o3-ip)"/><circle cx="210" cy="117" r="9" class="nb ip"/><text x="210" y="121" text-anchor="middle" class="nn">10</text><path d="M190,84 L230,84" class="aw ip" marker-end="url(#o3-ip)"/><path d="M336,102 L336,282 L250,282 L250,292" class="aw ul" marker-end="url(#o3-ul)"/><circle cx="336" cy="174" r="9" class="nb ul"/><text x="336" y="178" text-anchor="middle" class="nn">11</text><text x="330" y="200" text-anchor="end" class="al">Uu</text><path d="M205,342 L205,414" class="aw ul" marker-end="url(#o3-ul)"/><circle cx="205" cy="378" r="9" class="nb ul"/><text x="205" y="382" text-anchor="middle" class="nn">12</text><path d="M130,458 L130,486" class="aw ul" marker-end="url(#o3-ul)"/><circle cx="130" cy="472" r="9" class="nb ul"/><text x="130" y="476" text-anchor="middle" class="nn">13</text></svg></div>
+      <div class="key"><span><i style="border-color:var(--pc5);border-top-width:3px"></i>sidelink on the air</span><span><i style="border-color:var(--core);border-top-width:3px"></i>IP: over a sidelink tun, or a socket</span><span><i style="border-color:var(--ok);border-top-width:3px"></i>Uu uplink</span><span><i style="border-color:var(--ink-3);border-top-width:3px"></i>sidelink slots between a UE and its board</span></div>
+      <div class="scroll"><table>
+        <thead><tr><th>#</th><th>From → to</th><th>Over</th><th>What happens</th></tr></thead>
+        <tbody><tr><td class="n">1</td><td>C node → agvc-sl1p</td><td>UDP on oaitun_ue2</td><td>The positioning becomes an IP packet to 10.0.0.1:6600, AGV B&#x27;s end of the B–C link. The sidelink UE&#x27;s SDAP, PDCP, RLC and MAC make a transport block of it, with its SCI 1-A and SCI 2.</td></tr><tr><td class="n">2</td><td>agvc-sl1p → C board</td><td>nrlink_sl.c · USB</td><td>The controller runs the UE&#x27;s slots in real time (a RUN every 1 ms) and collects what the UE transmits. It waits for the gNB&#x27;s next window.</td></tr><tr><td class="n">3</td><td>C board → B board</td><td>air · PC5 hop 1</td><td>One AIR_SLX message per board and window carries the items of both of C&#x27;s sidelink UEs. Every board hears it; B takes the B–C part.</td></tr><tr><td class="n">4</td><td>B board → agvc-sl1m</td><td>USB · nrlink_sl.c</td><td>Handed to the B–C sync reference for its next slots: its MAC decodes the SCI and the block, RLC and PDCP rebuild the packet, out on oaitun_ue1.</td></tr><tr><td class="n">5</td><td>agvc-sl1m → B node</td><td>slfwd · unix socket</td><td>B&#x27;s computer reads the hop and picks the next one from the chain as it is now: a layer-3 relay.</td></tr><tr><td class="n">6</td><td>B node → agvc-sl0p</td><td>UDP on oaitun_ue2</td><td>To 10.0.0.1, AGV A&#x27;s end of the A–B link.</td></tr><tr><td class="n">7</td><td>agvc-sl0p → B board</td><td>nrlink_sl.c · USB</td><td>As in 2.</td></tr><tr><td class="n">8</td><td>B board → A board</td><td>air · PC5 hop 2</td><td>As in 3; A takes the A–B part.</td></tr><tr><td class="n">9</td><td>A board → agvc-sl0m</td><td>USB · nrlink_sl.c</td><td>As in 4.</td></tr><tr><td class="n">10</td><td>agvc-sl0m → A node</td><td>slfwd · unix socket</td><td>The pivot&#x27;s computer has the positioning: the sidelink part is over.</td></tr><tr><td class="n">11</td><td>A node → nrUE1 → A board</td><td>PDU session · PUSCH</td><td>As in option 2: into nrUE1&#x27;s PDU session, out through A&#x27;s board in the next U slot.</td></tr><tr><td class="n">12</td><td>A board → gNB board</td><td>air · Uu</td><td>AIR_UL, the answer to the gNB&#x27;s poll for UE 1.</td></tr><tr><td class="n">13</td><td>gNB board → edge</td><td>nFAPI · GTP-U · UDP</td><td>Through gnb_bridge, the PNF, the VNF and the UPF to the edge server.</td></tr></tbody>
+      </table></div>
+      <span class="label">Not yet as in the target design</span>
+      <ul class="plan" style="padding-left:18px">
+        <li><b>Mode 2, not mode 1.</b> The sidelink UEs choose their own resources. In mode 1 the gNB would grant them, which needs the sidelink UE attached to this gNB: OAI&#x27;s sidelink release running Uu over the boards. That release and the boards&#x27; Uu code are in different OAI trees, and the gNB runs about 8× slower than real time over the boards while the sidelink runs in real time.</li>
+        <li><b>A layer-3 relay, not OAI&#x27;s layer-2 relay.</b> The AGVs&#x27; computers route IP packets, as in 3GPP&#x27;s layer-3 UE-to-network relay. OAI&#x27;s relay (SRAP, step C) is one hop only, and a chain needs two.</li>
+        <li><b>Links kept apart by link ids.</b> The three links share one radio channel. They are separated by ids in the air header, not by frequency or by resource pool.</li>
+        <li><b>Beacons stay the controller&#x27;s.</b> The position beacons are still the controller&#x27;s own packets.</li>
+      </ul>
+      <span class="label">Board runs: OAI&#x27;s sidelink against the controller&#x27;s own hops</span>
+      <p class="hint" style="max-width:110ch">Ten minutes per run, measured from minute 1, with two Uu UEs attached in both options. Option 2 is the controller&#x27;s own packets per hop; option 3 is OAI&#x27;s NR sidelink. Positioning p50 and loss, command p50 and loss. All four option 3 runs are in the replay above ("OAI sidelink").</p>
+      <div class="scroll"><table>
+        <thead><tr><th>Load</th><th>Hops</th><th>Pivot positioning</th><th>Relay positioning</th><th>Remote positioning</th><th>Command to the remote</th></tr></thead>
+        <tbody>
+          <tr><td>L1</td><td>controller packets</td><td>133 ms · 0.3 %</td><td>201 ms · 0.3 %</td><td>270 ms · 0.5 %</td><td>162 ms · 1.2 %</td></tr>
+          <tr><td>L1</td><td><b>OAI sidelink</b></td><td>141 ms · 0.5 %</td><td>215 ms · 0.6 %</td><td>330 ms · 0.5 %</td><td>250 ms · 1.6 %</td></tr>
+          <tr><td>L2</td><td>controller packets</td><td>439 ms · 1.9 %</td><td>475 ms · 14.9 %</td><td>607 ms · 29.4 %</td><td>368 ms · 33.3 %</td></tr>
+          <tr><td>L2</td><td><b>OAI sidelink</b></td><td>155 ms · 9.2 %</td><td>402 ms · 38.5 %</td><td>633 ms · 57.4 %</td><td>458 ms · 51.4 %</td></tr>
+          <tr><td>L2</td><td><b>OAI sidelink, 35 ms windows</b></td><td>385 ms · 3.4 %</td><td>620 ms · 20.6 %</td><td>887 ms · 30.8 %</td><td>446 ms · 28.6 %</td></tr>
+          <tr><td>L2</td><td><b>OAI sidelink, 50 ms windows</b></td><td>6.3 s · 21.1 %</td><td>6.5 s · 21.6 %</td><td>6.6 s · 22.1 %</td><td>354 ms · 1.9 %</td></tr>
+        </tbody>
+      </table></div>
+      <ul class="plan" style="padding-left:18px">
+        <li><b>L1 runs over OAI&#x27;s sidelink.</b> Every flow lost 1.6 % or less, and each sidelink hop 0.9 % or less (2,100–2,300 messages per hop direction). The chain changed 31 times without a sidelink UE restarting: the six UEs stayed in sync, and a role change only re-routed.</li>
+        <li><b>A sidelink hop costs more than the controller&#x27;s packet.</b> The sidelink part of a positioning message&#x27;s delay was 79 ms for one hop (relay) and 195 ms for two (remote), against 54 and 122 ms with the controller&#x27;s packets. The extra comes from the sidelink UE&#x27;s own slot timing (it sends when its MAC has a resource) on top of the wait for the gNB&#x27;s window. The Uu part was the same in both: 123–130 ms.</li>
+        <li><b>L2 does not fit in the windows.</b> OAI&#x27;s sidelink puts about 7.6 kB/s of items on the air at L2 (transport blocks with their SCI, PSBCH every few slots, MAC, RLC, PDCP and IP headers). The windows were full (20.7 ms of each 25 ms window in use), and items waited in the UEs&#x27; outboxes until they were too old: 38–59 % of the relay&#x27;s and remote&#x27;s messages were lost. The controller&#x27;s hops also lost up to 33 % at L2. The pivot lost 9 % because, while a new pivot&#x27;s UE settles, its own messages hop over the sidelink to the UE carrying the traffic.</li>
+        <li><b>Wider windows move the limit to the Uu uplink.</b> With 50 ms windows instead of 25 the sidelink carries L2: each hop lost 0.2–2.5 % (22–62 % before), and a command reaches the remote in 354 ms with 1.9 % lost. But the gNB stays off the air longer each frame: frames fell from 11.2 to 8.1 a second, and the uplink slots with them, to about 45 kbit/s, below what the three AGVs send at L2. The pivot&#x27;s UE queued the whole fleet&#x27;s uplink: every positioning waited about 6.5 s, whatever the AGV&#x27;s role, and 21–22 % aged out. 35 ms lands in between: 9.4 frames a second leave the uplink just enough (the pivot&#x27;s positioning messages 385 ms, 3.4 % lost, no multi-second queue), but the sidelink, with 29 of its 35 ms in use, still lost 9–34 % per hop, so the relay lost 21 % and the remote 31 %. No width carries L2 on these boards: the sidelink and the uplink share one channel, and L2 needs more than its total. L1 stays on 25 ms.</li>
+        <li><b>Two fixes from these runs.</b> A UE that had just attached sometimes queued for 3–7 s when it took the traffic straight away. It now waits 8 s while the other attached UE carries on (<code>--egress-settle</code>); this also happened, less often, in option 2. And the position beacons now go before the sidelink items in each window: in the first L2 run the sidelink filled every window, no beacon got through, and the chain stopped following the AGVs.</li>
+      </ul>
+    </div>
+  </section>
+</div>
+
+<script>
+"use strict";
+const ATTACH_MS = 3300;   // a new pivot's UE: from coverage to PDU session, median of the per-AGV board runs
+const $ = id => document.getElementById(id);
+
+// ------------------------------------------------------------------ world (from apps/agv.py)
+const W = 48, H = 30;
+const RACKS = [[8, 6.5, 20, 8], [8, 15, 20, 17], [8, 20, 20, 22], [28, 8, 40, 10], [28, 14, 40, 16], [28, 20, 40, 22], [1.5, 17, 5.5, 24]];
+const ROUTE = [[4, 4], [24, 4], [44, 4], [44, 26], [24, 26], [24, 12], [4, 12]];
+const CPV = [0, 1, 2, 3, 4, 6];                        // route vertices that are checkpoints
+const CPN = ["Dock", "Aisle A", "Cell 3", "Cell 4", "Packing", "Buffer"];
+const POLE = [22, 10.5];
+const SEGS = ROUTE.map((p, i) => [p, ROUTE[(i + 1) % ROUTE.length]]);
+const SEGL = SEGS.map(([a, b]) => Math.hypot(b[0] - a[0], b[1] - a[1]));
+const LOOP = SEGL.reduce((a, b) => a + b, 0);
+const VS = []; { let s = 0; SEGL.forEach(l => { VS.push(s); s += l; }); }
+const CPS = CPV.map(v => VS[v]);
+const V_MAX = 1.2, ACC = 0.6, DEC = 1.0, GAP_M = 3;
+const LEVELS = { L1: { lidar: 1, det: 5 }, L2: { lidar: 2, det: 10 }, L3: { lidar: 4, det: 20 } };
+const AGV = [{ n: "A", board: "UE1 board" }, { n: "B", board: "UE2 board" }, { n: "C", board: "BLE1 board, on nrlink" }];
+const RCOL = ["--rpivot", "--rrelay", "--rremote"];
+const ROLES = ["pivot", "relay", "remote"];
+
+function posAt(s) {
+  s = ((s % LOOP) + LOOP) % LOOP;
+  for (let i = 0; i < SEGS.length; i++) {
+    if (s <= SEGL[i] || i === SEGS.length - 1) {
+      const [a, b] = SEGS[i], f = Math.min(1, s / SEGL[i]);
+      return [a[0] + (b[0] - a[0]) * f, a[1] + (b[1] - a[1]) * f, Math.atan2(b[1] - a[1], b[0] - a[0])];
+    }
+    s -= SEGL[i];
+  }
+}
+function rng(seed) { return () => { seed |= 0; seed = seed + 0x6D2B79F5 | 0; let t = Math.imul(seed ^ seed >>> 15, 1 | seed); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
+
+// ------------------------------------------------------------------ link model (see the table on the page)
+const M = {
+  sl: { hold: B => 4 + 0.029 * B, after: () => 8, limit: 100 },
+  ul: { hold: B => 0.08 * B, after: (B, r) => (46 + 0.04 * B) * r(0.22), limit: 5000 },
+  dl: { hold: B => 0.042 * B, after: (B, r) => (33 + 0.02 * B) * r(0.2), limit: 5000 },
+  core: { hold: () => 0, after: () => 1, limit: Infinity },
+};
+const RELAY_FWD = 18, PIVOT_FWD = 1, BEACON_AIR = 0.029 * 48;
+
+class Heap {
+  constructor() { this.a = []; }
+  push(x) { const a = this.a; a.push(x); let i = a.length - 1; while (i) { const p = (i - 1) >> 1; if (a[p].t <= a[i].t) break; [a[p], a[i]] = [a[i], a[p]]; i = p; } }
+  pop() { const a = this.a, top = a[0], last = a.pop(); if (a.length) { a[0] = last; let i = 0; for (;;) { const l = 2 * i + 1, r = l + 1; let m = i; if (l < a.length && a[l].t < a[m].t) m = l; if (r < a.length && a[r].t < a[m].t) m = r; if (m === i) break; [a[m], a[i]] = [a[i], a[m]]; i = m; } } return top; }
+  get size() { return this.a.length; }
+  peek() { return this.a[0]; }
+}
+
+class Sim {
+  constructor(o) {
+    this.o = Object.assign({ level: "L2", hyst: 2, ttt: 300, gap: 300, attach: ATTACH_MS, cov: 2, seed: 7, keep: true }, o);
+    this.R = rng(this.o.seed);
+    const R = this.R;
+    this.jit = s => Math.exp(s * this.gauss());
+    this.t = 0;                                  // ms
+    this.agv = AGV.map((a, i) => ({ i, s: i * LOOP / 3 + 2, v: 0, dwell: 0, cp: -1, x: 0, y: 0, h: 0, d: 0,
+      nDet: R() * 100, nLid: R() * 500, nCmd: R() * 500, last: {} }));
+    this.agv.forEach(a => this.place(a));
+    this.chain = this.order();
+    this.pend = null;                            // {chain, since}
+    this.readyAt = 0; this.uuUpAt = 0;
+    this.changes = 0; this.history = [{ t: 0, chain: this.chain.slice() }]; this.events = [];
+    this.srv = { sl: 0, ul: 0, dl: 0 };          // free-at times
+    this.busy = { sl: 0, ul: 0, dl: 0 };
+    this.q = new Heap(); this.flying = new Set();
+    this.recs = [];                              // recent records for the scatter (keep mode)
+    this.stats = {};                             // role|flow -> {d: [], lost, n}
+    this.nextBeacon = 100;
+    this.nid = 0;
+  }
+  gauss() { let u = 0, v = 0; while (!u) u = this.R(); v = this.R(); return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v); }
+  place(a) { const [x, y, h] = posAt(a.s); a.x = x; a.y = y; a.h = h; a.d = Math.hypot(x - POLE[0], y - POLE[1]); }
+  order() { return this.agv.map(a => a.i).sort((p, q) => this.agv[p].d - this.agv[q].d); }
+
+  move(dt) {                                     // dt in s
+    for (const a of this.agv) {
+      if (a.dwell > 0) { a.dwell -= dt; if (a.dwell <= 0) { a.s += 0.05; } continue; }
+      let toCp = Infinity, cpi = -1;
+      CPS.forEach((cs, k) => { const d = ((cs - a.s) % LOOP + LOOP) % LOOP; if (d > 0.001 && d < toCp) { toCp = d; cpi = k; } });
+      let ahead = Infinity;
+      for (const b of this.agv) if (b !== a) { const d = ((b.s - a.s) % LOOP + LOOP) % LOOP; if (d > 0 && d < ahead) ahead = d; }
+      const room = Math.min(toCp, ahead - GAP_M);
+      if (room <= a.v * a.v / (2 * DEC) + 0.03) a.v = Math.max(0, a.v - DEC * dt); else a.v = Math.min(V_MAX, a.v + ACC * dt);
+      const step = Math.max(0, Math.min(a.v * dt, room));
+      a.s = (a.s + step) % LOOP;
+      if (toCp - step < 0.1 && toCp <= ahead - GAP_M) { a.s = CPS[cpi]; a.v = 0; a.dwell = 1 + 3 * this.R(); a.cp = cpi; }
+      if (step === 0 && room <= 0) a.v = 0;
+    }
+    this.agv.forEach(a => this.place(a));
+  }
+
+  elect() {                                      // every beacon round
+    const d = this.agv.map(a => a.d), c = this.chain, h = this.o.hyst;
+    let want = null;
+    const best = this.order()[0];
+    if (best !== c[0] && d[c[0]] - d[best] > h) want = [best, ...c.filter(x => x !== best).sort((p, q) => d[p] - d[q])];
+    else if (d[c[1]] - d[c[2]] > h) want = [c[0], c[2], c[1]];
+    if (!want) { this.pend = null; return; }
+    const key = want.join();
+    if (!this.pend || this.pend.key !== key) { this.pend = { key, since: this.t }; return; }
+    if (this.t - this.pend.since < this.o.ttt) return;
+    const old = this.chain; this.chain = want; this.pend = null; this.changes++;
+    this.readyAt = this.t + this.o.gap;
+    if (old[0] !== want[0] && this.o.cov === 1) this.uuUpAt = this.t + this.o.attach;   // with 2 attached: the standby takes over   // the new pivot's UE attaches: no Uu meanwhile
+    this.history.push({ t: this.t, chain: want.slice() });
+    if (this.o.keep) {
+      const what = old[0] !== want[0] ? `pivot ${AGV[old[0]].n} → ${AGV[want[0]].n}` : `relay ${AGV[old[1]].n} → ${AGV[want[1]].n}`;
+      this.events.unshift({ t: this.t, txt: what, chain: want.map(i => AGV[i].n).join(" → "), d: want.map(i => d[i].toFixed(1)) });
+      if (this.events.length > 60) this.events.pop();
+    }
+  }
+
+  route(agv, up) {                               // hop list for one message, from the chain right now
+    const c = this.chain, k = c.indexOf(agv), hops = [];
+    if (up) {
+      for (let j = k; j >= 1; j--) hops.push({ k: "sl", a: c[j], b: c[j - 1], fwd: j < k ? RELAY_FWD : 0 });
+      hops.push({ k: "ul", a: c[0], b: -1, fwd: k > 0 ? PIVOT_FWD : 0 }, { k: "core", fwd: 0 });
+    } else {
+      hops.push({ k: "core", fwd: 0 }, { k: "dl", a: -1, b: c[0], fwd: 0 });
+      for (let j = 1; j <= k; j++) hops.push({ k: "sl", a: c[j - 1], b: c[j], fwd: j === 1 ? PIVOT_FWD : RELAY_FWD });
+    }
+    return { hops, role: ROLES[k] };
+  }
+
+  send(agv, flow, B, up) {
+    const { hops, role } = this.route(agv, up);
+    const m = { id: this.nid++, agv, flow, B, gen: this.t, hops, hi: 0, role, cur: null, x: this.agv[agv].x, y: this.agv[agv].y };
+    const t0 = Math.max(this.t, this.readyAt) + hops[0].fwd;
+    this.q.push({ t: t0, m });
+  }
+
+  hop(ev) {
+    const m = ev.m, h = m.hops[m.hi];
+    if (!h) { this.done(m, ev.t, null); return; }
+    const mod = M[h.k];
+    if ((h.k === "ul" || h.k === "dl") && ev.t < this.uuUpAt) { this.done(m, ev.t, "no session"); return; }
+    let start = ev.t;
+    if (h.k !== "core") start = Math.max(ev.t, this.srv[h.k]);
+    if (start - ev.t > mod.limit) { this.done(m, ev.t, h.k === "sl" ? "PC5 age" : "Uu queue"); return; }
+    const hold = mod.hold(m.B);
+    if (h.k !== "core") { this.srv[h.k] = start + hold; this.busy[h.k] += hold; }
+    const end = start + hold + mod.after(m.B, this.jit);
+    m.cur = { k: h.k, a: h.a, b: h.b, t0: start, t1: end };
+    if (this.o.keep) this.flying.add(m);
+    m.hi++;
+    const nx = m.hops[m.hi];
+    this.q.push({ t: end + (nx ? nx.fwd : 0), m });
+  }
+
+  done(m, t, lost) {
+    this.flying.delete(m);
+    const key = m.role + "|" + m.flow;
+    const st = this.stats[key] || (this.stats[key] = { d: [], lost: 0, n: 0 });
+    st.n++;
+    const dly = t - m.gen;
+    if (lost) st.lost++; else { st.d.push(dly); if (st.d.length > 20000) st.d.splice(0, 5000); }
+    if (this.o.keep) {
+      this.recs.push({ t, agv: m.agv, flow: m.flow, d: dly, lost, role: ROLES.indexOf(m.role) });
+      if (!lost) this.agv[m.agv].last[m.flow] = dly;
+      const ag = this.agv[m.agv];
+      if (!lost && m.flow === "det" && (!ag.rep || m.gen > ag.rep.gen)) ag.rep = { x: m.x, y: m.y, gen: m.gen };
+      while (this.recs.length && this.recs[0].t < t - 61000) this.recs.shift();
+    }
+  }
+
+  step(dtMs) {                                    // advance by dtMs in 50 ms motion steps
+    const end = this.t + dtMs, L = LEVELS[this.o.level];
+    while (this.t < end) {
+      const nt = Math.min(end, this.t + 50);
+      while (this.q.size && this.q.peek().t <= nt) { const ev = this.q.pop(); const save = this.t; this.t = ev.t; this.hop(ev); this.t = save; }
+      this.t = nt;
+      this.move(0.05);
+      if (this.t >= this.nextBeacon) {
+        this.nextBeacon += 100;
+        this.srv.sl = Math.max(this.srv.sl, this.t) + 3 * BEACON_AIR; this.busy.sl += 3 * BEACON_AIR;
+        this.elect();
+      }
+      for (const a of this.agv) {
+        if (this.t >= a.nDet) { a.nDet += 1000 / L.det * (0.9 + 0.2 * this.R()); this.send(a.i, "det", 58 + 8 * Math.floor(this.R() * 6), true); }
+        if (this.t >= a.nLid) { a.nLid += 1000 / L.lidar; this.send(a.i, "lidar", 780, true); }
+        if (this.t >= a.nCmd) { a.nCmd += 500; this.send(a.i, "cmd", 68, false); }
+      }
+    }
+  }
+}
+function pct(arr, p) { if (!arr.length) return null; const s = Float64Array.from(arr).sort(); return s[Math.min(s.length - 1, Math.floor(p * s.length))]; }
+const fmt = v => v == null ? "–" : v >= 1000 ? (v / 1000).toFixed(1) + " s" : Math.round(v) + "";
+
+// ------------------------------------------------------------------ drawing
+let COL = {};
+function readCols() { const cs = getComputedStyle(document.documentElement); ["--bg", "--panel", "--panel-2", "--line", "--ink", "--ink-2", "--ink-3", "--uu", "--pc5", "--bad", "--rack", "--floor", "--rpivot", "--rrelay", "--rremote"].forEach(k => COL[k] = cs.getPropertyValue(k).trim()); }
+function fit(cv) { const r = cv.getBoundingClientRect(), dpr = window.devicePixelRatio || 1; const w = Math.max(1, Math.round(r.width * dpr)), h = Math.max(1, Math.round(r.height * dpr)); if (cv.width !== w || cv.height !== h) { cv.width = w; cv.height = h; } const g = cv.getContext("2d"); g.setTransform(dpr, 0, 0, dpr, 0, 0); return [g, r.width, r.height]; }
+
+function drawFloor(sim, cv = $("floor")) {
+  const [g, w, h] = fit(cv);
+  const pad = 6, sc = Math.min((w - 2 * pad) / W, (h - 2 * pad - 14) / H), ox = (w - W * sc) / 2, oy = pad;
+  const X = x => ox + x * sc, Y = y => oy + y * sc;
+  g.clearRect(0, 0, w, h);
+  g.fillStyle = COL["--floor"]; g.strokeStyle = COL["--line"]; g.lineWidth = 1;
+  g.fillRect(X(0), Y(0), W * sc, H * sc); g.strokeRect(X(0) + .5, Y(0) + .5, W * sc - 1, H * sc - 1);
+  g.fillStyle = COL["--rack"]; RACKS.forEach(([x0, y0, x1, y1]) => g.fillRect(X(x0), Y(y0), (x1 - x0) * sc, (y1 - y0) * sc));
+  g.strokeStyle = COL["--line"]; g.lineWidth = 6; g.lineJoin = "round"; g.beginPath(); ROUTE.forEach(([x, y], i) => i ? g.lineTo(X(x), Y(y)) : g.moveTo(X(x), Y(y))); g.closePath(); g.stroke();
+  g.font = `11px ${getComputedStyle(document.body).getPropertyValue("--mono") || "monospace"}`; g.fillStyle = COL["--ink-3"]; g.textAlign = "center";
+  CPV.forEach((v, k) => { const [x, y] = ROUTE[v]; g.beginPath(); g.arc(X(x), Y(y), 3.5, 0, 7); g.fill(); g.fillText(CPN[k], X(x), Y(y) + (y > 20 ? -9 : 16)); });
+  // distance rings
+  g.setLineDash([3, 5]); g.strokeStyle = COL["--ink-3"]; g.lineWidth = 1; g.globalAlpha = .45;
+  for (let r = 5; r <= 30; r += 5) { g.beginPath(); g.arc(X(POLE[0]), Y(POLE[1]), r * sc, 0, 7); g.stroke(); }
+  g.globalAlpha = 1; g.setLineDash([]);
+  const P = i => i < 0 ? [X(POLE[0]), Y(POLE[1])] : [X(sim.agv[i].x), Y(sim.agv[i].y)];
+  // chain
+  const c = sim.chain, wait = sim.t < sim.readyAt;
+  g.lineCap = "round";
+  const link = (a, b, col, wdt) => { const [x0, y0] = P(a), [x1, y1] = P(b); g.strokeStyle = col; g.lineWidth = wdt; g.globalAlpha = wait ? .35 : .9; g.beginPath(); g.moveTo(x0, y0); g.lineTo(x1, y1); g.stroke(); g.globalAlpha = 1; };
+  const att = sim.t < (sim.uuUpAt || 0);
+  if (att) g.setLineDash([7, 6]);
+  link(-1, c[0], COL["--uu"], att ? 2.5 : 4); g.setLineDash([]); link(c[0], c[1], COL["--pc5"], 3.5); link(c[1], c[2], COL["--pc5"], 3.5);
+  // messages in flight
+  for (const m of sim.flying) {
+    const u = m.cur; if (!u || u.k === "core" || sim.t < u.t0 || sim.t > u.t1) continue;
+    const f = (sim.t - u.t0) / Math.max(1, u.t1 - u.t0), [x0, y0] = P(u.a), [x1, y1] = P(u.b);
+    g.fillStyle = COL[RCOL[ROLES.indexOf(m.role)]]; g.beginPath(); g.arc(x0 + (x1 - x0) * f, y0 + (y1 - y0) * f, m.flow === "lidar" ? 3.6 : 2.2, 0, 7); g.fill();
+  }
+  // pole
+  const [px, py] = P(-1);
+  g.fillStyle = COL["--uu"]; g.beginPath(); g.moveTo(px, py - 9); g.lineTo(px + 8, py + 6); g.lineTo(px - 8, py + 6); g.closePath(); g.fill();
+  g.fillStyle = COL["--ink"]; g.textAlign = "left"; g.font = `600 12px ${COL.disp}`; g.fillText("gNB pole", px + 11, py + 4);
+  // AGVs
+  sim.agv.forEach(a => {
+    const [x, y] = P(a.i), role = c.indexOf(a.i);
+    g.save(); g.translate(x, y); g.rotate(a.h);
+    g.fillStyle = COL[RCOL[role]]; g.strokeStyle = COL["--panel"]; g.lineWidth = 1.5;
+    g.beginPath(); g.roundRect ? g.roundRect(-0.9 * sc, -0.6 * sc, 1.8 * sc, 1.2 * sc, 3) : g.rect(-0.9 * sc, -0.6 * sc, 1.8 * sc, 1.2 * sc); g.fill(); g.stroke();
+    g.restore();
+    g.fillStyle = "#fff"; g.textAlign = "center"; g.font = `700 12px ${COL.disp}`; g.fillText(AGV[a.i].n, x, y + 4);
+    g.fillStyle = COL["--ink"]; g.font = `600 11px ${COL.disp}`; g.fillText(ROLES[role] + (a.dwell > 0 ? " · stopped" : ""), x, y - 0.6 * sc - 7);
+  });
+  if (att) { g.fillStyle = COL["--uu"]; g.textAlign = "left"; g.font = `600 12px ${COL.disp}`; g.fillText(`AGV ${AGV[c[0]].n}'s UE attaching: no Uu for ${((sim.uuUpAt - sim.t) / 1000).toFixed(1)} s`, X(0.6), Y(H) + 13); }
+  else if (wait) { g.fillStyle = COL["--pc5"]; g.textAlign = "left"; g.font = `600 12px ${COL.disp}`; g.fillText(`rebuilding the chain: ${Math.ceil(sim.readyAt - sim.t)} ms`, X(0.6), Y(H) + 13); }
+  else { g.fillStyle = COL["--ink-3"]; g.textAlign = "left"; g.font = `11px ${COL.mono}`; g.fillText("0", X(0), Y(H) + 12); g.textAlign = "right"; g.fillText("48 m", X(W), Y(H) + 12); }
+}
+
+function drawTimeline(sim, cv = $("timeline")) {
+  const [g, w, h] = fit(cv);
+  g.clearRect(0, 0, w, h);
+  const x0 = 26, x1 = w - 4, span = 120000, t1 = Math.max(sim.t, span), t0 = t1 - span, X = t => x0 + (t - t0) / span * (x1 - x0);
+  const rowH = 30, colR = [COL["--rpivot"], COL["--rrelay"], COL["--rremote"]];
+  g.font = `600 12px ${COL.disp}`; g.textAlign = "left";
+  AGV.forEach((a, i) => {
+    const y = 6 + i * (rowH + 6);
+    g.fillStyle = COL["--ink"]; g.fillText(a.n, 4, y + rowH / 2 + 4);
+    const H = sim.history;
+    for (let k = 0; k < H.length; k++) {
+      const s = Math.max(H[k].t, t0), e = Math.min(k + 1 < H.length ? H[k + 1].t : sim.t, t1);
+      if (e <= s) continue;
+      g.fillStyle = colR[H[k].chain.indexOf(i)]; g.fillRect(X(s), y, Math.max(1, X(e) - X(s)), rowH);
+    }
+  });
+  g.fillStyle = COL["--ink-3"]; g.font = `10.5px ${COL.mono}`; g.textAlign = "center";
+  sim.history.forEach(e => { if (e.t > t0 && e.t > 0) { g.fillRect(X(e.t) - .5, 2, 1, 3 * (rowH + 6)); } });
+  const yb = 6 + 3 * (rowH + 6) + 8;
+  for (let s = Math.ceil(t0 / 30000) * 30000; s <= t1; s += 30000) if (s >= 0) g.fillText(Math.round(s / 1000) + " s", X(s), Math.min(h - 2, yb));
+}
+
+function drawScatter(sim, cv = $("scatter")) {
+  const [g, w, h] = fit(cv);
+  g.clearRect(0, 0, w, h);
+  const x0 = 46, x1 = w - 6, y0 = 14, y1 = h - 20, span = 60000, t1 = Math.max(sim.t, span), t0 = t1 - span;
+  const lo = Math.log10(10), hi = Math.log10(10000), Y = v => y1 - (Math.log10(Math.max(10, Math.min(10000, v))) - lo) / (hi - lo) * (y1 - y0), X = t => x0 + (t - t0) / span * (x1 - x0);
+  g.strokeStyle = COL["--line"]; g.lineWidth = 1; g.fillStyle = COL["--ink-3"]; g.font = `10.5px ${COL.mono}`; g.textAlign = "right";
+  [10, 30, 100, 300, 1000, 3000, 10000].forEach(v => { const y = Math.round(Y(v)) + .5; g.beginPath(); g.moveTo(x0, y); g.lineTo(x1, y); g.stroke(); g.fillText(v >= 1000 ? v / 1000 + " s" : v + " ms", x0 - 5, y + 3.5); });
+  g.textAlign = "center"; for (let s = Math.ceil(t0 / 10000) * 10000; s <= t1; s += 10000) if (s >= 0) g.fillText(Math.round(s / 1000) + " s", X(s), h - 5);
+  g.fillText("dropped", x0 + 26, y0 - 4 + 2 > 0 ? y0 - 3 : 10);
+  for (const r of sim.recs) {
+    if (r.t < t0) continue;
+    const x = X(r.t); g.fillStyle = g.strokeStyle = COL[RCOL[r.role]];
+    if (r.lost) { g.lineWidth = 1.5; g.beginPath(); g.moveTo(x - 3, y0 - 9); g.lineTo(x + 3, y0 - 3); g.moveTo(x + 3, y0 - 9); g.lineTo(x - 3, y0 - 3); g.stroke(); continue; }
+    const y = Y(r.d);
+    if (r.flow === "lidar") { g.beginPath(); g.arc(x, y, 3.2, 0, 7); g.fill(); }
+    else if (r.flow === "det") { g.globalAlpha = .7; g.fillRect(x - 1.2, y - 1.2, 2.4, 2.4); g.globalAlpha = 1; }
+    else { g.lineWidth = 1.2; g.beginPath(); g.arc(x, y, 2.6, 0, 7); g.stroke(); }
+  }
+}
+
+function renderSide(sim) {
+  const L = sim.agv.map(a => {
+    const role = sim.chain.indexOf(a.i), hops = role;
+    return `<div class="agv" style="--c:var(${RCOL[role]})"><span class="sw"></span><span class="nm">AGV ${AGV[a.i].n}</span><span class="chip ${ROLES[role]}">${ROLES[role]}</span>
+      <span class="sub">${AGV[a.i].board} · <span class="ledg" style="--c:var(${RCOL[role]})"></span>LED ${["blue", "green", "red"][role]} · ${hops === 0 ? "Uu to the gNB" : hops + " PC5 hop" + (hops > 1 ? "s" : "") + " + Uu"}</span>
+      <dl><div><dt>to pole</dt><dd>${a.d.toFixed(1)} m</dd></div><div><dt>positioning</dt><dd>${fmt(a.last.det)}</dd></div><div><dt>LiDAR</dt><dd>${fmt(a.last.lidar)}</dd></div><div><dt>cmd</dt><dd>${fmt(a.last.cmd)}</dd></div></dl><div class="rep">${a.rep ? `edge knows <b>(${a.rep.x.toFixed(1)}, ${a.rep.y.toFixed(1)}) m</b>, reported ${((sim.t - a.rep.gen) / 1000).toFixed(2)} s ago` : "edge knows: no report yet"} · now (${a.x.toFixed(1)}, ${a.y.toFixed(1)}) m</div></div>`;
+  }).join("");
+  $("agvs").innerHTML = L + `<p class="hint">Last one-way delay of each flow, in ms. Uu busy ${Math.round(100 * sim.busy.ul / Math.max(1, sim.t))} %, PC5 busy ${Math.round(100 * sim.busy.sl / Math.max(1, sim.t))} % since reset.</p>`;
+}
+const FLOWN = { det: "positioning + detections", lidar: "LiDAR scan", cmd: "command (down)" };
+function renderLive(sim) {
+  let h = "";
+  ROLES.forEach(r => ["det", "lidar", "cmd"].forEach((f, k) => {
+    const st = sim.stats[r + "|" + f]; if (!st) return;
+    const loss = st.n ? 100 * st.lost / st.n : 0;
+    h += `<tr><td>${k === 0 ? `<span class="chip ${r}">${r}</span>` : ""}</td><td>${FLOWN[f]}</td><td class="n">${st.n}</td><td class="n">${fmt(pct(st.d, .5))}</td><td class="n">${fmt(pct(st.d, .9))}</td><td class="n ${loss >= 1 ? "bad" : ""}">${loss.toFixed(1)} %</td></tr>`;
+  }));
+  $("live").innerHTML = h || `<tr><td colspan="6" class="hint">collecting…</td></tr>`;
+  $("log").innerHTML = sim.events.map(e => `<li><b>${(e.t / 1000).toFixed(1)} s</b> ${e.txt} · chain ${e.chain} · ${e.d.join(" / ")} m</li>`).join("") || `<li>no change yet: chain ${sim.chain.map(i => AGV[i].n).join(" → ")}</li>`;
+}
+
+// ------------------------------------------------------------------ ten minutes per level
+const MODEL = {};
+function levels() {
+  let h = "";
+  for (const lv of ["L1", "L2", "L3"]) {
+    const s = new Sim({ level: lv, keep: false });
+    s.step(600000);
+    MODEL[lv] = s;
+    ROLES.forEach((r, k) => {
+      const cell = f => { const st = s.stats[r + "|" + f]; return st ? `${fmt(pct(st.d, .5))} / ${fmt(pct(st.d, .9))}` : "–"; };
+      let n = 0, lost = 0; ["det", "lidar", "cmd"].forEach(f => { const st = s.stats[r + "|" + f]; if (st) { n += st.n; lost += st.lost; } });
+      const lp = n ? 100 * lost / n : 0;
+      h += `<tr><td>${k === 0 ? `<b>${lv}</b>` : ""}</td><td><span class="chip ${r}">${r}</span></td><td class="n">${cell("det")}</td><td class="n">${cell("lidar")}</td><td class="n">${cell("cmd")}</td><td class="n ${lp >= 1 ? "bad" : ""}">${lp.toFixed(1)} %</td>` +
+        (k === 0 ? `<td class="n" rowspan="3">${Math.round(100 * s.busy.ul / s.t)} %</td><td class="n" rowspan="3">${Math.round(100 * s.busy.sl / s.t)} %</td><td class="n" rowspan="3">${(s.changes / 10).toFixed(1)} a minute</td>` : "") + `</tr>`;
+    });
+  }
+  $("levels").innerHTML = h;
+}
+
+
+// ------------------------------------------------------------------ board runs: replay of the recorded traces
+const RUNS = {}, FL = ["det", "lidar", "cmd"];
+let rep = null, rplaying = true, rdrag = false;
+function lo(arr, t, k = 0) { let a = 0, b = arr.length; while (a < b) { const m = (a + b) >> 1; if (arr[m][k] < t) a = m + 1; else b = m; } return a; }
+class Replay {
+  constructor(tr) {
+    this.tr = tr; this.T = tr.pos.length ? tr.pos[tr.pos.length - 1][0] * 1000 : 0;
+    this.history = [{ t: 0, chain: tr.pos.length ? tr.pos[0][2] : [0, 1, 2] }].concat(tr.chains.map(([t, c]) => ({ t: t * 1000, chain: c })));
+    this.readyAt = 0; this.seek(0);
+  }
+  seek(t) { this.t = Math.max(0, Math.min(this.T, t)); this.update(); }
+  step(dt) { this.seek(this.t + dt); }
+  update() {
+    const tr = this.tr, s = this.t / 1000, P = tr.pos;
+    let k = Math.max(0, Math.min(P.length - 2, lo(P, s) - 1));
+    const [ta, A, ca] = P[k], [tb, B] = P[k + 1] || P[k], f = tb > ta ? Math.max(0, Math.min(1, (s - ta) / (tb - ta))) : 0;
+    this.agv = A.map((a, i) => ({ i, x: a[0] + (B[i][0] - a[0]) * f, y: a[1] + (B[i][1] - a[1]) * f, h: a[2], d: a[3], dwell: a[4] }));
+    let c = this.history[0].chain; for (const e of this.history) { if (e.t > this.t) break; c = e.chain; }
+    this.chain = c;
+    this.uuUpAt = 0;
+    for (const [tc, , tu] of tr.att || []) if (tc * 1000 <= this.t && (tu === null || tu * 1000 > this.t)) this.uuUpAt = tu === null ? this.t + 1 : tu * 1000;
+    const H = tr.hops, j0 = lo(H, s - 0.06), j1 = lo(H, s + 0.0001);
+    this.flying = [];
+    for (let j = j0; j < j1; j++) { const [th, a, b, fl] = H[j]; this.flying.push({ cur: { k: "sl", t0: th * 1000 - 60, t1: th * 1000, a, b }, role: ROLES[c.indexOf(a)], flow: FL[fl] }); }
+    const M = tr.msgs, m0 = lo(M, s - 60), m1 = lo(M, s);
+    this.recs = [];
+    for (let j = m0; j < m1; j++) { const [tm, agv, fl, role, d] = M[j]; this.recs.push({ t: tm * 1000, agv, flow: FL[fl], role, d, lost: d === null }); }
+    const posAt = (ts, i) => { let k = Math.max(0, Math.min(P.length - 1, lo(P, ts))); if (k > 0 && P[k][0] > ts) k--; return P[k][1][i]; };
+    this.agv.forEach(a => { a.rep = null; for (let j = m1 - 1; j >= Math.max(0, m1 - 4000); j--) { const [tm, agv, fl, , d] = M[j]; if (agv === a.i && fl === 0 && d !== null && tm * 1000 + d <= this.t) { const p = posAt(tm, a.i); a.rep = { x: p[0], y: p[1], gen: tm * 1000 }; break; } } });
+    this.last = [0, 1, 2].map(i => { const o = {}; for (let j = m1 - 1; j >= m0 && Object.keys(o).length < 3; j--) { const [, agv, fl, , d] = M[j]; if (agv === i && d !== null && !(FL[fl] in o)) o[FL[fl]] = d; } return o; });
+  }
+}
+function renderSide2(r) {
+  $("agvs2").innerHTML = r.agv.map(a => {
+    const role = r.chain.indexOf(a.i), L = r.last[a.i];
+    return `<div class="agv" style="--c:var(${RCOL[role]})"><span class="sw"></span><span class="nm">AGV ${AGV[a.i].n}</span><span class="chip ${ROLES[role]}">${ROLES[role]}</span>
+      <span class="sub">${AGV[a.i].board} · <span class="ledg" style="--c:var(${RCOL[role]})"></span>LED ${["blue", "green", "red"][role]} · ${role === 0 ? "Uu to the gNB" : role + " PC5 hop" + (role > 1 ? "s" : "") + " + Uu"}</span>
+      <dl><div><dt>to pole</dt><dd>${a.d.toFixed(1)} m</dd></div><div><dt>positioning</dt><dd>${fmt(L.det)}</dd></div><div><dt>LiDAR</dt><dd>${fmt(L.lidar)}</dd></div><div><dt>cmd</dt><dd>${fmt(L.cmd)}</dd></div></dl><div class="rep">${a.rep ? `edge knows <b>(${a.rep.x.toFixed(1)}, ${a.rep.y.toFixed(1)}) m</b>, reported ${((r.t - a.rep.gen) / 1000).toFixed(2)} s ago` : "edge knows: no report yet"} · now (${a.x.toFixed(1)}, ${a.y.toFixed(1)}) m</div></div>`;
+  }).join("") + `<p class="hint">Measured one-way delay of each flow&#x27;s last message, in ms.</p>`;
+}
+function compare() {
+  let h = "";
+  for (const lv of Object.keys(RUNS)) {
+    const tr = RUNS[lv], md = MODEL[tr.level];
+    ROLES.forEach((r, k) => FL.forEach((f, q) => {
+      const b = tr.summary[r + "|" + f], m = md && md.stats[r + "|" + f]; if (!b) return;
+      h += `<tr><td>${k === 0 && q === 0 ? `<b>${lv}</b>` : ""}</td><td>${q === 0 ? `<span class="chip ${r}">${r}</span>` : ""}</td><td>${FLOWN[f]}</td><td class="n">${b.n}</td><td class="n">${fmt(b.p50)}</td><td class="n">${fmt(b.p90)}</td><td class="n ${b.lost >= 1 ? "bad" : ""}">${b.lost.toFixed(1)} %</td><td class="n">${m ? fmt(pct(m.d, .5)) + " / " + fmt(pct(m.d, .9)) : "–"}</td></tr>`;
+    }));
+  }
+  $("cmp").innerHTML = h;
+}
+function pickRun() { rep = new Replay(RUNS[$("run").value]); rep.seek(30000); }
+fetch("agv-chain-runs.json").then(r => r.json()).then(d => {
+  Object.assign(RUNS, d);
+  $("run").innerHTML = Object.keys(RUNS).map(k => `<option value="${k}">${k}: ${(RUNS[k].pos.at(-1)[0] / 60).toFixed(0)} min, ${RUNS[k].chains.length} role changes</option>`).join("");
+  pickRun(); compare();
+}).catch(() => { $("cmp").innerHTML = `<tr><td colspan="8" class="hint">The recorded runs (agv-chain-runs.json) could not be loaded.</td></tr>`; });
+$("run").onchange = pickRun;
+$("rplay").onclick = () => { rplaying = !rplaying; $("rplay").textContent = rplaying ? "Pause" : "Play"; };
+$("rpos").oninput = () => { if (rep) rep.seek($("rpos").value / 1000 * rep.T); };
+$("rpos").onpointerdown = () => rdrag = true; $("rpos").onpointerup = () => rdrag = false;
+
+// ------------------------------------------------------------------ run
+let sim, playing = !matchMedia("(prefers-reduced-motion: reduce)").matches, last = performance.now(), uiAt = 0;
+function reset() { sim = new Sim({ level: $("level").value, hyst: +$("hyst").value, gap: +$("gap").value, attach: +$("att").value, cov: +$("cov").value }); sim.step(30000); }
+function frame(now) {
+  const dt = Math.min(100, now - last); last = now;
+  if (playing) sim.step(dt * +$("speed").value);
+  drawFloor(sim);
+  if (rep) { if (rplaying && !rdrag) { rep.step(dt * +$("rspeed").value); if (rep.t >= rep.T) rep.seek(0); } drawFloor(rep, $("floor2")); }
+  if (rep && now - uiAt > 250) { drawTimeline(rep, $("timeline2")); drawScatter(rep, $("scatter2")); renderSide2(rep); $("rclock").textContent = `t = ${(rep.t / 1000).toFixed(0)} s`; if (!rdrag) $("rpos").value = Math.round(1000 * rep.t / rep.T); }
+  if (now - uiAt > 250) { uiAt = now; drawTimeline(sim); drawScatter(sim); renderSide(sim); renderLive(sim); $("clock").textContent = `t = ${(sim.t / 1000).toFixed(0)} s`; }
+  requestAnimationFrame(frame);
+}
+$("play").textContent = playing ? "Pause" : "Play";
+if (!playing) { rplaying = false; $("rplay").textContent = "Play"; }
+$("play").onclick = () => { playing = !playing; $("play").textContent = playing ? "Pause" : "Play"; };
+$("reset").onclick = reset;
+$("level").onchange = () => { sim.o.level = $("level").value; };
+$("hyst").oninput = () => { sim.o.hyst = +$("hyst").value; $("hystv").textContent = $("hyst").value + " m"; };
+$("gap").oninput = () => { sim.o.gap = +$("gap").value; $("gapv").textContent = $("gap").value + " ms"; };
+$("cov").onchange = () => { sim.o.cov = +$("cov").value; };
+$("att").oninput = () => { sim.o.attach = +$("att").value; $("attv").textContent = (+$("att").value / 1000).toFixed(1) + " s"; };
+readCols();
+{ const cs = getComputedStyle(document.documentElement); COL.disp = cs.getPropertyValue("--display").trim(); COL.mono = cs.getPropertyValue("--mono").trim(); }
+matchMedia("(prefers-color-scheme: dark)").addEventListener("change", readCols);
+new MutationObserver(readCols).observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
+reset();
+levels();
+requestAnimationFrame(frame);
+</script>

@@ -45,7 +45,7 @@ header .built { margin-left: auto; font: 12px var(--mono); color: var(--ink-3); 
   <header>
     <h1>BLE-5G Pages</h1>
     <p>5G NR over nrlink and Bluetooth LE non-3GPP access on FRDM-MCXW72 boards, free5GC and OpenAirInterface: every page of the testbed, served from the core PC.</p>
-    <span class="built">built 11 Nov 2026, 12:15</span>
+    <span class="built">built 19 Nov 2026, 07:23</span>
   </header>
   <main class="grid">
     <a class="card" href="http://192.168.10.223:8090/" data-port="8090">
@@ -64,7 +64,7 @@ header .built { margin-left: auto; font: 12px var(--mono); color: var(--ink-3); 
       </picture>
       <span class="txt"><span class="t">nrlink Two-PC Split</span>
         <span class="a">The whole setup over two PCs: architecture, who is connected where, latency per hop, slot schemes, packet sequences, stress tests and the NR against Bluetooth comparison.</span>
-        <span class="m">updated 11 Nov 2026</span></span>
+        <span class="m">updated 12 Nov 2026</span></span>
     </a>
     <a class="card" href="agv-testbed.html">
       <picture>
@@ -74,6 +74,24 @@ header .built { margin-left: auto; font: 12px var(--mono); color: var(--ink-3); 
       <span class="txt"><span class="t">AGV Testbed</span>
         <span class="a">LiDAR scans over NR and detections over Bluetooth at once: campaign results by load, mode, power and fade, with a replay of the tuned run.</span>
         <span class="m">updated 11 Nov 2026</span></span>
+    </a>
+    <a class="card" href="agv-relay-chain.html">
+      <picture>
+        <source srcset="thumbs/agv-relay-chain-dark.jpg" media="(prefers-color-scheme: dark)">
+        <img src="thumbs/agv-relay-chain-light.jpg" alt="" width="640" height="400" loading="lazy">
+      </picture>
+      <span class="txt"><span class="t">AGV Relay Chain</span>
+        <span class="a">Three AGVs and a gNB pole: the AGV nearest the pole talks to the gNB and relays the others over a sidelink chain, and the role moves as they drive. Simulated with the boards&#x27; measured links.</span>
+        <span class="m">updated 13 Nov 2026</span></span>
+    </a>
+    <a class="card" href="agv-dual-gateway.html">
+      <picture>
+        <source srcset="thumbs/agv-dual-gateway-dark.jpg" media="(prefers-color-scheme: dark)">
+        <img src="thumbs/agv-dual-gateway-light.jpg" alt="" width="640" height="400" loading="lazy">
+      </picture>
+      <span class="txt"><span class="t">AGV Dual Gateway</span>
+        <span class="a">Two AGVs connected to the gNB as gateways, the third one sidelink hop from either and picking one per message: board runs at L1 and L2 across sidelink window widths, with a replay. Now live as a platoon with coverage by position: AGVs lose the gNB in a shielded cold store, relay through another AGV one at a time, now as a 3GPP layer-3 relay (discovery, direct link, IP routing and NAT), with no relayed packets lost; every step compared; packet sequence, slot scheme, traffic flows.</span>
+        <span class="m">updated 19 Nov 2026</span></span>
     </a>
     <a class="card" href="nr-tuning.html">
       <picture>

@@ -153,6 +153,15 @@ svg .lat { font-family: var(--mono); font-size: 10.5px; font-weight: 600; fill: 
 .seqsvg .bs { fill: var(--ink-2); }
 .seqsvg .rb { fill: var(--panel-2); opacity: .55; }
 .seqsvg .rb.e { opacity: .25; }
+.tabs { display: flex; gap: 4px; padding: 12px 14px 0; border-bottom: 1px solid var(--line); overflow-x: auto; }
+.tabs [role="tab"] { font: 600 .98rem var(--display); color: var(--ink-2); background: transparent; border: 1px solid transparent; border-bottom: 0; border-radius: 6px 6px 0 0; padding: 8px 16px 7px; margin-bottom: -1px; cursor: pointer; white-space: nowrap; }
+.tabs [role="tab"]:hover { color: var(--ink); background: var(--panel-2); }
+.tabs [role="tab"][aria-selected="true"] { color: var(--ink); background: var(--panel); border-color: var(--line); border-bottom: 1px solid var(--panel); box-shadow: inset 0 3px 0 var(--c); }
+.tabs [role="tab"]:focus-visible { outline: 2px solid var(--signal); outline-offset: -2px; }
+.opt:focus-visible { outline: 2px solid var(--signal); outline-offset: -2px; }
+.opt h3.opth { font-size: 1.12rem; }
+.opt h4 { margin: 6px 0 0; font-size: 1rem; font-weight: 600; }
+.opt .hint { margin: 0; }
 .slotsvg { display: block; width: 100%; min-width: 760px; height: auto; }
 .slotsvg text { font-family: var(--mono); font-size: 11px; fill: var(--ink-2); }
 .slotsvg .t { font-family: var(--display); font-size: 13px; font-weight: 600; fill: var(--ink); }
@@ -181,7 +190,7 @@ svg .lat { font-family: var(--mono); font-size: 10.5px; font-weight: 600; fill: 
   <header class="top">
     <div class="title">
       <h1>nrlink Two-PC Split</h1>
-      <div class="sub">free5GC core and N3IWF, OpenAirInterface gNB split over nFAPI with two NR UEs, and NXP FRDM-MCXW72 boards carrying both the 5G radio and the Bluetooth LE non-3GPP access, spread over a core PC and a UE PC. Jump to: <a href="#sequences">packet sequences</a> · <a href="#compare">NR against Bluetooth</a> · <a href="#agv">AGV testbed</a> · <a href="#sidelink">NR sidelink</a></div>
+      <div class="sub">free5GC core and N3IWF, OpenAirInterface gNB split over nFAPI with two NR UEs, and NXP FRDM-MCXW72 boards carrying both the 5G radio and the Bluetooth LE non-3GPP access, spread over a core PC and a UE PC. Jump to: <a href="#sequences">slot schemes and packet sequences</a> · <a href="#compare">NR against Bluetooth</a> · <a href="#agv">AGV testbed</a> · <a href="#sidelink">NR sidelink</a></div>
     </div>
     <div class="kpis">
       <div class="kpi"><span class="label">PDU sessions</span><span class="v">4 / 4</span></div>
@@ -292,25 +301,26 @@ svg .lat { font-family: var(--mono); font-size: 10.5px; font-weight: 600; fill: 
     </div>
   </section>
 
-  <section class="card" aria-label="Slot schemes">
-    <div class="hd"><h2>Slot schemes</h2><span class="meta">how each radio shares its time · drawn to scale</span></div>
-    <div class="bd">
-      <h3>nFAPI over nrlink: OAI's TDD pattern, slowed down</h3>
-      <p class="hint" style="max-width:100ch">The VNF schedules a normal NR TDD pattern: 30 kHz subcarriers, a 5 ms period of 10 slots, 7 downlink (D), 1 special (S: 6 DL symbols, 4 guard, 4 UL) and 2 uplink (U). The PNF does not run on a clock. It waits until gnb_bridge has handled the slot: broadcast it and, when the slot carries uplink, poll both UE boards. Since 11 Nov (tuned) a D slot with nothing in it is not sent at all (dynamic slotting; the nrUE runs the slots it did not hear when the next one arrives), a D slot with content takes about 2 ms, and an uplink slot about 10.4 ms: the broadcast plus one poll round trip per UE board. With 0.7 ms per slot in the PNF, VNF and UDP, the period stretches from 5 ms to about 42 ms (about 240 slots/s, 8× slower than real NR). Before the tuning it was 106 ms: the bridge also polled a UE3 that no longer exists and waited out two 25 ms timeouts in every uplink slot.</p>
-      <div style="overflow-x:auto"><svg class="slotsvg" id="slotnr" viewBox="0 0 1100 250" role="img" aria-label="One TDD period: nominal 10 slots in 5 ms, and the real timing on nrlink, about 42 ms"></svg></div>
-      <h3>Bluetooth LE: connection events on one shared adapter</h3>
-      <p class="hint" style="max-width:100ch">Each UE board is the central of its own LE connection to the core's Intel adapter. They talk only in connection events. A link opens at a 45 ms interval (LE Enhanced Connection Complete: interval 45 ms, latency 0, supervision timeout 420 ms); since 10 Nov <code>ble_ip_link</code> then asks for <b>15 ms on BLE1 and 18.75 ms on BLE2</b> (HCI LE Connection Update). In each event the board sends first and the Intel adapter answers, with up to 27 B of data per packet, about 0.7 ms per exchange: the Intel 8265 (Bluetooth 4.2) has neither LE 2M nor data length extension, so more events per second is the only way to more throughput. Each event hops to the next of the 37 data channels (2404–2478 MHz). Both links share the Intel radio, and it serves one event at a time. Each board times its own link by its own clock, so the two links' events drift past each other. With equal intervals they stayed overlapped for minutes and one link starved (pings to 1.3 s, then the links swapped). With different intervals they meet only briefly, as drawn below. At 80 kbit/s a 15 ms event carries about 150 B, 5–6 exchanges.</p>
-      <div style="overflow-x:auto"><svg class="slotsvg" id="slotble" viewBox="0 0 1100 170" role="img" aria-label="Two Bluetooth LE connections, 15 ms and 18.75 ms connection intervals, sharing the Intel adapter"></svg></div>
-      <span class="hint">The starting offset between the two links is drawn at 8 ms for illustration; the boards choose it, and it drifts. Where the two links' events meet, the Intel adapter serves one and the other loses that event (marked ×). nrlink's fixed channel, 2402 MHz, is Bluetooth advertising channel 37, not one of the data channels.</span>
+  <section class="card" aria-label="Slot schemes and packet sequences" id="sequences">
+    <div class="hd"><h2>Slot schemes and packet sequences</h2><span class="meta">one tab per radio option · slot schemes drawn to scale · NR and Bluetooth 11 Nov 2026, tuned settings; sidelink 11–12 Nov (step B) · from nrlink_gnb.c, nrlink_ue.c, gnb_bridge.py, ue_bridge.py, ble_ip_link.py, nrlink_sl.c, sl_bridge.py</span></div>
+    <div class="bd" style="padding-bottom:0">
+      <p class="hint" style="max-width:100ch;margin:0">Each tab shows how one radio option shares its time (the slot scheme) and follows one packet through it (the sequence; the left column is the time structure the packet moves in). <b>nFAPI over nrlink</b> is scheduled: the gNB grants the uplink in a downlink slot, the nrUE prepares the transmission ahead, and the gNB bridge collects it by polling each UE board in the uplink slot, in lockstep with the PNF. <b>Bluetooth LE</b> is event-driven: the board, as central, sends whatever is queued in its own connection events, up to 27 B per link-layer packet, on a new channel each time. <b>NR sidelink</b> runs both UEs in real time with no gNB; the boards only move each slot&#x27;s items between them, in exchanges that the sync reference&#x27;s bridge starts.</p>
     </div>
-  </section>
+    <div class="tabs" role="tablist" aria-label="Radio option">
+      <button type="button" role="tab" id="tab-nfapi" aria-controls="opt-nfapi" aria-selected="true" style="--c:var(--embb)">nFAPI over nrlink</button>
+      <button type="button" role="tab" id="tab-ble" aria-controls="opt-ble" aria-selected="false" tabindex="-1" style="--c:var(--n3)">Bluetooth LE</button>
+      <button type="button" role="tab" id="tab-sidelink" aria-controls="opt-sidelink" aria-selected="false" tabindex="-1" style="--c:var(--oai)">NR sidelink</button>
+    </div>
 
-  <section class="card" aria-label="Packet sequences" id="sequences">
-    <div class="hd"><h2>Packet sequences: one uplink packet over NR and over Bluetooth</h2><span class="meta">11 Nov 2026, tuned settings · from nrlink_gnb.c, nrlink_ue.c, gnb_bridge.py, ue_bridge.py, ble_ip_link.py · times from gnb_bridge statistics and the Bluetooth connection parameters</span></div>
-    <div class="bd">
-      <p class="hint" style="max-width:100ch;margin-top:0">Each diagram follows one uplink packet from the UE to the core. The left column is the time structure it moves in: the slot (NR, see <i>Slot schemes</i> above) or the Bluetooth connection event. NR is scheduled: the gNB grants the uplink in a downlink slot, the nrUE prepares the transmission ahead, and the gNB bridge collects it by polling each UE board in the uplink slot, in lockstep with the PNF. Bluetooth is event-driven: the board, as central, sends whatever is queued in its own connection events, up to 27 B per link-layer packet, on a new channel each time.</p>
-      <h3>NR over nrlink: grant, prepare, poll</h3>
-      <figure class="seqfig">
+    <section class="opt" role="tabpanel" id="opt-nfapi" aria-labelledby="tab-nfapi" tabindex="0">
+      <div class="bd">
+        <h3 class="opth">nFAPI over nrlink: the split gNB, NR Uu over the boards</h3>
+        <h4>Slot scheme: OAI&#x27;s TDD pattern, slowed down</h4>
+        <p class="hint" style="max-width:100ch">The VNF schedules a normal NR TDD pattern: 30 kHz subcarriers, a 5 ms period of 10 slots, 7 downlink (D), 1 special (S: 6 DL symbols, 4 guard, 4 UL) and 2 uplink (U). The PNF does not run on a clock. It waits until gnb_bridge has handled the slot: broadcast it and, when the slot carries uplink, poll both UE boards. Since 11 Nov (tuned) a D slot with nothing in it is not sent at all (dynamic slotting; the nrUE runs the slots it did not hear when the next one arrives), a D slot with content takes about 2 ms, and an uplink slot about 10.4 ms: the broadcast plus one poll round trip per UE board. With 0.7 ms per slot in the PNF, VNF and UDP, the period stretches from 5 ms to about 42 ms (about 240 slots/s, 8× slower than real NR). Before the tuning it was 106 ms: the bridge also polled a UE3 that no longer exists and waited out two 25 ms timeouts in every uplink slot.</p>
+        <div style="overflow-x:auto"><svg class="slotsvg" id="slotnr" viewBox="0 0 1100 250" role="img" aria-label="One TDD period: nominal 10 slots in 5 ms, and the real timing on nrlink, about 42 ms"></svg></div>
+        <p class="hint" style="max-width:100ch"><b>Why most D slots carry nothing.</b> The pattern has 7 downlink slots in every period, but the VNF fills a D slot only when it has something for it: the SSB (every 20 ms, so one period in four), SIB1, the DCIs that grant the uplink, or downlink data. The traffic here is mostly uplink (in the tuning runs about 46 kbit/s up against 7 down), so about 5 of the 7 carry nothing; gnb_bridge skipped about half of all slots. Skipping them costs no capacity: a skipped slot takes 0.7 ms, one that is sent about 2 ms. Under a downlink load they fill: the downlink test carried 192 kbit/s. The 7 D : 2 U split is OAI&#x27;s default; 3 D + 6 U did not attach (random access failed), and 5 D + 4 U attached but was slower, because every U slot costs a poll round over the boards.</p>
+        <h4>Packet sequence: grant, prepare, poll</h4>
+        <figure class="seqfig">
         <div style="overflow-x:auto"><svg class="seqsvg" viewBox="0 0 1100 620" role="img" aria-label="Sequence of one NR uplink packet over nrlink: the grant goes out in a downlink slot, empty slots stay off the air, the nrUE prepares its PUSCH ahead, and the gNB bridge polls each UE board in the uplink slot">
 <defs>
 <marker id="sqnr-dl" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="mk dl"/></marker>
@@ -368,8 +378,18 @@ svg .lat { font-family: var(--mono); font-size: 10.5px; font-weight: 600; fill: 
 </svg></div>
         <figcaption>One TDD period (7 D, S, 2 U) as it runs on nrlink: the uplink grant goes out in a downlink slot; the five empty downlink slots stay off the air; the nrUE builds its PUSCH when it runs the slot <i>k</i> slots before the U slot (k ≥ min_rxtxtime 4); in the U slot the gNB bridge broadcasts the slot, then polls UE1 and UE2 in turn, and the PNF turns the answers into nFAPI indications. Solid: data; dashed: slot bookkeeping and the second UE's poll. The S slot runs like a U slot when it carries uplink.</figcaption>
       </figure>
-      <h3>Bluetooth LE: queue, then the next connection event</h3>
-      <figure class="seqfig">
+      </div>
+    </section>
+
+    <section class="opt" role="tabpanel" id="opt-ble" aria-labelledby="tab-ble" tabindex="0" hidden>
+      <div class="bd">
+        <h3 class="opth">Bluetooth LE: non-3GPP access to the N3IWF</h3>
+        <h4>Slot scheme: connection events on one shared adapter</h4>
+        <p class="hint" style="max-width:100ch">Each UE board is the central of its own LE connection to the core's Intel adapter. They talk only in connection events. A link opens at a 45 ms interval (LE Enhanced Connection Complete: interval 45 ms, latency 0, supervision timeout 420 ms); since 10 Nov <code>ble_ip_link</code> then asks for <b>15 ms on BLE1 and 18.75 ms on BLE2</b> (HCI LE Connection Update). In each event the board sends first and the Intel adapter answers, with up to 27 B of data per packet, about 0.7 ms per exchange: the Intel 8265 (Bluetooth 4.2) has neither LE 2M nor data length extension, so more events per second is the only way to more throughput. Each event hops to the next of the 37 data channels (2404–2478 MHz). Both links share the Intel radio, and it serves one event at a time. Each board times its own link by its own clock, so the two links' events drift past each other. With equal intervals they stayed overlapped for minutes and one link starved (pings to 1.3 s, then the links swapped). With different intervals they meet only briefly, as drawn below. At 80 kbit/s a 15 ms event carries about 150 B, 5–6 exchanges.</p>
+        <div style="overflow-x:auto"><svg class="slotsvg" id="slotble" viewBox="0 0 1100 170" role="img" aria-label="Two Bluetooth LE connections, 15 ms and 18.75 ms connection intervals, sharing the Intel adapter"></svg></div>
+        <span class="hint">The starting offset between the two links is drawn at 8 ms for illustration; the boards choose it, and it drifts. Where the two links' events meet, the Intel adapter serves one and the other loses that event (marked ×). nrlink's fixed channel, 2402 MHz, is Bluetooth advertising channel 37, not one of the data channels.</span>
+        <h4>Packet sequence: queue, then the next connection event</h4>
+        <figure class="seqfig">
         <div style="overflow-x:auto"><svg class="seqsvg" viewBox="0 0 1100 458" role="img" aria-label="Sequence of one uplink packet over Bluetooth LE: the IPsec packet becomes one L2CAP SDU, crosses HCI to the board, and goes out in 27 byte link-layer packets in the board&#x27;s connection events, each event on a new channel">
 <defs>
 <marker id="sqble-dl" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="mk dl"/></marker>
@@ -415,19 +435,79 @@ svg .lat { font-family: var(--mono); font-size: 10.5px; font-weight: 600; fill: 
 </svg></div>
         <figcaption>The n3iwue's packet, already in GRE and IPsec, becomes one L2CAP SDU. BlueZ hands it to the board over HCI, and the board's link layer sends it in ≤ 27 B pieces in its connection events, each answered by the Intel adapter. A small packet (a detection message, ≤ 80 B before the tunnel) fits in one event; a LiDAR scan spreads over several. Dashed: the peer's answers.</figcaption>
       </figure>
+      </div>
+    </section>
+
+    <section class="opt" role="tabpanel" id="opt-sidelink" aria-labelledby="tab-sidelink" tabindex="0" hidden>
+      <div class="bd">
+        <h3 class="opth">NR sidelink: two UEs over PC5, no gNB (step B, over the UE1 and UE2 boards)</h3>
+        <h4>Slot scheme: real-time sidelink slots, air exchanges beside them</h4>
+        <p class="hint" style="max-width:100ch">The sidelink preconfiguration (<code>sl_sync_ref_nofb.conf</code>, <code>sl_ue1_nofb.conf</code>) uses 30 kHz subcarriers and a 5 ms TDD period of 10 slots, 6 D and 4 U; the sidelink may use only the U slots, with one 100-PRB subchannel. In mode 2 there is no gNB to grant anything: each UE picks its own U slots by sensing (a 100 ms window) and reserves them. The sync reference sends the sidelink broadcast (PSBCH) 4 times every 160 ms, every 60 ms from slot 8. Unlike nFAPI, the slots are <b>not</b> slowed down: each bridge sends its UE a RUN about every millisecond, up to the slot the clock has reached (measured 2000 slots/s), because neither UE waits for the air. The MAC takes PSBCH and SCI timing from their contents, so an item can arrive milliseconds after its slot. The air runs on its own beside the slots: the sync reference&#x27;s bridge (master, UE1 board) polls, carrying its items, and the nearby bridge (peer, UE2 board) replies at once with its own. Idle, that is about 268 exchanges a second; under load, one message holds up to 20 packets of 248 B and an exchange takes about 100 ms (10 a second at 346 kbit/s).</p>
+        <div style="overflow-x:auto"><svg class="slotsvg" id="slotsl" viewBox="0 0 1100 272" role="img" aria-label="Sidelink: four 5 ms TDD periods in real time, 6 D and 4 U slots each, with the PSBCH in slot 8; one RUN every millisecond; idle air exchanges every 3.7 ms; and, at a tenth of the scale, loaded exchanges of about 100 ms"></svg></div>
+        <span class="hint">The exchanges are not aligned to the slots. An item received in an exchange goes to its UE in the next RUN and waits there for the first slot whose RX action fits it. Items that waited more than 200 slots (100 ms) for the air are dropped before they take air time, which is what holds delivery at about 320 kbit/s under overload instead of collapsing. The poll and reply split drawn in the idle row is illustrative; 3.7 ms per exchange is measured, of which 2 ms is the master&#x27;s pause after an empty exchange.</span>
+        <h4>Packet sequence: send in a picked slot, wait for the poll, feed the decode</h4>
+        <figure class="seqfig">
+        <div style="overflow-x:auto"><svg class="seqsvg" viewBox="0 0 1100 492" role="img" aria-label="Sequence of one IP packet from the nearby UE to the sync reference over the boards: the PSBCH sets the nearby side&#x27;s slot clock; the nearby UE sends in a U slot it picked by sensing; its bridge holds the items until the master&#x27;s next poll and sends them in the reply; the master&#x27;s bridge hands them to the sync-reference UE in its next RUN, which feeds them to the MAC as decodes">
+<defs>
+<marker id="sqsl-dl" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="mk dl"/></marker>
+<marker id="sqsl-ul" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="mk ul"/></marker>
+<marker id="sqsl-ack" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="mk ack"/></marker>
+</defs>
+<rect x="168" y="6" width="136" height="40" rx="5" class="lh"/><text x="236" y="23" text-anchor="middle" class="ln">nearby UE</text><text x="236" y="38" text-anchor="middle" class="ls">MAC, mode 2</text><line x1="236" x2="236" y1="46" y2="488" class="ll"/>
+<rect x="319" y="6" width="136" height="40" rx="5" class="lh"/><text x="387" y="23" text-anchor="middle" class="ln">peer side</text><text x="387" y="38" text-anchor="middle" class="ls">sl_bridge + UE2 board</text><line x1="387" x2="387" y1="46" y2="488" class="ll"/>
+<rect x="470" y="6" width="136" height="40" rx="5" class="lh"/><text x="538" y="23" text-anchor="middle" class="ln">air</text><text x="538" y="38" text-anchor="middle" class="ls">GFSK 1 Mbit/s · 2450</text><line x1="538" x2="538" y1="46" y2="488" class="ll"/>
+<rect x="620" y="6" width="136" height="40" rx="5" class="lh"/><text x="688" y="23" text-anchor="middle" class="ln">master side</text><text x="688" y="38" text-anchor="middle" class="ls">sl_bridge + UE1 board</text><line x1="688" x2="688" y1="46" y2="488" class="ll"/>
+<rect x="771" y="6" width="136" height="40" rx="5" class="lh"/><text x="839" y="23" text-anchor="middle" class="ln">sync-ref UE</text><text x="839" y="38" text-anchor="middle" class="ls">L1 emulation</text><line x1="839" x2="839" y1="46" y2="488" class="ll"/>
+<rect x="922" y="6" width="136" height="40" rx="5" class="lh"/><text x="990" y="23" text-anchor="middle" class="ln">sync-ref MAC → IP</text><text x="990" y="38" text-anchor="middle" class="ls">RLC, PDCP · tun</text><line x1="990" x2="990" y1="46" y2="488" class="ll"/>
+<rect x="8" y="56" width="128" height="110" rx="4" class="bd d"/><rect x="142" y="56" width="950" height="110" rx="4" class="rb d"/><text x="18" y="73" class="bn">sync</text><text x="18" y="89" class="bs">PSBCH every</text><text x="18" y="103" class="bs">60 ms (4 per</text><text x="18" y="117" class="bs">160 ms)</text>
+<line x1="835" y1="74" x2="695" y2="74" class="m dl" marker-end="url(#sqsl-dl)"/>
+<text x="763" y="69" text-anchor="middle" class="ml">DONE: PSBCH item</text>
+<line x1="684" y1="101" x2="394" y2="101" class="m dl" marker-end="url(#sqsl-dl)"/>
+<text x="537" y="96" text-anchor="middle" class="ml">AIR_SLM poll carries it</text>
+<line x1="383" y1="128" x2="243" y2="128" class="m dl" marker-end="url(#sqsl-dl)"/>
+<text x="311" y="123" text-anchor="middle" class="ml">RUN: as SSB decode</text>
+<text x="397" y="155" text-anchor="start" class="nt">the peer bridge re-aligns its slot clock on every PSBCH; the nearby UE syncs on the first</text>
+<rect x="8" y="170" width="128" height="110" rx="4" class="bd u"/><rect x="142" y="170" width="950" height="110" rx="4" class="rb u"/><text x="18" y="187" class="bn">SL slot n</text><text x="18" y="203" class="bs">a U slot</text><text x="18" y="217" class="bs">0.5 ms</text>
+<text x="246" y="188" text-anchor="start" class="nt">10.0.0.100: IP packet → PDCP, RLC → MAC; mode 2 picks a U slot by sensing (100 ms window); a RUN every 1 ms</text>
+<line x1="383" y1="215" x2="243" y2="215" class="m ack" stroke-dasharray="5 4" marker-end="url(#sqsl-ack)"/>
+<text x="311" y="210" text-anchor="middle" class="ml">RUN up to slot n</text>
+<line x1="240" y1="242" x2="380" y2="242" class="m ul" marker-end="url(#sqsl-ul)"/>
+<text x="311" y="237" text-anchor="middle" class="ml">DONE: SCIs + TB</text>
+<text x="397" y="269" text-anchor="start" class="nt">outbox; items older than 200 slots (100 ms) are dropped before they take air time</text>
+<rect x="8" y="284" width="128" height="92" rx="4" class="bd e"/><rect x="142" y="284" width="950" height="92" rx="4" class="rb e"/><text x="18" y="301" class="bn">next poll</text><text x="18" y="317" class="bs">≤ 3.7 ms idle</text><text x="18" y="331" class="bs">≈ 100 ms loaded</text>
+<line x1="684" y1="302" x2="394" y2="302" class="m dl" marker-end="url(#sqsl-dl)"/>
+<text x="537" y="297" text-anchor="middle" class="ml">AIR_SLM poll (seq k): the master&#x27;s items, or none</text>
+<line x1="391" y1="329" x2="681" y2="329" class="m ul" marker-end="url(#sqsl-ul)"/>
+<text x="537" y="324" text-anchor="middle" class="ml">AIR_SLP reply (seq k): SCI + TB, 7 B header + ≤ 248 B a packet</text>
+<line x1="684" y1="356" x2="394" y2="356" class="m ack" stroke-dasharray="5 4" marker-end="url(#sqsl-ack)"/>
+<text x="537" y="351" text-anchor="middle" class="ml">next poll (seq k+1) acks it; a lost reply: same poll, same reply</text>
+<rect x="8" y="380" width="128" height="104" rx="4" class="bd u"/><rect x="142" y="380" width="950" height="104" rx="4" class="rb u"/><text x="18" y="397" class="bn">sync-ref</text><text x="18" y="413" class="bs">next RUN ≤ 1 ms,</text><text x="18" y="427" class="bs">first U slot</text><text x="18" y="441" class="bs">≤ 3 ms</text>
+<line x1="692" y1="398" x2="832" y2="398" class="m ul" marker-end="url(#sqsl-ul)"/>
+<text x="763" y="393" text-anchor="middle" class="ml">RUN: the items</text>
+<text x="829" y="425" text-anchor="end" class="nt">held until the first slot whose RX action fits</text>
+<line x1="843" y1="452" x2="983" y2="452" class="m ul" marker-end="url(#sqsl-ul)"/>
+<text x="914" y="447" text-anchor="middle" class="ml">SCI 1-A, SCI 2, TB</text>
+<text x="980" y="479" text-anchor="end" class="nt">MAC → RLC, PDCP → tun 10.0.0.1 → ping / iperf3</text>
+</svg></div>
+        <figcaption>One IP packet from the nearby UE (10.0.0.100) to the sync reference (10.0.0.1). Neither UE waits for the air: each runs in real time on its bridge&#x27;s RUNs, and the boards only move slot items between them. The sync reference&#x27;s bridge drives the air: its poll carries its own items and collects the peer&#x27;s in the reply, stop and wait, so nothing is lost or duplicated. At the far end the items are fed to the MAC the way a PHY reports good decodes. Solid: data; dashed: bookkeeping (the RUN, the implicit ack). The other direction is the same, with the sync reference&#x27;s items riding the next poll. A 56 B ping takes 28 ms round trip (8 ms over rfsim).</figcaption>
+        </figure>
+      </div>
+    </section>
+
+    <div class="bd" style="border-top:1px solid var(--line)">
       <h3>Framing: what one LiDAR scan becomes on each path</h3>
     </div>
     <div class="tbl">
       <table>
-        <thead><tr><th>Layer</th><th>NR over nrlink (nrUE1)</th><th>Bluetooth LE (n3iwue1)</th></tr></thead>
+        <thead><tr><th>Layer</th><th>NR over nrlink (nrUE1)</th><th>Bluetooth LE (n3iwue1)</th><th>NR sidelink (nearby UE)</th></tr></thead>
         <tbody>
-<tr><td>Application</td><td>752 B LiDAR scan + UDP/IP 28 B = 780 B IP packet</td><td>the same 780 B IP packet</td></tr>
-<tr><td>Tunnel to the core</td><td>none: the PDU session&#x27;s IP rides the radio bearer</td><td>GRE inside IPsec ESP to the N3IWF: about +80 B</td></tr>
-<tr><td>Link layer above the radio</td><td>PDCP, RLC, MAC headers (a few bytes) → a PUSCH transport block, sized by the grant (MCS ≤ 2)</td><td>1 L2CAP SDU (PSM 0x0081, MTU 1500): 2 B SDU length + 4 B header per K-frame</td></tr>
-<tr><td>Host ↔ radio controller</td><td>UL_SLOT message: 10 B header + PUSCH item (3 B item header + 5 B) + TB; UDP to ue_bridge</td><td>HCI ACL (4 B header) over H4 (1 B), USB to the Pico, UART 1 Mbaud with RTS/CTS</td></tr>
-<tr><td>Radio packet</td><td>AIR_UL fragments: 7 B header + ≤ 248 B, SLIP over USB to the board, GFSK 1 Mbit/s on 2402 MHz</td><td>LL data PDU: ≤ 27 B payload + 2 B header (+ preamble, access address, CRC on air), LE 1M, a new channel every event</td></tr>
-<tr><td>When it may go</td><td>only when polled, in an uplink slot whose PUSCH the gNB granted</td><td>only in the board&#x27;s own connection events, as the central</td></tr>
-<tr><td>This 752 B scan</td><td>one or more PUSCH transport blocks, each UL_SLOT message in ≤ 248 B air fragments; 142 ms median end to end (about 3.4 TDD periods of 42 ms)</td><td>≈ 860 B SDU → about 35 LL PDUs → about 6 connection events; 172 ms median end to end</td></tr>
+<tr><td>Application</td><td>752 B LiDAR scan + UDP/IP 28 B = 780 B IP packet</td><td>the same 780 B IP packet</td><td>the same 780 B IP packet</td></tr>
+<tr><td>Tunnel to the core</td><td>none: the PDU session&#x27;s IP rides the radio bearer</td><td>GRE inside IPsec ESP to the N3IWF: about +80 B</td><td>none, and no core: IP rides the sidelink radio bearer (PC5) to the other UE</td></tr>
+<tr><td>Link layer above the radio</td><td>PDCP, RLC, MAC headers (a few bytes) → a PUSCH transport block, sized by the grant (MCS ≤ 2)</td><td>1 L2CAP SDU (PSM 0x0081, MTU 1500): 2 B SDU length + 4 B header per K-frame</td><td>PDCP, RLC, MAC headers → one SL-SCH transport block, plus SCI 1-A and SCI 2 (one 100-PRB subchannel, MCS up to 9)</td></tr>
+<tr><td>Host ↔ radio controller</td><td>UL_SLOT message: 10 B header + PUSCH item (3 B item header + 5 B) + TB; UDP to ue_bridge</td><td>HCI ACL (4 B header) over H4 (1 B), USB to the Pico, UART 1 Mbaud with RTS/CTS</td><td>DONE message to sl_bridge over UDP: 9 B header + SCI 1-A, SCI 2 and TB items (trailing padding stripped)</td></tr>
+<tr><td>Radio packet</td><td>AIR_UL fragments: 7 B header + ≤ 248 B, SLIP over USB to the board, GFSK 1 Mbit/s on 2402 MHz</td><td>LL data PDU: ≤ 27 B payload + 2 B header (+ preamble, access address, CRC on air), LE 1M, a new channel every event</td><td>air message fragments: 7 B header + ≤ 248 B, ≤ 20 a message, SLIP over USB to the board, GFSK 1 Mbit/s on 2450 MHz</td></tr>
+<tr><td>When it may go</td><td>only when polled, in an uplink slot whose PUSCH the gNB granted</td><td>only in the board&#x27;s own connection events, as the central</td><td>in a U slot its own MAC picked by sensing (mode 2), then in the peer&#x27;s next reply to a master poll (the sync reference&#x27;s items ride the poll)</td></tr>
+<tr><td>This 752 B scan</td><td>one or more PUSCH transport blocks, each UL_SLOT message in ≤ 248 B air fragments; 142 ms median end to end (about 3.4 TDD periods of 42 ms)</td><td>≈ 860 B SDU → about 35 LL PDUs → about 6 connection events; 172 ms median end to end</td><td>about 4 air packets in one reply; not run with the AGV. Pings: 500 B 49 ms, 1400 B (6 packets each way) 89 ms round trip</td></tr>
         </tbody>
       </table>
     </div>
@@ -435,7 +515,6 @@ svg .lat { font-family: var(--mono); font-size: 10.5px; font-weight: 600; fill: 
       <span class="hint">Why the small messages favour Bluetooth and the large ones NR (AGV testbed, medians): on Bluetooth a ≤ 80 B message rides the next event, 15–18.75 ms away (50 ms end to end), but a 752 B scan needs about 6 events (172 ms, 3.4× as long). On NR every message first waits for its grant and a polled U slot in a 42 ms period (59–74 ms for a small one), and the scan takes about twice that (142 ms).</span>
     </div>
   </section>
-
 
   <section class="card" aria-label="Stress tests">
     <div class="hd"><h2>Stress tests</h2><span class="meta">5 Nov 2026 · iperf3 3.16 and ping to ext-dn 192.168.70.132 · round trips only (the PC clocks differ)</span></div>
@@ -689,7 +768,7 @@ svg .lat { font-family: var(--mono); font-size: 10.5px; font-weight: 600; fill: 
     <div class="hd"><h2>NR sidelink over the boards: two UEs, no gNB</h2><span class="meta">11 Nov 2026 · OAI sl-release-2025w49 (sidelink mode 2) · step A over rfsim, step B over the UE1 and UE2 boards, borrowed for the test · nearby UE 10.0.0.100 → sync reference 10.0.0.1 · iperf3 3.16 and ping</span></div>
     <div class="bd">
       <p style="margin:0;max-width:100ch"><b>What runs.</b> Two OAI NR UEs talk to each other directly over the PC5 sidelink, with no gNB and no core: one is the sync reference and sends the sidelink broadcast (PSBCH), the other synchronises to it, and each opens a tun with an IP address. Both run on the UE PC (containers <code>sl-syncref</code> and <code>sl-nearby</code>). <b>Step A</b> ran them over OAI's rfsim, unchanged, with PSFCH and CSI off. <b>Step B</b> carries them over two FRDM-MCXW72 boards, the nrlink UE1 and UE2 boards, on GenFSK 2450 MHz, away from nrlink's 2402 MHz.</p>
-      <p style="margin:0;max-width:100ch"><b>How step B works.</b> <code>nrlink_sl.c</code> replaces the sidelink radio threads when <code>NRLINK_SL</code> is set; the MAC above it runs as with a radio. Each slot, what the MAC hands the PHY is captured as data: the PSBCH payload, or SCI 1-A, SCI 2 and the transport block. At the receiving UE, those items are fed to the MAC the way a PHY reports a good decode. <code>sl_bridge.py</code>, one per UE, keeps its UE on real time (2000 slots/s) and moves the items over its board. The sync reference's bridge polls and the other answers, so only one board transmits at a time. A lost poll or reply is sent again, and nothing is lost or duplicated.</p>
+      <p style="margin:0;max-width:100ch"><b>How step B works.</b> <code>nrlink_sl.c</code> replaces the sidelink radio threads when <code>NRLINK_SL</code> is set; the MAC above it runs as with a radio. Each slot, what the MAC hands the PHY is captured as data: the PSBCH payload, or SCI 1-A, SCI 2 and the transport block. At the receiving UE, those items are fed to the MAC the way a PHY reports a good decode. <code>sl_bridge.py</code>, one per UE, keeps its UE on real time (2000 slots/s) and moves the items over its board. The sync reference's bridge polls and the other answers, so only one board transmits at a time. A lost poll or reply is sent again, and nothing is lost or duplicated. Its slot scheme and one packet&#x27;s sequence are in the <a href="#opt-sidelink">NR sidelink tab</a> of <i>Slot schemes and packet sequences</i>.</p>
     </div>
     <figure style="margin:0;padding:8px 10px 4px;border-top:1px solid var(--line);overflow-x:auto">
       <svg viewBox="0 0 1010 150" style="width:100%;min-width:720px;height:auto;display:block" role="img" aria-label="Step B path: each OAI sidelink UE hands its slot items over UDP to its sl_bridge, the bridges reach the boards over USB, and the two boards exchange polls and replies on 2450 MHz.">
@@ -1045,5 +1124,71 @@ function slots() {
   el("rect", { x: bx + 300, y: 150, width: 12, height: 10, fill: "var(--intel)" }, b); el("text", { x: bx + 318, y: 159 }, b).textContent = "Intel hci0 answers";
   el("text", { x: bx + 470, y: 159 }, b).textContent = "BLE1 busy (≈ 80 kbit/s), BLE2 idle · × = event lost";
 }
-bars(); slots();
+function slotsSl() {
+  const s = $("slotsl"); s.textContent = "";
+  const x0 = 70, W = 1000, span = 20, X = t => x0 + t * W / span;       // 50 px per ms
+  el("text", { class: "t", x: 0, y: 16 }, s).textContent = "Sidelink slots in real time: 10 × 0.5 ms = 5 ms, 6 D + 4 U; the sidelink uses only the U slots";
+  el("text", { x: 0, y: 43 }, s).textContent = "slots";
+  for (let k = 0; k < 40; k++) {
+    const u = k % 10 >= 6;
+    el("rect", { x: X(k * 0.5), y: 28, width: W / 40 - 2, height: 22, rx: 3, fill: u ? "var(--oai)" : "var(--line)" }, s);
+    if (u) el("text", { x: X(k * 0.5 + 0.25) - 1, y: 43, "text-anchor": "middle", style: "fill:#fff;font-weight:600" }, s).textContent = k === 8 ? "B" : "U";
+  }
+  el("text", { x: 0, y: 66 }, s).textContent = "RUN";
+  for (let t = 0; t < span; t += 1) el("rect", { x: X(t), y: 56, width: 3, height: 12, fill: "var(--ink-3)" }, s);
+  el("text", { x: 0, y: 92 }, s).textContent = "air, idle";
+  const e0 = 0.6, cyc = 3.7, half = 0.85;
+  for (let t = e0; t + 2 * half <= span; t += cyc) {
+    el("rect", { x: X(t), y: 78, width: half * W / span - 1, height: 20, fill: "var(--embb)" }, s);
+    el("rect", { x: X(t + half), y: 78, width: half * W / span - 1, height: 20, fill: "var(--urllc)" }, s);
+  }
+  el("line", { x1: X(e0), x2: X(e0 + cyc), y1: 106, y2: 106, stroke: "var(--ink-2)" }, s);
+  el("text", { x: X(e0 + cyc) + 6, y: 110 }, s).textContent = "3.7 ms: 268 exchanges a second, measured idle";
+  for (let t = 0; t <= span; t += 5) {
+    el("line", { x1: X(t), x2: X(t), y1: 120, y2: 124, stroke: "var(--ink-3)" }, s);
+    el("text", { x: X(t), y: 136, "text-anchor": "middle" }, s).textContent = t + " ms";
+  }
+  el("line", { x1: x0, x2: x0 + W, y1: 120, y2: 120, stroke: "var(--line)" }, s);
+
+  const lspan = 200, L = t => x0 + t * W / lspan;                       // a tenth of the scale: 5 px per ms
+  el("text", { class: "t", x: 0, y: 162 }, s).textContent = "Under load, at a tenth of the scale: one exchange ≈ 100 ms, 10 a second (346 kbit/s measured), ≈ 5 ms per 248 B packet";
+  el("text", { x: 0, y: 188 }, s).textContent = "air, load";
+  for (const t0 of [0, 100]) {
+    el("rect", { x: L(t0), y: 174, width: 5 * W / lspan - 1, height: 20, fill: "var(--embb)" }, s);
+    for (let p = 1; p < 20; p++) el("rect", { x: L(t0 + 5 * p), y: 174, width: 5 * W / lspan - 1, height: 20, fill: "var(--urllc)" }, s);
+  }
+  for (let t = 0; t <= lspan; t += 50) {
+    el("line", { x1: L(t), x2: L(t), y1: 202, y2: 206, stroke: "var(--ink-3)" }, s);
+    el("text", { x: L(t), y: 218, "text-anchor": "middle" }, s).textContent = t + " ms";
+  }
+  el("line", { x1: x0, x2: x0 + W, y1: 202, y2: 202, stroke: "var(--line)" }, s);
+  const key = [["var(--oai)", "U slot (B: PSBCH, the first of 4 per 160 ms)"], ["var(--line)", "D slot, unused by the sidelink"], ["var(--ink-3)", "RUN: the bridge runs its UE up to the clock\u2019s slot"],
+    ["var(--embb)", "poll, UE1 board (sync-ref side), with its items"], ["var(--urllc)", "reply, UE2 board (nearby side), up to 20 packets"]];
+  key.forEach(([c, t], k) => {
+    const xx = x0 + (k % 3) * 340, yy = 242 + Math.floor(k / 3) * 18;
+    el("rect", { x: xx, y: yy - 10, width: 14, height: 10, fill: c }, s);
+    el("text", { x: xx + 20, y: yy }, s).textContent = t;
+  });
+}
+function tabs() {
+  const ts = [...document.querySelectorAll('#sequences [role="tab"]')];
+  const show = (b, focus) => {
+    ts.forEach(t => { const on = t === b; t.setAttribute("aria-selected", on); t.tabIndex = on ? 0 : -1; $(t.getAttribute("aria-controls")).hidden = !on; });
+    if (focus) b.focus();
+  };
+  ts.forEach((b, k) => {
+    b.addEventListener("click", () => show(b));
+    b.addEventListener("keydown", e => {
+      const d = { ArrowRight: 1, ArrowLeft: -1 }[e.key];
+      const n = d ? ts[(k + d + ts.length) % ts.length] : e.key === "Home" ? ts[0] : e.key === "End" ? ts[ts.length - 1] : null;
+      if (n) { e.preventDefault(); show(n, true); }
+    });
+  });
+  const fromHash = () => {
+    const b = ts.find(t => "#" + t.getAttribute("aria-controls") === location.hash);
+    if (b) { show(b); $(b.getAttribute("aria-controls")).scrollIntoView(); }
+  };
+  window.addEventListener("hashchange", fromHash); fromHash();
+}
+bars(); slots(); slotsSl(); tabs();
 </script>

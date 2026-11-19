@@ -15,12 +15,30 @@
 #                         (architecture); the UE PC runs its other half. Role from this PC's IP. Run it on both PCs.
 #                         "up" starts it and "down" stops it.
 #   ./nrlink.sh live enable|disable      start it at every boot (user crontab @reboot); it waits for the stack
-#     --scenario factory|agv   which experiment (saved in logs/live_scenario with the options below, so the next
+#     --scenario factory|agv|chain|dual|cover   which experiment (saved in logs/live_scenario with the options below, so the next
 #                              start and the boot start use it again; default factory)
 #       factory  the factory floor, closed loop (5 Nov - 10 Nov 2026): 4 AGVs, pole LiDAR on nrUE1, AGV reports and
 #                commands on nrUE2, camera video to two operators over Bluetooth (n3iwue1/2); trials L1-L3
 #       agv      one AGV, the same data on NR and Bluetooth at once (11 Nov 2026): its LiDAR on nrUE1 + n3iwue1,
 #                camera detections and pose on nrUE2 + n3iwue2, checkpoint syncs back; simulated radio channel
+#       chain    the AGV relay chain (12 Nov 2026): three AGVs = the UE1, UE2 and BLE1 boards (BLE1 on nrlink
+#                firmware), pivot/relay/remote by distance to the pole, hops between them over OAI's NR sidelink,
+#                a UE per AGV (nrUE1-3, pivot's and relay's attached); board LEDs blue/green/red show the roles.
+#                Core: apps/agv_chain_live.py (page, edge, clock) and gnb_bridge restarted with --ues 1,2,3
+#                --sl-window; UE: apps/agv_chain.py ue --live. Stopping it stops nrUE1-3 and the sidelink UEs.
+#       dual     the AGV dual gateway (12 Nov 2026): same boards and parts as chain, but the two AGVs nearest the
+#                pole are both gateways (UE attached, sending their own data) and the remote picks one per message
+#                over one sidelink hop (sticky: stays on one gateway at least 5 s); LEDs: remote red, the gateway
+#                serving it blue, the other gateway green. Page apps/agv_dual_live.html.
+#       cover    the AGVs lose the gNB for real (13 Nov 2026): same parts as dual, but coverage comes from where each
+#                AGV is (path loss + a shielded cold store on the route). Inside it an AGV's UE loses the connection
+#                and it sends over one sidelink hop to the nearest AGV still in coverage, only if that AGV is nearer than the
+#                gNB; the AGVs drive as a platoon (A leading, 8 m gaps), and only one AGV is on the sidelink at a time: an AGV with a session holds before
+#                the dead zone while another is on the sidelink, which drives on to its own direct connection. LEDs: red
+#                over the sidelink, blue carrying another AGV's traffic, green own UE only. Page apps/agv_cover_live.html.
+#     --sl-window MS            (chain, dual) the gNB's sidelink window per frame, default 25
+#     --pc5 oai|ctl             (chain) hops over OAI's sidelink (default) or the controller's own packets
+#     --relay l3|app            (cover) layer-3 UE-to-network relay: IP forwarding + NAT in the relay AGV (default), or app-level passing on
 #     --level L1|L2|L3          starting load (both scenarios)
 #     --mode both|nr|ble        (agv) which technologies carry the data
 #     --tx-dbm 0|-10|-20|-30    (agv) simulated transmit power for the channel model
@@ -107,9 +125,20 @@ live_scenario() {   # sets SCN and SCN_OPTS: from the command line (and saves th
   else
     SCN=factory; SCN_OPTS=$LIVE_OPTS
   fi
-  case "$SCN" in factory | agv) ;; *) die "unknown scenario '$SCN' (factory or agv)" ;; esac
+  case "$SCN" in factory | agv | chain | dual | cover) ;; *) die "unknown scenario '$SCN' (factory, agv, chain, dual or cover)" ;; esac
 }
 live_opt() { local o=$1; set -- $SCN_OPTS; while [ $# -gt 0 ]; do [ "$1" = "$o" ] && { echo "${2:-}"; return; }; shift; done; }
+CHAIN_BOARDS=${CHAIN_BOARDS:-2HOKMMVEX1WMP,GBAMNH4BQ3CSB,GLNAOWUSDREB4}   # AGV A, B, C (C = nrlink v6, host link through its Pico, see pico_ports.json)
+chain_bridge() {   # chain_bridge [window ms]: gnb_bridge polling nrUE1-3 with a sidelink window each frame
+  local w=${1:-25} p a
+  p=$(cat "$PID/gnb_bridge.pid" 2>/dev/null); a=$(ps -o args= -p "$p" 2>/dev/null)
+  [ -n "$a" ] || die "gnb_bridge is not running: start the stack first (nrlink.sh up --role core)"
+  if [[ "$a" == *"--ues 1,2,3"*"--sl-window $w"* ]]; then ok "gnb_bridge already has --ues 1,2,3 --sl-window $w"; return 0; fi
+  kill "$p"; for _ in $(seq 25); do kill -0 "$p" 2>/dev/null || break; sleep 0.2; done; kill -9 "$p" 2>/dev/null
+  cp "$LOG/gnb_bridge.log" "$LOG/gnb_bridge.log.prev" 2>/dev/null
+  start_proc gnb_bridge "$PY" -u gnb_bridge.py --ues 1,2,3 --skip-empty --sl-window "$w"
+  wait_for 20 "gnb_bridge restarted with --ues 1,2,3 --sl-window $w" grep -q "listening on udp" "$LOG/gnb_bridge.log"
+}
 live_start() {
   local r lv; r=$(live_role); live_scenario
   lv=$(live_opt --level); lv=${lv:-L1}
@@ -118,8 +147,15 @@ live_start() {
     core)
       if alive live_server; then ok "live server already running (pid $(cat "$PID/live_server.pid")); live restart to change the scenario"; return 0; fi
       pkill -f "[f]actory_live2\.py" 2>/dev/null; pkill -f "[f]actory_live\.py" 2>/dev/null; pkill -f "[c]amsrc --truth" 2>/dev/null
-      pkill -f "[a]gv_live\.py" 2>/dev/null
-      if [ "$SCN" = agv ]; then
+      pkill -f "[a]gv_live\.py" 2>/dev/null; pkill -f "[a]gv_chain_live\.py" 2>/dev/null
+      if [ "$SCN" = chain ] || [ "$SCN" = dual ] || [ "$SCN" = cover ]; then
+        chain_bridge "$(live_opt --sl-window)"
+        mkdir -p "$LOG/agvc"
+        start_proc live_server python3 -u apps/agv_chain_live.py --http 8090 --page "agv_${SCN}_live.html"
+        wait_for 20 "live page on :8090" curl -sf -o /dev/null http://127.0.0.1:8090/
+        ok "http://$CORE_PC:8090/  (AGV $(case "$SCN" in dual) echo dual gateway ;; cover) echo coverage relay ;; *) echo relay chain ;; esac); start the UE PC side now)"
+        return 0
+      elif [ "$SCN" = agv ]; then
         local a=(--http 8090 --level "$lv") v
         v=$(live_opt --mode); [ -n "$v" ] && a+=(--mode "$v")
         v=$(live_opt --tx-dbm); [ -n "$v" ] && a+=(--tx-dbm "$v")
@@ -135,7 +171,24 @@ live_start() {
     ue)
       if alive live_agent; then ok "live agent already running (pid $(cat "$PID/live_agent.pid")); live restart to change the scenario"; return 0; fi
       pkill -f "[f]actory2\.py agent" 2>/dev/null; pkill -f "[f]actory_dl\.py agent" 2>/dev/null; pkill -f "[a]gv\.py ue" 2>/dev/null
-      if [ "$SCN" = agv ]; then
+      pkill -f "[a]gv_chain\.py ue" 2>/dev/null
+      if [ "$SCN" = chain ] || [ "$SCN" = dual ] || [ "$SCN" = cover ]; then
+        local w p5 rl l3=; w=$(live_opt --sl-window); w=${w:-25}; p5=$(live_opt --pc5); p5=${p5:-oai}
+        rl=$(live_opt --relay); rl=${rl:-l3}     # cover: l3 = layer-3 UE-to-network relay (NAT in the relay), app = the controller passes messages on
+        if [ "$SCN" = cover ] && [ "$p5" = oai ]; then
+          l3="--relay $rl"
+          if [ "$rl" = l3 ] && ! docker image inspect agvc-relay:local >/dev/null 2>&1; then
+            docker build -q --network host -t agvc-relay:local "$HERE/deploy/agvc-relay" >/dev/null || die "could not build agvc-relay:local (deploy/agvc-relay)"
+          fi
+        fi
+        for f in ue1_bridge ue2_bridge ue3_bridge; do
+          alive $f && die "$f holds a board the chain needs: stop the UE bridges first (nrlink.sh down --role ue --keep-core)"
+        done
+        mkdir -p "$LOG/agvc"
+        start_proc live_agent "$PY" -u apps/agv_chain.py ue --uu per-agv --in-coverage 2 --pc5 "$p5" --core "$CORE_PC" \
+          --boards "$CHAIN_BOARDS" --level "$lv" --guard-ms 0.2 --window-ms "$w" --topology "$SCN" --pick "$([ "$SCN" = cover ] && echo near || echo sticky)" $([ "$SCN" = cover ] && echo --platoon 8 --hold one) $l3 \
+          --log "$LOG/agvc/live.jsonl" --log-max-mb 200 --live "$CORE_PC:5301"
+      elif [ "$SCN" = agv ]; then
         start_proc live_agent python3 -u apps/agv.py ue --core "$CORE_PC" --level "$lv"
       else
         mkdir -p "$LOG/factory/live2"
@@ -150,10 +203,16 @@ live_stop() {
   step "live pages ($r PC)"
   case "$r" in
     core) stop_proc live_server; pkill -f "[f]actory_live2\.py" 2>/dev/null; pkill -f "[c]amsrc --truth" 2>/dev/null
-          pkill -f "[a]gv_live\.py" 2>/dev/null
-          for c in $LIVE_SIDECARS_CORE; do dk rm -f "$c" >/dev/null 2>&1; done ;;
+          pkill -f "[a]gv_live\.py" 2>/dev/null; pkill -f "[a]gv_chain_live\.py" 2>/dev/null
+          for c in $LIVE_SIDECARS_CORE agvc-edge; do dk rm -f "$c" >/dev/null 2>&1; done ;;
     ue)   stop_proc live_agent; pkill -f "[f]actory2\.py agent" 2>/dev/null; pkill -f "[a]gv\.py ue" 2>/dev/null
-          for c in $LIVE_SIDECARS_UE; do dk rm -f "$c" >/dev/null 2>&1; done ;;
+          for c in $LIVE_SIDECARS_UE; do dk rm -f "$c" >/dev/null 2>&1; done
+          if pkill -f "[a]gv_chain\.py ue" 2>/dev/null || [ -n "$(dk ps -q --filter name=agvc-)" ]; then
+            # the chain: its forwarders and sidelink UEs go; nrUE1-3 are only stopped (pre-created containers)
+            for c in $(dk ps -a --format '{{.Names}}' | grep '^agvc-'); do dk rm -f "$c" >/dev/null 2>&1; done
+            dk stop -t 2 oai-nrue1 oai-nrue2 oai-nrue3 >/dev/null 2>&1
+            ok "chain: sidelink UEs removed, nrUE1-3 stopped (nrlink.sh up --role ue brings nrUE1/2 back)"
+          fi ;;
   esac
   ok "stopped"
 }
@@ -162,17 +221,23 @@ live_status() {
   printf 'scenario      %s %s\n' "$SCN" "$SCN_OPTS"
   case "$r" in
     core) alive live_server && printf 'live server   running (pid %s)  http://%s:8090/  /arch\n' "$(cat "$PID/live_server.pid")" "$CORE_PC" \
-            || printf 'live server   stopped\n'; c=$LIVE_SIDECARS_CORE ;;
+            || printf 'live server   stopped\n'; c="$LIVE_SIDECARS_CORE agvc-edge" ;;
     ue)   alive live_agent && printf 'live agent    running (pid %s) -> %s\n' "$(cat "$PID/live_agent.pid")" "$CORE_PC" || printf 'live agent    stopped\n'
-          c=$LIVE_SIDECARS_UE ;;
+          c="$LIVE_SIDECARS_UE $(dk ps -a --format '{{.Names}}' | grep '^agvc-' | tr '\n' ' ')" ;;
     *) printf 'live pages need the two-PC split\n'; return ;;
   esac
   for n in $c; do st=$(dk inspect -f '{{.State.Status}}' "$n" 2>/dev/null) && printf '  %-20s %s\n' "$n" "$st"; done
   crontab -l 2>/dev/null | grep -q "nrlink.sh live start" && printf 'at boot       enabled (crontab @reboot)\n' || printf 'at boot       disabled\n'
 }
-live_boot() {   # live_boot enable|disable
-  local line="@reboot sleep 45 && $HERE/nrlink.sh live start >> $LOG/live_boot.log 2>&1"
-  { crontab -l 2>/dev/null | grep -v "nrlink.sh live start"; [ "$1" = enable ] && echo "$line"; } | crontab -
+live_boot() {   # live_boot enable|disable: the core PC brings the whole stack up (up starts live too); the UE PC
+                #   waits for the core's live page, then starts its half
+  local line
+  case "$(live_role)" in
+    core) line="@reboot sleep 45 && $HERE/nrlink.sh up --role core >> $LOG/live_boot.log 2>&1" ;;
+    ue) line="@reboot sleep 45 && until curl -sf -o /dev/null http://$CORE_PC:8090/; do sleep 10; done && $HERE/nrlink.sh live start >> $LOG/live_boot.log 2>&1" ;;
+    *) line="@reboot sleep 45 && $HERE/nrlink.sh live start >> $LOG/live_boot.log 2>&1" ;;
+  esac
+  { crontab -l 2>/dev/null | grep -v "nrlink.sh live start" | grep -v "nrlink.sh up --role"; [ "$1" = enable ] && echo "$line"; } | crontab -
   [ "$1" = enable ] && ok "live pages start at boot: $line" || ok "live pages no longer start at boot"
 }
 live() {
@@ -574,7 +639,10 @@ while [ $# -gt 0 ]; do
     --role) case "${2:-}" in all | core | ue) ROLE=$2; ROLE_SET=1 ;;
               *) die "--role takes all, core or ue" ;; esac; shift ;;
     --keep-core) KEEP_CORE=1 ;;
-    --scenario) case "${2:-}" in factory | agv) SCENARIO=$2 ;; *) die "--scenario takes factory or agv" ;; esac; shift ;;
+    --scenario) case "${2:-}" in factory | agv | chain | dual | cover) SCENARIO=$2 ;; *) die "--scenario takes factory, agv, chain, dual or cover" ;; esac; shift ;;
+    --sl-window) case "${2:-}" in [1-9] | [1-9][0-9]) LIVE_OPTS="$LIVE_OPTS --sl-window $2" ;; *) die "--sl-window takes 1-99 ms" ;; esac; shift ;;
+    --pc5) case "${2:-}" in oai | ctl) LIVE_OPTS="$LIVE_OPTS --pc5 $2" ;; *) die "--pc5 takes oai or ctl" ;; esac; shift ;;
+    --relay) case "${2:-}" in l3 | app) LIVE_OPTS="$LIVE_OPTS --relay $2" ;; *) die "--relay takes l3 or app" ;; esac; shift ;;
     --level) case "${2:-}" in L1 | L2 | L3) LIVE_OPTS="$LIVE_OPTS --level $2" ;; *) die "--level takes L1, L2 or L3" ;; esac; shift ;;
     --mode) case "${2:-}" in both | nr | ble) LIVE_OPTS="$LIVE_OPTS --mode $2" ;; *) die "--mode takes both, nr or ble" ;; esac; shift ;;
     --tx-dbm) case "${2:-}" in 0 | -10 | -20 | -30) LIVE_OPTS="$LIVE_OPTS --tx-dbm $2" ;; *) die "--tx-dbm takes 0, -10, -20 or -30" ;; esac; shift ;;

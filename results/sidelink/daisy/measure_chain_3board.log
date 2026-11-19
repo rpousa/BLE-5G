@@ -1,0 +1,39 @@
+== ping 56 B
+20 packets transmitted, 20 received, 0% packet loss, time 9519ms
+rtt min/avg/max/mdev = 79.531/94.432/120.584/8.498 ms
+== ping 500 B
+20 packets transmitted, 20 received, 0% packet loss, time 9519ms
+rtt min/avg/max/mdev = 126.211/147.458/224.641/22.956 ms
+== ping 1400 B
+20 packets transmitted, 20 received, 0% packet loss, time 9508ms
+rtt min/avg/max/mdev = 216.699/250.372/304.624/26.242 ms
+== UDP up 100k
+[  5]   0.00-15.00  sec   184 KBytes   100 Kbits/sec  0.000 ms  0/188 (0%)  sender
+[  5]   0.00-15.14  sec   184 KBytes  99.3 Kbits/sec  15.202 ms  0/188 (0%)  receiver
+== UDP up 150k
+[  5]   0.00-15.00  sec   275 KBytes   150 Kbits/sec  0.000 ms  0/282 (0%)  sender
+[  5]   0.00-15.25  sec   188 KBytes   101 Kbits/sec  20.496 ms  89/282 (32%)  receiver
+== UDP up 200k
+[  5]   0.00-15.00  sec   366 KBytes   200 Kbits/sec  0.000 ms  0/375 (0%)  sender
+[  5]   0.00-15.23  sec   188 KBytes   101 Kbits/sec  17.769 ms  183/375 (49%)  receiver
+== UDP up 300k
+[  5]   0.00-15.00  sec   550 KBytes   300 Kbits/sec  0.000 ms  0/563 (0%)  sender
+[  5]   0.00-15.28  sec   192 KBytes   103 Kbits/sec  16.058 ms  366/563 (65%)  receiver
+== UDP down 100k
+[  5]   0.00-15.22  sec   187 KBytes   100 Kbits/sec  0.000 ms  0/191 (0%)  sender
+[  5]   0.00-15.00  sec   167 KBytes  91.2 Kbits/sec  7.953 ms  17/188 (9%)  receiver
+== UDP down 150k
+[  5]   0.00-15.18  sec   278 KBytes   150 Kbits/sec  0.000 ms  0/285 (0%)  sender
+[  5]   0.00-15.00  sec   174 KBytes  94.9 Kbits/sec  24.761 ms  102/280 (36%)  receiver
+== UDP down 200k
+[  5]   0.00-15.21  sec   372 KBytes   200 Kbits/sec  0.000 ms  0/381 (0%)  sender
+[  5]   0.00-15.00  sec   177 KBytes  96.5 Kbits/sec  17.649 ms  192/373 (51%)  receiver
+== TCP up 30 s
+[  5]   0.00-30.00  sec   256 KBytes  69.9 Kbits/sec   75             sender
+[  5]   0.00-30.09  sec   232 KBytes  63.1 Kbits/sec                  receiver
+== TCP down 30 s
+[  5]   0.00-30.71  sec   128 KBytes  34.1 Kbits/sec   94             sender
+[  5]   0.00-30.00  sec  38.2 KBytes  10.4 Kbits/sec                  receiver
+== ping 56 B under TCP up
+30 packets transmitted, 27 received, 10% packet loss, time 14594ms
+rtt min/avg/max/mdev = 113.705/216.698/363.102/53.696 ms
