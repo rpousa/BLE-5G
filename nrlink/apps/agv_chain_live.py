@@ -93,7 +93,7 @@ def on_ctl(m):
     elif k == "led":
         S["leds"][m["agv"]] = m
         emit(m)
-    elif k in ("cov", "attach", "egress", "pc5", "pc5up", "start", "serve", "rlf", "hold", "pc5conn", "rur", "disc"):
+    elif k in ("cov", "attach", "egress", "pc5", "pc5up", "start", "serve", "rlf", "hold", "pc5conn", "rur", "disc", "relayop", "rlysess"):
         emit(m)
     elif k == "stats":
         S["stats"] = m

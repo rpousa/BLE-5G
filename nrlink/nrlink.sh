@@ -257,7 +257,8 @@ ran_conf_free5gc() {
   sed 's/snssaiList = ({ sst = 1 }/snssaiList = ({ sst = 1; sd = 0x010203 }, { sst = 1 }/' "$D/vnf.conf" > "$G/vnf.conf"
   grep -q 'sd = 0x010203' "$G/vnf.conf" || die "could not add slice 1/010203 to vnf.conf"
   for u in 1 2 3; do
-    sed 's/pdu_sessions = ({ dnn = "oai"; nssai_sst = 1; });/pdu_sessions = ({ dnn = "internet"; nssai_sst = 1; nssai_sd = 0x010203; });/' "$D/ue$u.conf" > "$G/ue$u.conf"
+    # two PDU sessions: the UE's own (oaitun_ue1) and the UE-to-network relay's (DNN relay, oaitun_rly, TS 23.304)
+    sed 's/pdu_sessions = ({ dnn = "oai"; nssai_sst = 1; });/pdu_sessions = ({ dnn = "internet"; nssai_sst = 1; nssai_sd = 0x010203; }, { dnn = "relay"; nssai_sst = 1; nssai_sd = 0x010203; ifname = "oaitun_rly"; });/' "$D/ue$u.conf" > "$G/ue$u.conf"
     grep -q 'nssai_sd = 0x010203' "$G/ue$u.conf" || die "could not set the free5GC slice in ue$u.conf"
   done
 }
@@ -289,6 +290,8 @@ core_free5gc() {
   wait_for 60 "webconsole up, subscribers 036-038 (nrUEs), 040 (docker n3iwue) and 041-042 (UE PC n3iwues) provisioned" "$PY" f5gc_subscribers.py
   wait_for 60 "SMF associated with the UPF (PFCP)" bash -c "$(declare -f dk); dk logs f5gc-smf 2>&1 | grep -qi 'association.*\(success\|accept\)'"
   wait_for 60 "ext-dn routes 12.1.1.0/24 to the UPF" bash -c "$(declare -f dk); [ \"\$(dk inspect -f '{{.State.Health.Status}}' oai-ext-dn)\" = healthy ]"
+  dk exec oai-ext-dn ip route replace 12.1.2.0/24 via 192.168.70.133 >/dev/null 2>&1 \
+    && ok "ext-dn routes 12.1.2.0/24 (DNN relay) to the UPF" || die "could not route 12.1.2.0/24 (DNN relay) in ext-dn"
   dk compose -f "$F5" up -d n3iwf >>"$LOG/core.log" 2>&1 || die "N3IWF did not start"
   wait_for 60 "N3IWF registered with the AMF (NG setup)" bash -c "$(declare -f dk); dk logs f5gc-n3iwf 2>&1 | grep -qi 'NG *Setup *Response'"
   ran_conf_free5gc

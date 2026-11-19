@@ -107,8 +107,10 @@ function lvEv(e) {
     case "cov": if (e.on) { if (DUALP || LV.chain[0] === e.agv) LV.att.push([t, e.agv, null]); lvLog(e.t, `AGV ${AGV[e.agv].n} in coverage: nrUE${e.ue} attaching`); } else lvLog(e.t, `AGV ${AGV[e.agv].n} out of coverage: nrUE${e.ue} stopped`); break;
     case "attach": if (e.ok) { const a = LV.att.findLast(x => x[1] === e.agv && x[2] === null); if (a) a[2] = t; lvLog(e.t, `nrUE${e.ue} attached (AGV ${AGV[e.agv].n}), session ${e.ip || ""}`); } else lvLog(e.t, `nrUE${e.ue} did not attach: ${e.why || ""}`); break;
     case "egress": lvLog(e.t, `fleet traffic leaves through ${e.agv === null ? "no UE" : "AGV " + AGV[e.agv].n + "'s nrUE" + (e.agv + 1)}`); break;
-    case "pc5conn": lvLog(e.t, e.on ? `L3 relay: AGV ${AGV[e.agv].n} has a direct link to AGV ${AGV[e.relay].n}, address ${e.ip} (${e.ms} ms)` : `L3 relay: AGV ${AGV[e.agv].n} released its link to AGV ${AGV[e.relay].n}`); break;
-    case "rur": lvLog(e.t, `AGV ${AGV[e.relay].n} reports remote UE AGV ${AGV[e.remote].n} to the network (${e.ev})`); break;
+    case "pc5conn": lvLog(e.t, e.on ? `L3 relay: AGV ${AGV[e.agv].n} has a direct link to AGV ${AGV[e.relay].n}, DHCPv4 address ${e.ip} (${e.ms} ms from the request)` : `L3 relay: AGV ${AGV[e.agv].n} released its link to AGV ${AGV[e.relay].n}`); break;
+    case "rur": lvLog(e.t, `AGV ${AGV[e.relay].n} reports remote UE AGV ${AGV[e.remote].n} to the network (${e.ev}${e.ip ? ", " + e.ip : ""})`); break;
+    case "relayop": lvLog(e.t, `AGV ${AGV[e.agv].n} ${e.on ? "may act as a relay" : "stops relay operation"} (Uu ${e.q} dBm)`); break;
+    case "rlysess": lvLog(e.t, `AGV ${AGV[e.agv].n}: relay PDU session (DNN relay) up, ${e.ip}`); break;
     case "disc": lvLog(e.t, `AGV ${AGV[e.agv].n} hears relay AGV ${AGV[e.relay].n}'s announcement, SD-RSRP ${e.sd} dBm`); break;
     case "pc5up": lvLog(e.t, `sidelink UE up on AGV ${AGV[e.agv].n} (link ${e.l}), ${e.ip}`); break;
     case "led": LV.leds[e.agv] = e; if (LV.ledlog.length > 5000) LV.ledlog.splice(0, 1000); LV.ledlog.push([t, e.agv, { blue: 0, green: 1, red: 2 }[e.c] ?? -1, e.blink]); lvLog(e.t, `AGV ${AGV[e.agv].n}'s board ${e.board}: LED ${e.c}${e.blink ? " blinking" : ""}`); break;

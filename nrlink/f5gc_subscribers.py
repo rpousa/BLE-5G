@@ -5,7 +5,8 @@
   IMSI 208950000000040      the non-3GPP UE (n3iwue, via the N3IWF)
   IMSI 208950000000041-042  the two non-3GPP UEs over Bluetooth (UE PC n3iwue1/2, same K/OPc as 040)
 
-All on slice SST 1 / SD 010203, DNN internet (UE pool 12.1.1.0/24).
+All on slice SST 1 / SD 010203, DNN internet (UE pool 12.1.1.0/24); the nrUEs also on DNN relay (12.1.2.0/24),
+the PDU session a UE-to-network relay carries its remote UEs' traffic in.
 """
 import json
 import sys
@@ -37,6 +38,7 @@ def call(method, path, body=None, token=None):
 
 
 def subscriber(imsi, key, opc):
+    dnns = [DNN, "relay"] if (key, opc) == NRUE else [DNN]   # nrUEs: also the UE-to-network relay DNN (TS 23.304)
     snssai = f"{SST:02x}{SD}"
     dnn_cfg = {
         "sscModes": {"defaultSscMode": "SSC_MODE_1", "allowedSscModes": ["SSC_MODE_2", "SSC_MODE_3"]},
@@ -60,11 +62,11 @@ def subscriber(imsi, key, opc):
             "nssai": {"defaultSingleNssais": [{"sst": SST, "sd": SD, "isDefault": True}], "singleNssais": []},
             "subscribedUeAmbr": {"uplink": "1 Gbps", "downlink": "2 Gbps"},
         },
-        "SessionManagementSubscriptionData": [{"singleNssai": {"sst": SST, "sd": SD}, "dnnConfigurations": {DNN: dnn_cfg}}],
-        "SmfSelectionSubscriptionData": {"subscribedSnssaiInfos": {snssai: {"dnnInfos": [{"dnn": DNN}]}}},
+        "SessionManagementSubscriptionData": [{"singleNssai": {"sst": SST, "sd": SD}, "dnnConfigurations": {d: dnn_cfg for d in dnns}}],
+        "SmfSelectionSubscriptionData": {"subscribedSnssaiInfos": {snssai: {"dnnInfos": [{"dnn": d} for d in dnns]}}},
         "AmPolicyData": {"subscCats": ["free5gc"]},
         "SmPolicyData": {"smPolicySnssaiData": {snssai: {"snssai": {"sst": SST, "sd": SD},
-                                                         "smPolicyDnnData": {DNN: {"dnn": DNN}}}}},
+                                                         "smPolicyDnnData": {d: {"dnn": d} for d in dnns}}}},
         "FlowRules": [],
         "QosFlows": [],
         "ChargingDatas": [],
