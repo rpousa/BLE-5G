@@ -13,6 +13,10 @@ import serial
 SLIP_END, SLIP_ESC, SLIP_ESC_END, SLIP_ESC_ESC = 0xC0, 0xDB, 0xDC, 0xDD
 MSG_TX, MSG_LED, MSG_CFG, MSG_PING, MSG_STATS = 0x01, 0x02, 0x03, 0x04, 0x05
 MSG_REPEAT, MSG_REPEATOK = 0x07, 0x87       # nrlink v5
+MSG_SLCFG, MSG_SLQ, MSG_SLFLUSH = 0x08, 0x09, 0x0A    # nrlink v7: sidelink mode 1 (the gNB's grants gate the board)
+MSG_SLCFGOK, MSG_SLDONE = 0x88, 0x8A
+SL_OFF, SL_MODE1, SL_MODE2 = 0, 1, 2
+SL_POOL_ID = 0xFF
 MSG_TXDONE, MSG_RX, MSG_CFGOK, MSG_PONG, MSG_STATSR = 0x81, 0x82, 0x83, 0x84, 0x85
 OFF, RED, GREEN, BLUE = 0, 1, 2, 3
 
@@ -50,6 +54,7 @@ class Board:
         self.serial_no = serial_no
         self.ser = serial.Serial(port_of(serial_no), baud, timeout=0.05)
         self.rx = queue.Queue()        # (rssi, ts, payload)
+        self.on_sldone = None          # v7: called with (sent, left, dropped, mode, granted_ms, used_ms) after each grant
         self.events = queue.Queue()    # (type, body) for non-RX messages
         self._stop = False
         self._t = threading.Thread(target=self._reader, daemon=True)
@@ -96,6 +101,10 @@ class Board:
             rssi = struct.unpack("b", f[1:2])[0]
             ts = struct.unpack("<I", f[2:6])[0]
             self.rx.put((rssi, ts, f[6:]))
+        elif f[0] == MSG_SLDONE and len(f) >= 9:
+            if self.on_sldone:
+                sent, left, dropped, mode, g, u = struct.unpack_from("<BBBBHH", f, 1)
+                self.on_sldone(sent, left, dropped, mode, g / 10, u / 10)
         else:
             self.events.put((f[0], f[1:]))
 
@@ -130,6 +139,21 @@ class Board:
         b = self._wait(MSG_STATSR)
         return struct.unpack("<%dI" % (len(b) // 4), b)
 
+    # ---- nrlink v7: sidelink mode 1
+    def sl_config(self, sl_id, mode, gap_us=300):
+        """Grant id this board answers to (its UE id), and the mode: SL_MODE1 = the gNB's grant for sl_id, SL_MODE2 =
+        the pool for UEs out of coverage (grant id 0xFF), SL_OFF = v6 behaviour. Returns (id, mode, queue size)."""
+        self._send(MSG_SLCFG, bytes([sl_id, mode, min(255, gap_us // 50)]))
+        return tuple(self._wait(MSG_SLCFGOK)[:3])
+
+    def sl_stage(self, payload):
+        """Stage one sidelink packet on the board: it goes out in this board's next grant (no reply)."""
+        assert len(payload) <= 255
+        self._send(MSG_SLQ, bytes(payload))
+
+    def sl_flush(self):
+        self._send(MSG_SLFLUSH)
+
     def repeat(self, rules, to_host=False, gap_us=0):
         """nrlink v5: repeat packets whose (kind, link) match a rule (kind, from_link, to_link), with the link byte
         set to to_link; rules=[] turns the repeater off. gap_us: before and between repeated packets (200 us steps,
@@ -144,6 +168,10 @@ class Board:
 # Every radio packet: kind, ue_id, sfn (le16), slot, frag, nfrag, then a chunk of a slot message.
 AIR_DL, AIR_POLL, AIR_UL = 0x01, 0x02, 0x03
 AIR_SLWIN, AIR_CH, AIR_BEACON = 0x08, 0x09, 0x0A   # AGV relay chain: sidelink window (gNB), chain data, beacon
+# AIR_SLWIN body: <width ms:u16>, and with mode 1 <n>{<id><offset:u16><length:u16>}*n, 100 us units (SL_GRANT)
+SL_GRANT = struct.Struct("<BHH")
+IT_SLBSR = 0x14     # in a UE's UL_SLOT (mode 1): sidelink buffer status <bytes:u32><packets:u16><flags:u8>, bit 0 = a
+                    # PC5 peer is out of coverage (wants the pool); gnb_bridge takes it out before the PNF
 AIR_HDR = struct.Struct("<BBHBBB")
 AIR_CHUNK = 255 - AIR_HDR.size
 

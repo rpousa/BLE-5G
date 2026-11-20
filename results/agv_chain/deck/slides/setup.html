@@ -1,0 +1,27 @@
+<section id="setup" class="alt foot">
+<p class="eyebrow">01 · THE SETUP</p>
+<h2>A full 5G system on two PCs and four boards</h2>
+<div class="row" style="gap:40px;align-items:stretch">
+<div class="panel rise" style="--i:0"><p class="pl">CORE PC</p>
+<div class="box core"><p>Edge server</p></div>
+<div class="box core"><p>free5GC core</p></div>
+<div class="box ran"><p>OAI gNB · VNF</p></div>
+<div class="box ran"><p>OAI gNB · PNF</p></div>
+<div class="box ran"><p>gnb_bridge</p></div>
+</div>
+<div class="radio rise" style="--i:1">
+<div class="box brd"><p>gNB board</p></div>
+<div class="air"><p>2.4 GHz · 1 Mbit/s</p></div>
+<div class="row" style="gap:16px"><div class="box brd"><p>A</p></div><div class="box brd"><p>B</p></div><div class="box brd"><p>C</p></div></div>
+<p class="pl" style="text-align:center">4 × FRDM-MCXW72</p>
+</div>
+<div class="panel rise" style="--i:2"><p class="pl">UE PC</p>
+<div class="box ue"><p>AGV controller · A B C</p></div>
+<div class="box ran"><p>3 OAI nrUEs</p></div>
+<div class="box ran"><p>6 OAI sidelink UEs</p></div>
+<div class="box ran"><p>ue_bridge · sl_bridge</p></div>
+</div>
+</div>
+<div class="footer"><span>AGV Sidelink Testbed</span><span class="pg"></span></div>
+<aside>Core PC: the edge server that collects the AGVs’ data, free5GC, the OAI gNB split into VNF and PNF, and gnb_bridge to the gNB board. Four FRDM-MCXW72 boards replace the RF front end: one for the gNB, one per AGV. UE PC: the AGV controller (driving, positioning, LiDAR), three OAI nrUEs, six OAI sidelink UEs and their bridges to the boards. The AGVs are software; the radio, the 5G stack and the core are real.</aside>
+</section>

@@ -16,6 +16,7 @@ every period and announces the window (AIR_SLWIN); the chain transmits only insi
   core, sidecar in oai-ext-dn's netns:  agv_chain.py edge                       (JSON lines on stdout)
 """
 import argparse
+import collections
 import hashlib
 import hmac
 import json
@@ -66,7 +67,7 @@ ROLES = ("pivot", "relay", "remote")
 LED_OF_ROLE = (3, 2, 1)                                  # board LED: blue, green, red
 LED_NAMES = {0: "off", 1: "red", 2: "green", 3: "blue"}
 LIVE_KINDS = {"hold", "rlf", "serve", "uu", "start", "pos", "chain", "hop", "gen", "drop", "cmdrx", "clock", "cov", "attach", "egress", "stats", "led",
-              "pc5", "pc5up", "pc5st", "disc", "pc5conn", "rur", "relayop", "rlysess"}
+              "pc5", "pc5up", "pc5st", "disc", "pc5conn", "rur", "relayop", "rlysess", "manual", "slm1"}
 
 APP = struct.Struct("<4sBBIdff")     # 'AGC1', agv, flow (0 det, 1 lidar, 2 cmd), seq, t (sender clock), x, y
 CHH = struct.Struct("<BB")           # chain header: direction (0 up, 1 down), destination AGV
@@ -99,11 +100,15 @@ class Fleet:
     B, C following at that gap (m); only the leader stops at the checkpoints, the followers keep the gap behind it."""
 
     def lag_room(self, i):
-        """Platoon: an AGV with a session keeps the AGV behind it (A-B-C order) within the gap plus slack."""
-        if not self.platoon or i == 2 or not self.wait_ok[i]:
+        """Platoon: an AGV with a session keeps the AGV behind it on the route within the gap plus slack. Behind = the
+        nearest AGV less than half a loop back (the platoon's last AGV has none; an AGV moved by hand is off the route)."""
+        if not self.platoon or not self.wait_ok[i] or self.a[i].get("man"):
             return math.inf
-        lag = (self.a[i]["s"] - self.a[i + 1]["s"]) % LOOP
-        return max(0.0, self.platoon + self.slack - lag)
+        lags = [(self.a[i]["s"] - b["s"]) % LOOP for b in self.a if b is not self.a[i] and not b.get("man")]
+        lags = [g for g in lags if 0 < g <= LOOP / 2]
+        if not lags:
+            return math.inf
+        return max(0.0, self.platoon + self.slack - min(lags))
 
     def __init__(self, rng, platoon=0.0):
         self.rng, self.platoon = rng, platoon
@@ -119,19 +124,35 @@ class Fleet:
 
     @staticmethod
     def place(a):
-        a["x"], a["y"], a["h"] = pos_at(a["s"])
+        if not a.get("man"):                           # moved by hand: stays where it was put
+            a["x"], a["y"], a["h"] = pos_at(a["s"])
         a["d"] = math.dist((a["x"], a["y"]), POLE)
+
+    def put(self, i, x, y):
+        """Moved by hand (live page): AGV i stands at (x, y), off its route, until back_to_route(i)."""
+        a = self.a[i]
+        a.update(man=True, x=min(W - 0.5, max(0.5, x)), y=min(H - 0.5, max(0.5, y)), v=0.0, dwell=0.0)
+        self.place(a)
+
+    def back_to_route(self, i):
+        """Back on its route at the nearest point, driving on from there."""
+        a = self.a[i]
+        best = min((math.dist((a["x"], a["y"]), pos_at(k * 0.1)[:2]), k * 0.1) for k in range(int(LOOP / 0.1)))
+        a.update(man=False, s=best[1], v=0.0, dwell=0.0)
+        self.place(a)
 
     def step(self, dt):
         for a in self.a:
+            if a.get("man"):
+                continue
             if a["dwell"] > 0:
                 a["dwell"] -= dt
                 if a["dwell"] <= 0:
                     a["s"] = (a["s"] + 0.05) % LOOP
                 continue
             to_cp, cpi = min((((cs - a["s"]) % LOOP, k) for k, cs in enumerate(CPS) if (cs - a["s"]) % LOOP > 0.001))
-            ahead = min(((b["s"] - a["s"]) % LOOP for b in self.a if b is not a and (b["s"] - a["s"]) % LOOP > 0),
-                        default=math.inf)
+            ahead = min(((b["s"] - a["s"]) % LOOP for b in self.a if b is not a and not b.get("man")
+                         and (b["s"] - a["s"]) % LOOP > 0), default=math.inf)
             if self.platoon and ahead < LOOP / 2:      # a follower: no stops of its own, it keeps the gap
                 to_cp = math.inf
                 room = min(ahead - self.platoon, self.lag_room(self.a.index(a)))
@@ -174,7 +195,8 @@ class Controller:
         self.live = None                               # the core PC's live page: every event also goes there
         if args.live:
             h, _, p = args.live.rpartition(":")
-            self.live = (socket.socket(socket.AF_INET, socket.SOCK_DGRAM), (h, int(p)))
+            self.live = (socket.socket(socket.AF_INET, socket.SOCK_DGRAM), (socket.gethostbyname(h), int(p)))
+            self.live[0].bind(("0.0.0.0", 0))           # the live page's commands (AGVs moved by hand) come back here
         self.boards = []
         for i, sn in enumerate(args.boards.split(",")):
             b = N.Board(sn)
@@ -183,6 +205,16 @@ class Controller:
             self.boards.append(b)
         self.txlock = [threading.Lock() for _ in self.boards]
         self.reasm = [N.Reassembler() for _ in self.boards]
+        # sidelink mode 1 (nrlink v7): packets are staged on the boards and sent in the gNB's grants
+        self.m1 = [dict(mode=None, staged=collections.deque(), grants=0, sent=0, gms=0.0, ums=0.0, unused=0, full=0, left=0)
+                   for _ in self.boards]
+        self.m1lock = threading.Lock()
+        self.win_t = []                                # times of the last sidelink windows (mode 1: when to gather)
+        if args.sl_mode1:
+            for i, b in enumerate(self.boards):
+                b.on_sldone = (lambda i: lambda *r: self.on_sldone(i, *r))(i)
+                print(f"AGV {NAMES[i]} board: sidelink mode 1 staging, {b.sl_config(i + 1, N.SL_MODE2)}", flush=True)
+                b.sl_flush()
         d = [a["d"] for a in self.fleet.a]
         self.chain = sorted(range(3), key=lambda i: d[i])
         self.view = [[None] * 3 for _ in range(3)]     # view[i][j]: position of AGV j as AGV i last heard it
@@ -219,7 +251,8 @@ class Controller:
         self.set_leds()
         self.log("start", platoon=getattr(args, "platoon", 0), hold=getattr(args, "hold", None), boards=args.boards.split(","), level=args.level, chain=self.chain, window_ms=args.window_ms,
                  hyst=args.hyst, age_ms=args.age_ms, guard_ms=args.guard_ms, uu=args.uu, pc5=getattr(args, "pc5", "ctl"),
-                 topology=getattr(args, "topology", "chain"), pick=getattr(args, "pick", None), relay=getattr(args, "relay", "app"))
+                 topology=getattr(args, "topology", "chain"), pick=getattr(args, "pick", None), relay=getattr(args, "relay", "app"),
+                 sl_mode1=int(bool(args.sl_mode1)))
 
     def log(self, k, **kw):
         kw["k"], kw["t"] = k, round(time.time(), 4)
@@ -328,7 +361,9 @@ class Controller:
                         if self.win_seen != (sfn, slot):
                             self.win_seen = (sfn, slot)
                             self.win_end = time.time() + ms / 1000 - 0.002
+                            self.win_t = (self.win_t + [time.time()])[-8:]
                             self.st["windows"] += 1
+                            self.st["win_ms"] = self.st.get("win_ms", 0.0) + ms
                             self.wincv.notify_all()
                     continue
                 if kind == N.AIR_BEACON:
@@ -411,6 +446,162 @@ class Controller:
         self.st["sl_msgs"] += 1
         self.log("hop", agv=agv, f=flow, s=seq, a=src, b=node)
         self.forward(node, dirn, dest, app)
+
+    # ---------------------------------------------------------------- sidelink mode 1 (nrlink v7)
+    def sl_mode_of(self, i):
+        """SL_MODE1 when AGV i's UE is connected to the gNB (it reports its buffer and gets grants), else SL_MODE2:
+        out of coverage it uses the pool (TS 38.300 16.9.3: mode 2 when the UE cannot use mode 1)."""
+        return self.N.SL_MODE1
+
+    def sl_ooc_peer(self, i):
+        """Does AGV i carry an out-of-coverage AGV over the sidelink (SL-BSR flag: the gNB keeps the pool open)?"""
+        return i in getattr(self, "serv", {}).values()
+
+    def sl_modes(self):
+        for i, b in enumerate(self.boards):
+            m = self.sl_mode_of(i)
+            if m != self.m1[i]["mode"]:
+                with self.txlock[i]:
+                    b.sl_config(i + 1, m)
+                if self.m1[i]["mode"] is not None:
+                    print(f"{time.strftime('%T')} AGV {NAMES[i]}: sidelink {'mode 1 (gNB grants)' if m == 1 else 'mode 2 (pool)'}", flush=True)
+                self.m1[i]["mode"] = m
+                self.log("slmode", agv=i, mode=m)
+
+    def on_sldone(self, i, sent, left, dropped, mode, gms, ums):
+        """Board i's report after a grant (or a full queue): what went out, what is still staged."""
+        m = self.m1[i]
+        with self.m1lock:
+            for _ in range(min(sent, len(m["staged"]))):
+                m["staged"].popleft()
+            while len(m["staged"]) > left:
+                m["staged"].popleft()
+            m["left"] = left
+            if gms or sent:
+                m["grants"] += 1
+                m["sent"] += sent
+                m["gms"] += gms
+                m["ums"] += ums
+                m["unused"] += sent == 0
+            m["full"] += dropped
+
+    def sl_bsr(self, i):
+        """AGV i's sidelink buffer status: bytes and packets staged on its board or waiting to be."""
+        m = self.m1[i]
+        with self.m1lock:
+            nb, npk = sum(m["staged"]), len(m["staged"])
+        q = self.m1q[i] if hasattr(self, "m1q") else []
+        nb += sum(len(x[1]) for x in q)
+        npk += len(q)
+        return struct.pack("<IHB", nb, min(npk, 65535), 1 if self.sl_ooc_peer(i) else 0)
+
+    def stage_loop(self):
+        """Mode 1: stage every sidelink packet on its board, which sends it in its next grant (or the pool). The
+        sidelink UEs' items are gathered once a period, just before the next window (from the last windows' rhythm),
+        so the window carries what they made since the last one."""
+        pend = self.m1q = [[] for _ in self.boards]   # per board: (t_queued, packet, meta) not staged yet
+        age, cap, lead = self.args.age_ms / 1000, self.args.sl_stage_max, self.args.sl_lead_ms / 1000
+        t_gather = 0.0
+        while True:
+            now = time.time()
+            while True:
+                try:
+                    t_q, node, pkts, meta = self.airq.get_nowait()
+                except queue.Empty:
+                    break
+                pend[node].extend((t_q, p, meta) for p in pkts)
+            w = self.win_t
+            per = (w[-1] - w[0]) / (len(w) - 1) if len(w) >= 3 else 0.07
+            due = (w[-1] + per - lead) if w else 0.0
+            if now >= due and t_gather < (w[-1] if w else now) or now - t_gather > 2 * per + 0.05:
+                t_gather = now
+                jobs = self.window_jobs()
+                while jobs:
+                    t_q, node, pkts, meta = jobs.pop(0)
+                    pend[node].extend((t_q, p, meta) for p in pkts)
+            # not while a window is on the air: the boards then pass every packet they hear to the host with blocking
+            # writes, and bytes staged meanwhile overrun their UART (frames lost or cut short, seen as slxbad)
+            if w and w[-1] - 0.001 <= now < getattr(self, "win_end", 0.0) + 0.005:
+                time.sleep(0.002)
+                continue
+            for i, b in enumerate(self.boards):
+                while pend[i] and len(self.m1[i]["staged"]) < cap:
+                    t_q, pkt, meta = pend[i].pop(0)
+                    if now - t_q > age:
+                        self.st["sl_drop"] += 1
+                        if meta and "agv" in meta:
+                            self.log("drop", agv=meta["agv"], f=meta["f"], s=meta["s"], at=i, why="PC5 age")
+                        elif meta:
+                            self.st["sl_job_age"] = self.st.get("sl_job_age", 0) + 1
+                        continue
+                    with self.m1lock:
+                        self.m1[i]["staged"].append(len(pkt))
+                    with self.txlock[i]:
+                        b.sl_stage(pkt)
+                    self.st["sl_pkts"] += 1
+            time.sleep(0.002)
+
+    def m1_stats(self):
+        out, ev = [], []
+        for i, m in enumerate(self.m1):
+            n = max(1, m["grants"])
+            out.append(f"{NAMES[i]} {'m1' if m['mode'] == 1 else 'm2'} {m['grants']} grants {m['sent']} pkts "
+                       f"{m['ums'] / n:.1f}/{m['gms'] / n:.1f} ms staged {len(m['staged'])}" + (f" full {m['full']}" if m["full"] else ""))
+            ev.append(dict(mode=m["mode"], grants=m["grants"], sent=m["sent"], gms=round(m["gms"], 1), ums=round(m["ums"], 1),
+                           unused=m["unused"], full=m["full"], staged=len(m["staged"])))
+            m.update(grants=0, sent=0, gms=0.0, ums=0.0, unused=0, full=0)
+        self.log("slm1", a=ev)
+        return "  mode 1: " + ", ".join(out)
+
+    # ---------------------------------------------------------------- AGVs moved by hand on the live page
+    def live_cmd_loop(self):
+        """Commands from the core PC's live page: {"k": "drag", "agv", "x", "y"} puts an AGV there while it is dragged;
+        with "end" (dropped) it goes onto its route at the point nearest to where it was dropped and drives on from
+        there. {"k": "route", "agv"} does the same for an AGV still off its route. Only from the live server's address."""
+        sk, (host, _port) = self.live
+        while True:
+            try:
+                p, addr = sk.recvfrom(4096)
+                if addr[0] != host:
+                    continue
+                m = json.loads(p)
+                i = int(m["agv"])
+                if not 0 <= i < 3:
+                    continue
+                with self.lock:
+                    if m.get("k") == "drag":
+                        was = self.fleet.a[i].get("man")
+                        self.fleet.put(i, float(m["x"]), float(m["y"]))
+                        self.man_t[i] = time.time()
+                        a = self.fleet.a[i]
+                        if m.get("end"):                   # dropped: onto the route at the nearest point, driving on
+                            x0, y0 = a["x"], a["y"]
+                            self.fleet.back_to_route(i)
+                            self.man_t[i] = None
+                            print(f"{time.strftime('%T')} AGV {NAMES[i]}: dropped at ({x0:.1f}, {y0:.1f}) m, on its route at "
+                                  f"({a['x']:.1f}, {a['y']:.1f}) m", flush=True)
+                            self.log("manual", agv=i, on=0, x=round(a["x"], 2), y=round(a["y"], 2), drop=[round(x0, 2), round(y0, 2)])
+                        else:
+                            if not was:
+                                print(f"{time.strftime('%T')} AGV {NAMES[i]}: picked up by hand", flush=True)
+                            self.log("manual", agv=i, on=1, x=round(a["x"], 2), y=round(a["y"], 2), end=0)
+                    elif m.get("k") == "route" and self.fleet.a[i].get("man"):
+                        self.fleet.back_to_route(i)
+                        self.man_t[i] = None
+                        print(f"{time.strftime('%T')} AGV {NAMES[i]}: back on its route", flush=True)
+                        self.log("manual", agv=i, on=0)
+            except (OSError, ValueError, KeyError, TypeError):
+                time.sleep(0.05)
+
+    def man_check(self, now):
+        """An AGV left off its route by hand goes back after --manual-s (nobody may be watching the page)."""
+        for i in range(3):
+            t = self.man_t[i]
+            if t and self.args.manual_s and now - t > self.args.manual_s and self.fleet.a[i].get("man"):
+                self.fleet.back_to_route(i)
+                self.man_t[i] = None
+                print(f"{time.strftime('%T')} AGV {NAMES[i]}: back on its route after {self.args.manual_s:.0f} s", flush=True)
+                self.log("manual", agv=i, on=0, auto=1)
 
     def air_loop(self):
         """Sends queued sidelink packets, one board at a time, only inside the gNB's windows."""
@@ -567,7 +758,10 @@ class Controller:
         print("forwarder:", (r.stdout or r.stderr).strip()[:80], flush=True)
 
     def run(self):
-        for fn in ((self.uu_udp,) if self.args.uu == "fleet" else ()) + (self.air_loop, self.ctl_loop, self.clock_loop):
+        self.man_t = [None] * 3
+        for fn in ((self.uu_udp,) if self.args.uu == "fleet" else ()) + (
+                self.stage_loop if self.args.sl_mode1 else self.air_loop, self.ctl_loop, self.clock_loop) + (
+                (self.live_cmd_loop,) if self.live else ()):
             threading.Thread(target=fn, daemon=True).start()
         for i in range(len(self.boards)):
             threading.Thread(target=self.rx_loop, args=(i,), daemon=True).start()
@@ -580,7 +774,11 @@ class Controller:
         bseq = 0
         while True:
             now = time.time()
-            self.fleet.step(now - t_prev)
+            with self.lock:
+                self.fleet.step(now - t_prev)
+            self.man_check(now)
+            if self.args.sl_mode1:
+                self.sl_modes()
             t_prev = now
             if now >= t_beacon:
                 t_beacon += self.args.beacon_s
@@ -600,7 +798,7 @@ class Controller:
             if now - t_pos >= 0.2:
                 t_pos = now
                 self.log("pos", a=[[round(a["x"], 2), round(a["y"], 2), round(a["h"], 3), round(a["d"], 2),
-                                    1 if a["dwell"] > 0 else 0] for a in self.fleet.a], chain=self.chain,
+                                    2 if a.get("man") else 1 if a["dwell"] > 0 else 0] for a in self.fleet.a], chain=self.chain,
                          **({"q": [round(q, 1) for q in self.q]} if hasattr(self, "q") else {}))
             if now - t_stats >= 5:
                 dt, t_stats = now - t_stats, now
@@ -609,7 +807,8 @@ class Controller:
                         f"sl {s['sl_pkts'] / dt:.0f} pkt/s, {s['sl_msgs']} hops, {s['sl_drop']} dropped, "
                         f"queue {self.airq.qsize()}  beacons heard {s['beacons_rx']}  Uu: {s['dl_slots'] / dt:.0f} DL "
                         f"slots/s, {s['polls']} polls ({s['late']} late), {s['uu_up']} up  cmds {s['cmd_rx']}  txerr {s.get('tx_err', 0)}  "
-                        f"chain {'-'.join(NAMES[j] for j in self.chain)}" + self.extra_stats())
+                        f"chain {'-'.join(NAMES[j] for j in self.chain)}" + self.extra_stats()
+                        + (self.m1_stats() + f"  window {s.get('win_ms', 0) / max(1, s['windows']):.1f} ms" if self.args.sl_mode1 else ""))
                 print(time.strftime("%T"), line, flush=True)
                 self.log("stats", **{k: (round(v, 1) if isinstance(v, float) else v) for k, v in s.items()},
                          dt=round(dt, 2), q=self.airq.qsize(), line=line)
@@ -749,10 +948,20 @@ class PerAgvUu(Controller):
                 self.st["dtx"] = self.st.get("dtx", 0) + 1
             if ans is None or N.MSG_HDR.unpack_from(ans)[6] == 0:
                 ans = N.MSG_HDR.pack(N.NRLINK_MAGIC, N.NRLINK_UL_SLOT, s1, s2, 0, u["rnti"] if u["cov"] else 0, 0)
+            if self.args.sl_mode1 and u["cov"] and u["rnti"]:
+                # the SL-BSR (MAC CE) rides along with the UE's uplink; gnb_bridge takes it out before the PNF
+                h = list(N.MSG_HDR.unpack_from(ans))
+                h[6] += 1
+                bsr = self.sl_bsr(i)
+                ans = N.MSG_HDR.pack(*h) + ans[N.MSG_HDR.size:] + N.ITEM_HDR.pack(N.IT_SLBSR, len(bsr)) + bsr
             with self.txlock[i]:
                 for p in N.fragments(N.AIR_UL, i + 1, s1, s2, ans):
                     self.boards[i].tx(p)
             self.uu_busy = False
+
+    def sl_mode_of(self, i):
+        u = self.ues[i]
+        return self.N.SL_MODE1 if u["cov"] and u["rnti"] and u["addr"] else self.N.SL_MODE2
 
     # ---- coverage
     def docker(self, *a):
@@ -995,11 +1204,17 @@ class Pc5Oai(PerAgvUu):
         if not got:
             return
         data, off = got[1], 1
-        for _ in range(data[0]):
+        for _ in range(data[0] if data else 0):
+            if off + SLX_PART.size > len(data):
+                break
             l, side, n = SLX_PART.unpack_from(data, off)
             off += SLX_PART.size
             msg = data[off:off + n]
             off += n
+            if len(msg) < n or l >= len(self.sl) or side > 1 or len(msg) < 2:
+                self.st["slx_bad"] = self.st.get("slx_bad", 0) + 1
+                self.log("slxbad", a=uid, b=i, l=l, side=side, n=n, got=len(msg), size=len(data))
+                break
             L = self.sl[l]
             rside = 1 - side                           # the receiving side of that link
             if L["agv"][rside] != i:
@@ -2542,6 +2757,14 @@ def main():
                    help="cover with --pc5 oai: app = the relay AGV's controller passes the remote's messages on; l3 = a layer-3 "
                         "UE-to-network relay as in TS 23.304: SIB12-style thresholds, PC5 discovery and PC5-S link set-up (24.554), "
                         "DHCPv4 from the relay, NAT into the relay's own PDU session (DNN relay), Remote UE Report")
+    g.add_argument("--sl-mode1", action="store_true", help="sidelink mode 1: the gNB grants the sidelink air (gnb_bridge "
+                   "--sl-mode1, nrlink v7 boards): packets are staged on the boards, SL-BSRs ride in the uplink; out of "
+                   "coverage an AGV uses the pool")
+    g.add_argument("--sl-stage-max", type=int, default=16, help="mode 1: packets staged on a board at most (v7 holds 24)")
+    g.add_argument("--sl-lead-ms", type=float, default=45, help="mode 1: gather the sidelink UEs' items this long before "
+                   "the next window is due")
+    g.add_argument("--manual-s", type=float, default=10, help="an AGV moved by hand on the live page goes back to its "
+                   "route after this many seconds (0: never)")
     g.add_argument("--log", required=True)
     g.add_argument("--log-max-mb", type=float, default=0, help="move the log to <log>.1 when it passes this size (0: never)")
     g.add_argument("--live", help="HOST:PORT of the core PC's live page (agv_chain_live.py): events also go there by UDP")

@@ -1,0 +1,13 @@
+<section id="window" class="foot">
+<p class="eyebrow">05 · SHARING THE AIR</p>
+<h2>The gNB pauses so the AGVs can talk</h2>
+<p class="lead">One radio channel carries NR and sidelink. After slot 9 of each period the gNB stays silent for a sidelink window.</p>
+<div style="display:flex;flex-direction:column;gap:28px">
+<div class="row grow" style="--i:0;gap:0;align-items:center"><p class="barlab">fixed</p><div class="bar" style="width:912px;background:#0D659E">NR · 57 ms</div><div class="bar" style="width:400px;background:#E20073">window 25 ms</div></div>
+<div class="row grow" style="--i:1;gap:0;align-items:center"><p class="barlab">mode 1</p><div class="bar" style="width:912px;background:#0D659E">NR · 57 ms</div><div class="bar" style="width:67px;background:#2C93CC">A</div><div class="bar" style="width:66px;background:#83CFED;color:#022E57">B</div><div class="bar" style="width:130px;background:#E20073">pool</div></div>
+<div class="row" style="gap:0"><p class="barlab"></p><p class="tl">One cycle, to scale: time runs left to right</p></div>
+</div>
+<p style="font-size:32px;color:#4F6A84">Mode 1: the gNB grants each AGV a slice sized to its buffer report and the remote a pool. Window 25 → 16.4 ms; cycles 12.3 → 13.5 per s.</p>
+<div class="footer"><span>AGV Sidelink Testbed</span><span class="pg"></span></div>
+<aside>Bars are to scale: 16 px per ms. Mode-1 slices are measured means including guards (A 3.2 ms, B 3.3 ms, pool 6.8 ms, plus about 3 ms of guards and the announcement). The Sidelink tab animates this.</aside>
+</section>

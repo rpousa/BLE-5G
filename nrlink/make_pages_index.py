@@ -31,7 +31,8 @@ ABOUT = {
                              "picking one per message: board runs at L1 and L2 across sidelink window widths, with a replay. "
                              "Now live as a platoon with coverage by position: AGVs lose the gNB in a shielded cold store, "
                              "relay through another AGV one at a time, now as a 3GPP layer-3 relay (configured thresholds, PC5-S with security, DHCPv4, a relay PDU session, QoS, Remote UE Report to the SMF), "
-                             "with no relayed packets lost; every step compared; packet sequence, slot scheme, traffic flows.",
+                             "with no relayed packets lost; then gNB-scheduled sidelink (mode 1: a slice of the window per AGV, a pool for the remote); "
+                             "every run and what changed; how routes are picked; animated explainers of the sidelink and of the nFAPI adaptation to the boards; packet sequence, slot schemes, traffic flows; full details in an Annex.",
     "nr-tuning.html": "Each NR optimisation step measured on its own: slot rate and one-way delays, "
                       "from 643 ms to 144 ms for a LiDAR scan.",
     "factory-floor-downlink.html": "The factory demo: downlink traffic classes to the UEs and their one-way delays.",

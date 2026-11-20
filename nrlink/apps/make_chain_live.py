@@ -42,6 +42,16 @@ CSS = """
 .lwait { padding: 14px 16px; color: var(--ink-2); }
 .lev { font-family: var(--mono); font-size: 12px; color: var(--ink-2); max-height: 158px; overflow: auto; padding: 6px 10px 10px; margin: 0; list-style: none; }
 .lev li { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#floor3 { touch-action: none; }
+#floor3.grab { cursor: grab; }
+#floor3.dragging { cursor: grabbing; }
+.lback { font: 600 12.5px var(--display); color: var(--ink); background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 3px 9px; margin-top: 6px; cursor: pointer; }
+.lback:hover, .lback:focus-visible { border-color: var(--signal, var(--rpivot)); outline: none; }
+.lman { color: var(--ink-2); font-size: 12.5px; }
+.ldragerr { color: var(--rremote); }
+.lkey { display: flex; flex-wrap: wrap; gap: 8px 24px; margin-top: 12px; font-size: 14px; color: var(--text-muted); }
+.lkey b { color: var(--navy); margin-right: 6px; }
+.lintro .bd { padding: 16px 24px 20px; }
 """
 
 CARD = """
@@ -57,13 +67,14 @@ CARD = """
       <div class="floorwrap">
         <canvas id="floor3" style="aspect-ratio:48/31" role="img" aria-label="Live: AGV positions, roles and the chain, with sidelink hops as the boards receive them"></canvas>
         <div class="key" style="margin-top:8px"><span>AGV colour = its role, as its board's LED shows it</span><span>dots: sidelink hops as the boards received them</span><span id="llag"></span></div>
+        <p class="hint" style="margin-top:6px" id="ldraghint">Drag an AGV to move it: the controller on the UE PC puts it there, and its gNB signal, coverage and relaying follow from the new position. When you drop it, it goes onto its route at the nearest point and drives on from there.</p>
       </div>
       <div class="side" id="agvs3"></div>
     </div>
     <div class="charts">
       <div>
         <span class="label">Roles over the last 120 s</span>
-        <canvas id="timeline3" style="height:132px" role="img" aria-label="Live roles of the AGVs"></canvas>
+        <canvas id="timeline3" style="height:152px" role="img" aria-label="Live roles of the AGVs"></canvas>
       </div>
       <div>
         <span class="label">Events</span>
@@ -87,7 +98,7 @@ const DUALP = typeof drawFloorDual === "function", LNAME0 = DUALP ? RNAME : ROLE
 const COVN = ["relays", "own UE", "sidelink"];
 const isCov = () => !!(LV.start && LV.start.topology === "cover");
 const LNAME = new Proxy(LNAME0, { get: (t, k) => (isCov() && /^[0-2]$/.test(String(k)) ? COVN[k] : t[k]) });
-const LV = { serv: [], holds: [], ledlog: [], serve: [], t0: null, start: null, chain: [0, 1, 2], pos: [], chains: [], hops: [], msgs: [], att: [], leds: [null, null, null], stats: "", st: null, recvAt: 0, rep: null, dirty: false, evlog: [] };
+const LV = { man: [null, null, null], drag: null, ghost: null, dragErr: "", serv: [], holds: [], ledlog: [], serve: [], t0: null, start: null, chain: [0, 1, 2], pos: [], chains: [], hops: [], msgs: [], att: [], leds: [null, null, null], stats: "", st: null, recvAt: 0, rep: null, dirty: false, evlog: [] };
 const LEDV = { blue: "--rpivot", green: "--rrelay", red: "--rremote", off: "--line" };
 const hm = t => new Date((t + (LV.st ? LV.st.off : 0)) * 1000).toTimeString().slice(0, 8);   // UE PC clock -> core PC clock
 function lvLog(t, s) { LV.evlog.unshift(`${hm(t)}  ${s}`); LV.evlog.length = Math.min(LV.evlog.length, 60); }
@@ -115,6 +126,8 @@ function lvEv(e) {
     case "pc5up": lvLog(e.t, `sidelink UE up on AGV ${AGV[e.agv].n} (link ${e.l}), ${e.ip}`); break;
     case "led": LV.leds[e.agv] = e; if (LV.ledlog.length > 5000) LV.ledlog.splice(0, 1000); LV.ledlog.push([t, e.agv, { blue: 0, green: 1, red: 2 }[e.c] ?? -1, e.blink]); lvLog(e.t, `AGV ${AGV[e.agv].n}'s board ${e.board}: LED ${e.c}${e.blink ? " blinking" : ""}`); break;
     case "stats": LV.stats = e.line; break;
+    case "manual": LV.man[e.agv] = e.on ? e : null; if (!e.on) lvLog(e.t, `AGV ${AGV[e.agv].n} back on its route${e.auto ? " (after 5 min)" : ""}`); else if (e.end) lvLog(e.t, `AGV ${AGV[e.agv].n} moved by hand to (${e.x.toFixed(1)}, ${e.y.toFixed(1)}) m, ${Math.round(rsrpAt(e.x, e.y))} dBm from the gNB`); break;
+    case "slmode": lvLog(e.t, `AGV ${AGV[e.agv].n}: sidelink ${e.mode === 1 ? "mode 1, the gNB grants its air time" : "mode 2, the pool for UEs out of coverage"}`); break;
   }
   LV.dirty = true;
 }
@@ -129,12 +142,77 @@ function lvTrim() {
   const j = lo(LV.chains, cut); if (j > 1) LV.chains.splice(0, j - 1);
   LV.att = LV.att.filter(a => a[2] === null || a[2] > cut);
 }
+// ---- moving an AGV by hand: hit test on the floor as drawFloorDual draws it; commands go to POST agv
+function floorMap(cv) {
+  const r = cv.getBoundingClientRect(), pad = 6, sc = Math.min((r.width - 2 * pad) / W, (r.height - 2 * pad - 14) / H);
+  return { r, sc, ox: (r.width - W * sc) / 2, oy: pad };
+}
+function floorAt(cv, ev) { const m = floorMap(cv); return [(ev.clientX - m.r.left - m.ox) / m.sc, (ev.clientY - m.r.top - m.oy) / m.sc]; }
+function agvAt(x, y) {
+  if (!LV.rep) return -1;
+  let best = -1, bd = 2.2;
+  LV.rep.agv.forEach(a => { const d = Math.hypot(a.x - x, a.y - y); if (d < bd) { bd = d; best = a.i; } });
+  return best;
+}
+function sendAgv(body) {
+  return fetch("agv", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) })
+    .then(r => { LV.dragErr = r.ok ? "" : r.status === 503 ? "The controller on the UE PC is not running: the AGV did not move." : `The live server refused the move (${r.status}).`; })
+    .catch(() => { LV.dragErr = "No connection to the core PC: the AGV did not move."; });
+}
+function dragInit() {
+  const cv = $("floor3"); if (!cv || !DUALP) return;
+  const clampXY = ([x, y]) => [Math.min(W - 0.5, Math.max(0.5, x)), Math.min(H - 0.5, Math.max(0.5, y))];
+  cv.addEventListener("pointermove", ev => {
+    if (LV.drag) {
+      const [x, y] = clampXY(floorAt(cv, ev)); Object.assign(LV.drag, { x, y });
+      const now = performance.now();
+      if (now - LV.drag.sent > 120) { LV.drag.sent = now; sendAgv({ agv: LV.drag.i, x, y }); }
+      return;
+    }
+    cv.classList.toggle("grab", agvAt(...floorAt(cv, ev)) >= 0);
+  });
+  cv.addEventListener("pointerdown", ev => {
+    const [x, y] = floorAt(cv, ev), i = agvAt(x, y);
+    if (i < 0) return;
+    ev.preventDefault(); cv.setPointerCapture(ev.pointerId); cv.classList.add("dragging");
+    LV.drag = { i, x, y, sent: 0 }; LV.ghost = null;
+  });
+  const end = ev => {
+    if (!LV.drag) return;
+    const d = LV.drag; LV.drag = null; cv.classList.remove("dragging");
+    sendAgv({ agv: d.i, x: d.x, y: d.y, end: 1 });
+    LV.ghost = { i: d.i, x: d.x, y: d.y, until: performance.now() + 2500 };
+  };
+  cv.addEventListener("pointerup", end); cv.addEventListener("pointercancel", end);
+  $("agvs3").addEventListener("click", ev => { const b = ev.target.closest("[data-route]"); if (b) { sendAgv({ agv: +b.dataset.route, route: 1 }); b.disabled = true; b.textContent = "Going back…"; } });
+}
+function drawGhost() {
+  const g0 = LV.drag || (LV.ghost && performance.now() < LV.ghost.until ? LV.ghost : null);
+  if (!g0) return;
+  const cv = $("floor3"), g = cv.getContext("2d"), m = floorMap(cv), dpr = window.devicePixelRatio || 1;
+  g.setTransform(dpr, 0, 0, dpr, 0, 0);
+  const x = m.ox + g0.x * m.sc, y = m.oy + g0.y * m.sc, q = rsrpAt(g0.x, g0.y), sc = m.sc;
+  g.setLineDash([4, 3]); g.strokeStyle = COL["--ink"]; g.lineWidth = 2;
+  g.beginPath(); g.roundRect ? g.roundRect(x - 0.9 * sc, y - 0.6 * sc, 1.8 * sc, 1.2 * sc, 3) : g.rect(x - 0.9 * sc, y - 0.6 * sc, 1.8 * sc, 1.2 * sc); g.stroke(); g.setLineDash([]);
+  g.font = `600 12px ${COL.disp}`; g.textAlign = "center"; g.fillStyle = COL["--ink"];
+  const txt = `AGV ${AGV[g0.i].n} → (${g0.x.toFixed(1)}, ${g0.y.toFixed(1)}) m · ${Math.round(q)} dBm${q < QRLF ? " · no gNB" : q < QSW ? " · sidelink" : ""}`;
+  g.lineWidth = 4; g.strokeStyle = COL["--panel"]; g.strokeText(txt, x, y + 0.6 * sc + 15); g.fillText(txt, x, y + 0.6 * sc + 15);
+}
+// the top bar's data chip (comnets-web-design: honest states): Live, Stale, Offline or Connecting
+function lvChip() {
+  const c = document.getElementById("datachip"); if (!c) return;
+  const age = LV.lastMsg ? Date.now() - LV.lastMsg : null;
+  const [cls, txt] = LV.lastMsg === 0 ? ["off", "Offline"] : age == null ? ["idle", "Connecting"] : age > 5000 ? ["stale", "Stale"] : ["live", "Live"];
+  if (c.dataset.s !== cls) { c.dataset.s = cls; c.innerHTML = `<span class="dot ${cls}"></span>${txt}`; }
+}
+setInterval(lvChip, 1000);
 function lvConnect() {
   const es = new EventSource("events");
-  es.onmessage = m => { const d = JSON.parse(m.data); if (d.snap) Object.assign(LV, { serv: [], holds: [], ledlog: [], serve: [], t0: null, start: null, pos: [], chains: [], hops: [], msgs: [], att: [], evlog: [] }); const st = d.ev.findLast(e => e.k === "state"); if (st) LV.st = st; d.ev.forEach(lvEv); lvTrim(); };
-  es.onerror = () => { LV.st = null; $("lmeta").innerHTML = `<span class="lstate bad"><span class="dot"></span>no connection to the core PC's live server, retrying</span>`; };
+  es.onmessage = m => { LV.lastMsg = Date.now(); const d = JSON.parse(m.data); if (d.snap) Object.assign(LV, { serv: [], holds: [], ledlog: [], serve: [], t0: null, start: null, pos: [], chains: [], hops: [], msgs: [], att: [], evlog: [] }); const st = d.ev.findLast(e => e.k === "state"); if (st) LV.st = st; d.ev.forEach(lvEv); lvTrim(); };
+  es.onerror = () => { LV.st = null; LV.lastMsg = 0; lvChip(); $("lmeta").innerHTML = `<span class="lstate bad"><span class="dot"></span>no connection to the core PC's live server, retrying</span>`; };
 }
 function renderLeds() {
+  if (!$("lleds")) return;
   const B = (LV.start && LV.start.boards) || [];
   $("lleds").innerHTML = [0, 1, 2].map(i => {
     const L = LV.leds[i], c = L ? L.c : "off", role = DUALP ? ({ blue: 0, green: 1, red: 2 }[c] ?? (LV.chain.indexOf(i) === 2 ? 2 : 1)) : LV.rep ? LV.rep.chain.indexOf(i) : LV.chain.indexOf(i);
@@ -153,10 +231,11 @@ function renderSide3(r) {
     const role = DUALP ? ledRole(r, a.i, r.t) : r.chain.indexOf(a.i), L = r.last[a.i], led = LV.leds[a.i], c = led ? led.c : "off";
     return `<div class="agv" style="--c:var(${RCOL[role]})"><span class="sw"></span><span class="nm">AGV ${AGV[a.i].n}</span><span class="chip ${ROLES[role]}">${LNAME[role]}</span>
       <span class="sub">${B[a.i] || AGV[a.i].board} · <span class="ledg" style="--c:var(${LEDV[c]})"></span>LED ${c}${led && led.blink ? " blinking" : ""} · ${isCov() ? (role === 2 ? (() => { const v = relayOf(r, a.i); return v === a.i ? "its own UE, session settling" : "over the sidelink" + (v !== null && v >= 0 ? " to AGV " + AGV[v].n : ""); })() : role === 0 ? "its own UE, also relaying another AGV" : "its own UE only") : DUALP ? (role === 0 ? "its own UE to the gNB, with the remote's traffic" : role === 1 ? "its own UE to the gNB" : "one PC5 hop" + (servingAt(r.tr, r.t) >= 0 ? " to AGV " + AGV[servingAt(r.tr, r.t)].n : "") + " + Uu") : role === 0 ? "Uu to the gNB" : role + " PC5 hop" + (role > 1 ? "s" : "") + " + Uu"}</span>
-      <dl><div>${isCov() ? `<dt>gNB signal</dt><dd>${Math.round(rsrpAt(a.x, a.y))} dBm</dd>` : `<dt>to pole</dt><dd>${a.d.toFixed(1)} m</dd>`}</div><div><dt>positioning</dt><dd>${fmt(L.det)}</dd></div><div><dt>LiDAR</dt><dd>${fmt(L.lidar)}</dd></div><div><dt>cmd</dt><dd>${fmt(L.cmd)}</dd></div></dl><div class="rep">${a.rep ? `edge knows <b>(${a.rep.x.toFixed(1)}, ${a.rep.y.toFixed(1)}) m</b>, reported ${((r.t - a.rep.gen) / 1000).toFixed(2)} s ago` : "edge knows: no report yet"} · now (${a.x.toFixed(1)}, ${a.y.toFixed(1)}) m</div></div>`;
+      <dl><div>${isCov() ? `<dt>gNB signal</dt><dd>${Math.round(rsrpAt(a.x, a.y))} dBm</dd>` : `<dt>to pole</dt><dd>${a.d.toFixed(1)} m</dd>`}</div><div><dt>positioning</dt><dd>${fmt(L.det)}</dd></div><div><dt>LiDAR</dt><dd>${fmt(L.lidar)}</dd></div><div><dt>cmd</dt><dd>${fmt(L.cmd)}</dd></div></dl>${LV.man[a.i] ? `<div class="lman">Held by hand: it goes onto its route when dropped. <button class="lback" data-route="${a.i}">Put it on its route</button></div>` : ""}<div class="rep">${a.rep ? `edge knows <b>(${a.rep.x.toFixed(1)}, ${a.rep.y.toFixed(1)}) m</b>, reported ${((r.t - a.rep.gen) / 1000).toFixed(2)} s ago` : "edge knows: no report yet"} · now (${a.x.toFixed(1)}, ${a.y.toFixed(1)}) m</div></div>`;
   }).join("") + `<p class="hint">Measured one-way delay of each flow&#x27;s last message, in ms.</p>`;
 }
 function renderLiveTable(r) {
+  if (!$("lcmp")) return;
   const s = r.t / 1000, a = lo(LV.msgs, s - 70), b = lo(LV.msgs, s - 10);
   let h = "";
   ROLES.forEach((role, k) => FL.forEach((f, q) => {
@@ -178,7 +257,8 @@ function renderMeta() {
   if (!okc && !LV.pos.length) { w.hidden = false; w.innerHTML = `Waiting for the controller on the UE PC. Start it with <code>./nrlink.sh live start --scenario ${SCN}</code> on both PCs (the core PC first).`; }
   else w.hidden = true;
   $("lev").innerHTML = LV.evlog.map(x => `<li>${x}</li>`).join("");
-  $("lstats").textContent = "Last 60 s, up to 10 s ago (a message counts as lost 10 s after it was sent). One-way delays on the core PC's clock, the UE PC's set to it by UDP clock pings." + (LV.stats ? "  Controller: " + LV.stats : "");
+  if ($("lstats")) $("lstats").textContent = "Last 60 s · a message counts as lost 10 s after it was sent.";
+  const axs = $("axlivestats"); if (axs) axs.textContent = "Last 60 s, up to 10 s ago (a message counts as lost 10 s after it was sent). One-way delays on the core PC's clock, the UE PC's set to it by UDP clock pings." + (LV.stats ? "  Controller: " + LV.stats : "");
 }
 let lvUi = 0;
 function liveFrame(now) {
@@ -186,13 +266,15 @@ function liveFrame(now) {
     if (LV.dirty || !LV.rep) { LV.rep = new (DUALP ? DualReplay : Replay)({ pos: LV.pos, chains: LV.chains, hops: LV.hops, msgs: LV.msgs, att: LV.att, serve: LV.serve, leds: LV.ledlog, holds: LV.holds, serv: LV.serv, topology: LV.start && LV.start.topology }); LV.dirty = false; }
     const head = LV.st ? (LV.st.now_ue - LV.t0) * 1000 + (now - LV.recvAt) : LV.rep.T;
     LV.rep.seek(Math.max(0, Math.min(LV.rep.T, head - 600)));
-    if (DUALP) drawFloorDual(LV.rep, $("floor3")); else drawFloor(LV.rep, $("floor3"));
+    if (DUALP) { drawFloorDual(LV.rep, $("floor3")); drawGhost(); } else drawFloor(LV.rep, $("floor3"));
     if (DUALP && typeof AR !== "undefined" && LV.rep.tr) { window.ARLIVE = 1; AR.update(LV.rep); }
-    if (now - lvUi > 250) { lvUi = now; if (DUALP) drawTimelineDual(LV.rep, $("timeline3")); else drawTimeline(LV.rep, $("timeline3")); drawFlows(LV.rep, "flows3"); renderSide3(LV.rep); renderLiveTable(LV.rep); renderLeds(); renderMeta(); $("llag").textContent = `shown ${((head - LV.rep.t) / 1000).toFixed(1)} s behind the AGVs`; }
+    if (now - lvUi > 250) { lvUi = now; if (DUALP) drawTimelineDual(LV.rep, $("timeline3")); else drawTimeline(LV.rep, $("timeline3")); drawFlows(LV.rep, "flows3"); renderSide3(LV.rep); renderLiveTable(LV.rep); renderLeds(); renderMeta(); $("llag").textContent = `shown ${((head - LV.rep.t) / 1000).toFixed(1)} s behind the AGVs`; $("ldraghint").className = "hint brief" + (LV.dragErr ? " ldragerr" : ""); $("ldraghint").textContent = LV.dragErr || LHINT; }
   } else if (now - lvUi > 500) { lvUi = now; renderLeds(); renderMeta(); }
   requestAnimationFrame(liveFrame);
 }
 lvConnect();
+const LHINT = $("ldraghint").textContent;
+dragInit();
 requestAnimationFrame(liveFrame);
 """
 
@@ -208,10 +290,44 @@ def main():
             i += len(anchor)
         s = s[:i] + text + s[i:]
     put("</style>", CSS)
-    put("</header>", CARD.replace("%LEDTXT%", LEDTXT), before=False)
+    card = CARD.replace("%LEDTXT%", LEDTXT)
+    if 'id="seg"' in s:                       # pages in the comnets-web-design layout: the live card is the first view
+        card = card.replace('id="onboards">', 'id="onboards" data-tab="live">', 1)
+        i, j = card.index('    <div class="charts">'), card.index('    <div class="flow3"')
+        k = card.index("  </section>")
+        led = card[card.index('      <p class="hint" style="margin-top:8px">'):]
+        led = led[:led.index("</p>") + 4]
+        drag = card[card.index('        <p class="hint" style="margin-top:6px" id="ldraghint">'):]
+        drag = drag[:drag.index("</p>") + 4]
+        top = (card[:i] + "  </section>\n").replace(drag, '        <p class="hint brief" style="margin-top:6px" id="ldraghint">Drag an AGV to move it; when you let go, it rejoins its route at the nearest point.</p>\n'
+                                                     '        <div class="full">' + drag.replace(' id="ldraghint"', "") + '</div>')
+        roles = ('  <section class="card" aria-label="Live roles and events" id="liveroles" data-tab="overview">\n'
+                 '    <div class="hd"><h2>Live: roles and events</h2><span class="meta"><span class="chip"><span class="dot live"></span>Live</span></span></div>\n'
+                 + card[i:j] + "  </section>\n")
+        loss = ('  <section class="card" aria-label="Live delay and loss" id="liveloss" data-tab="annex">\n'
+                '    <div class="hd"><h2>Live: delay and lost packets</h2><span class="meta"><span class="chip"><span class="dot live"></span>Live · last 60 s</span></span></div>\n'
+                + card[j:k] + "  </section>\n")
+        b0 = top.index('    <div class="bd" style="border-bottom:1px solid var(--line)">')
+        b1 = top.index("    </div>\n", b0) + len("    </div>\n")
+        top = top[:b0] + '    <div class="full" id="axlive">\n' + top[b0:b1] + "    </div>\n" + top[b1:]      # the LED strip: Annex only
+        top = top.replace("<h2>Live on the boards</h2>", '<h2><span class="brief">Floor and AGVs</span><span class="full">Live on the boards</span></h2>', 1)
+        intro = ('  <section class="card lintro brief" aria-label="What this shows" id="liveintro" data-tab="live">\n'
+                 '    <div class="hd"><h2>Three AGVs on 5G radio boards, live</h2></div>\n'
+                 '    <div class="bd"><p class="short">A factory floor with one gNB. Each AGV sends its position and LiDAR over its own NR link, '
+                 'or, in the shielded cold store, over the sidelink through another AGV.</p>\n'
+                 '      <div class="lkey"><span><b>Map</b> where each AGV is and which way its data goes</span>'
+                 '<span><b>Right</b> each AGV\'s role, gNB signal and last delays</span>'
+                 '<span><b>Drag</b> an AGV to move it; it rejoins its route</span></div></div>\n'
+                 '  </section>\n')
+        put('  <section class="card net" aria-label="Architecture"', intro + top.lstrip("\n") + "\n" + roles)
+        put('  <section class="card" aria-label="Replay" id="replay"', loss)
+        s = s.replace('<span class="chip" id="datachip"><span class="dot rec"></span>Recorded</span>',
+                      '<span class="chip" id="datachip"><span class="dot idle"></span>Connecting</span>', 1)
+    else:
+        put("</header>", card, before=False)
     put("</script>", JS, last=True)
     s = s.replace(f"<title>{TITLE}</title>", f"<title>{TITLE} · live</title>", 1)
-    s = s.replace('<span class="pill"><span class="dot"></span>', '<span class="pill"><span class="dot"></span><a href="#onboards">live on the boards, below</a> · ', 1)
+    s = s.replace('<span class="pill"><span class="dot"></span>', '<span class="pill"><span class="dot"></span><a href="#onboards">live on the boards</a> · ', 1)
     open(OUT, "w", encoding="utf-8").write(s)
     print(f"{OUT}: {len(s)} bytes")
 

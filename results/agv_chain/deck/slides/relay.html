@@ -1,0 +1,13 @@
+<section id="relay" class="alt foot">
+<p class="eyebrow">04 · THE RELAY</p>
+<h2>Another AGV relays it, as 3GPP specifies</h2>
+<div class="row">
+<div class="card rise" style="--i:0"><p class="num">01 DISCOVER</p><h3>Hear the relays</h3><p class="txt">AGVs with a good gNB signal announce themselves every 0.5 s. The remote picks the strongest above −90 dBm.</p></div>
+<div class="card rise" style="--i:1"><p class="num">02 LINK</p><h3>Secure PC5 link</h3><p class="txt">PC5-S set-up with keys per link; the traffic goes in ESP. About 0.7 s.</p></div>
+<div class="card rise" style="--i:2"><p class="num">03 ADDRESS</p><h3>IP from the relay</h3><p class="txt">DHCPv4 on the link; the relay reports the remote to the SMF.</p></div>
+<div class="card rise" style="--i:3"><p class="num">04 ROUTE</p><h3>Routed and NATed</h3><p class="txt">The relay’s kernel sends the remote’s IP into its relay PDU session.</p></div>
+</div>
+<p class="lead">Layer-3 UE-to-network relay: TS 23.304, 24.554, 38.304. The remote keeps its relay until its own NR link is back.</p>
+<div class="footer"><span>AGV Sidelink Testbed</span><span class="pg"></span></div>
+<aside>Thresholds as SIB12 would carry them: relay while Uu RSRP is between −95 and −31 dBm, remote below −100 dBm, SD-RSRP above −90 dBm, 2 dB to reselect. The Gateways tab of the page shows the full rule.</aside>
+</section>

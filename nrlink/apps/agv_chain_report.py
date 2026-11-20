@@ -170,6 +170,16 @@ def main():
                   att=[[round(c["t"] - tb, 2), c["agv"],
                         next((round(m["t"] - tb, 2) for m in att if m["agv"] == c["agv"] and m.get("ok") and m["t"] >= c["t"]), None)]
                        for c in covs])
+        if start.get("sl_mode1"):
+            # mode 1 every 5 s: [t, windows/s, mean window ms, [[mode, grants, packets, granted ms, used ms, staged] per AGV]]
+            sts = [m for m in ctl if m["k"] == "stats" and win[0] <= m["t"] <= win[1]]
+            m1s = [m for m in ctl if m["k"] == "slm1" and win[0] <= m["t"] <= win[1]]
+            tr["m1"] = [[round(st["t"] - tb, 1), round(st.get("windows", 0) / max(0.1, st.get("dt", 5)), 2),
+                         round(st.get("win_ms", 0) / max(1, st.get("windows", 0)), 2),
+                         [[x["mode"], x["grants"], x["sent"], x["gms"], x["ums"], x["staged"]] for x in sl["a"]]]
+                        for st, sl in zip(sts, m1s)]
+            tr["slmode"] = [[round(m["t"] - tb, 2), m["agv"], m["mode"]] for m in ctl if m["k"] == "slmode" and m["t"] <= win[1]]
+            tr["slxbad"] = [[round(m["t"] - tb, 2), m["a"], m["b"], m["n"], m["got"]] for m in ctl if m["k"] == "slxbad" and win[0] <= m["t"] <= win[1]]
         json.dump(tr, open(a.trace, "w"), separators=(",", ":"))
         print("trace:", a.trace)
 

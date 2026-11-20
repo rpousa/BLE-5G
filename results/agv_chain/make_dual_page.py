@@ -5,6 +5,13 @@ import html, math
 import json
 import os
 import re
+import sys
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from story import STORY_CSS, STORY_HTML, STORY_JS  # noqa: E402
+from annex_tool import ANNEX_CSS, annexify  # noqa: E402
+from nfapi import NFAPI_CSS, NFAPI_HTML, NFAPI_JS  # noqa: E402
+from deck_tab import DECK_CSS, DECK_JS, deck_html  # noqa: E402
+from runs_routes import RH_CSS, ROUTES, run_history  # noqa: E402
 
 S = os.path.dirname(os.path.abspath(__file__))  # dual_findings.html lives next to this script
 P = os.path.expanduser("~/BLE-5G/docs/pages")
@@ -13,7 +20,8 @@ chain = open(f"{P}/agv-relay-chain.html", encoding="utf-8").read()
 CH_RUNS = json.load(open(f"{P}/agv-chain-runs.json"))
 
 DUAL = [  # (key on the page, trace, window ms, pick)
-    ("Coverage · layer-3 relay, secured: PC5 security, measured SD-RSRP, QoS, Remote UE Report to the SMF (live scenario)", "cover_l3e_L1_w25", 25, "near"),
+    ("Coverage · layer-3 relay, sidelink mode 1: the gNB grants each AGV its share of the window, a pool for the out-of-coverage AGV (live scenario)", "cover_m1_L1_w25", 25, "near"),
+    ("Coverage · layer-3 relay, secured: PC5 security, measured SD-RSRP, QoS, Remote UE Report to the SMF", "cover_l3e_L1_w25", 25, "near"),
     ("Coverage · layer-3 relay, 3GPP procedures: thresholds, PC5-S, DHCPv4, relay PDU session", "cover_l3b_L1_w25", 25, "near"),
     ("Coverage · layer-3 relay, first version: discovery, direct link, IP forwarding and NAT", "cover_l3_L1_w25", 25, "near"),
     ("Coverage · platoon, sidelink kept until the NR link is up", "cover_p8sl_L1_w25", 25, "near"),
@@ -47,7 +55,7 @@ def load_runs():
             tr = json.load(open(f))
             tr["window_ms"], tr["pick"] = w, pick
             tr["serve"] = serve_of(tr)
-            tr["relay"] = "l3" if "_l3" in name else "app"
+            tr["relay"] = "l3" if ("_l3" in name or "_m1" in name) else "app"
             runs[key] = tr
     return runs
 
@@ -148,6 +156,146 @@ def cover_table(runs):
             + "".join(out) + '</tbody></table></div><p class="hint" style="margin:8px 0 0">Lost includes messages that had no way up. Commands are grouped by the AGV&#x27;s LED when the edge sent them.</p>')
 
 
+def ctl_rates(name, t_from=60):
+    """(windows/s, mean window ms, NR stretch ms) over a recorded run, from the controller's 5 s stats."""
+    f = f"{R}/ctl_{name}.jsonl"
+    if not os.path.exists(f):
+        return None
+    w = dt = ms = 0.0
+    t0 = None
+    for l in open(f):
+        try:
+            m = json.loads(l)
+        except ValueError:
+            continue
+        t0 = t0 or m["t"]
+        if m["k"] == "stats" and m["t"] - t0 > t_from:
+            w += m["windows"]
+            dt += m["dt"]
+            ms += m.get("win_ms", 0.0)
+    if not w:
+        return None
+    wps = w / dt
+    win = ms / w if ms else None
+    return wps, win, 1000 / wps - (win if win else 0)
+
+
+def gnb_m1(name):
+    """The gNB bridge's mode-1 lines for the run: mean pool ms, share of windows with a remote UE, windows full."""
+    f = f"{R}/gnb_{name}.log"
+    if not os.path.exists(f):
+        return None
+    pool = []
+    ooc = cut = n = 0
+    for l in open(f, errors="replace"):
+        m = re.search(r"mode 1: window ([\d.]+) ms \(pool ([\d.]+), CBR ([\d.]+)\).*?(\d+) windows full(?:, (\d+) with a remote UE)?", l)
+        if m:
+            pool.append(float(m.group(2)))
+            cut += int(m.group(4))
+            ooc += int(m.group(5) or 0)
+            n += 1
+    return dict(pool=sum(pool) / len(pool) if pool else 0, cut=cut, ooc=ooc, lines=n)
+
+
+def m1_section(runs):
+    tr = next((runs[k] for k, n, *_ in DUAL if n == "cover_m1_L1_w25" and k in runs), None)
+    if not tr or not tr.get("m1"):
+        return '<div class="bd"><p class="hint">Mode-1 run not recorded yet.</p></div>'
+    m1 = [r for r in tr["m1"] if r[0] >= 0]
+    nwin = sum(r[1] * 5 for r in m1)
+    # per AGV: mean granted ms per window (all windows), mean used ms per grant
+    g_ms = [sum(r[3][i][3] for r in m1) / max(1, nwin) for i in range(3)]
+    grants = [sum(r[3][i][1] for r in m1) for i in range(3)]
+    used = [sum(r[3][i][4] for r in m1) / max(1, grants[i]) for i in range(3)]
+    gms_g = [sum(r[3][i][3] for r in m1) / max(1, grants[i]) for i in range(3)]
+    pkts = [sum(r[3][i][2] for r in m1) for i in range(3)]
+    win = sum(r[2] * r[1] for r in m1) / max(0.01, sum(r[1] for r in m1))
+    me, base = ctl_rates("cover_m1_L1_w25"), ctl_rates("cover_l3e_L1_w25")
+    g = gnb_m1("cover_m1_L1_w25") or dict(pool=4.0, cut=0, ooc=0, lines=0)
+    pool = g["pool"]
+    X0, PX = 70, 9.56                                  # as the slot scheme: 25 ms = 239 px
+    o = ['<div class="bd scroll"><svg class="slotsvg" viewBox="0 0 1000 500" role="img" aria-label="Sidelink mode 1: the window as the gNB grants it, measured; against the fixed 25 ms window; and the window width over the run">']
+    o.append(f'<text x="0" y="16" class="t">The mode-1 window, measured means (window {win:.1f} ms against 25 ms fixed)</text>')
+    o.append('<text x="0" y="52" class="lb">mode 1</text>')
+    x = X0
+    seg = [("1 ms: the announcement, then the boards set their timers", 1.0, "sGd", "")]
+    for i, cls in enumerate(("sA", "sA2", "sA3")):
+        seg.append((f"AGV {'ABC'[i]}: {gms_g[i]:.1f} ms per grant, {used[i]:.1f} ms of it used; {grants[i]} grants, {pkts[i]} packets", g_ms[i], cls, "ABC"[i]))
+        seg.append(("0.8 ms guard", 0.8 * grants[i] / max(1, nwin), "sGd", ""))
+    seg.append((f"pool: {pool:.1f} ms mean, for an AGV with no NR session (mode 2, random start in its first half)", pool, "sPool", "pool"))
+    seg.append(("0.5 ms: the last packet ends", 0.5, "sGd", ""))
+    for tip, ms, cls, lab in seg:
+        w = ms * PX
+        o.append(f'<rect x="{x:.1f}" y="30" width="{max(0.5, w - 1):.1f}" height="34" class="{cls}"><title>{html.escape(tip)}</title></rect>')
+        if lab and w > 18:
+            o.append(f'<text x="{x + w / 2:.1f}" y="52" class="sl" text-anchor="middle">{lab}</text>')
+        x += w
+    o.append(f'<text x="{x + 10:.1f}" y="52" class="lb">{win:.1f} ms</text>')
+    o.append('<text x="0" y="96" class="lb">fixed</text>')
+    o.append(f'<rect x="{X0}" y="74" width="{25 * PX - 1:.1f}" height="34" class="sW"><title>the fixed window: 25 ms, every AGV picks its own time in it</title></rect>')
+    o.append(f'<text x="{X0 + 12.5 * PX:.1f}" y="96" class="sl" text-anchor="middle">fixed window 25 ms</text>')
+    for v in range(0, 30, 5):
+        o.append(f'<line x1="{X0 + v * PX:.1f}" x2="{X0 + v * PX:.1f}" y1="110" y2="115" class="gr"/><text x="{X0 + v * PX:.1f}" y="127" class="lb" text-anchor="middle">{v}</text>')
+    o.append(f'<text x="{X0 + 12.5 * PX:.1f}" y="143" class="lb axt" text-anchor="middle">Time in the window (ms) · mean over all windows</text>')
+    # cycles
+    o.append('<text x="0" y="166" class="t">One cycle: NR frame, then the window (measured, controller stats from minute 1)</text>')
+    y = 180
+    for lab, r in (("fixed 25 ms", base), ("mode 1", me)):
+        if not r:
+            continue
+        wps, wms, nr = r
+        wms = wms or 25.0
+        nr = 1000 / wps - wms
+        o.append(f'<text x="0" y="{y + 15}" class="lb">{lab}</text>')
+        o.append(f'<rect x="{X0}" y="{y}" width="{nr * PX / 2.5:.1f}" height="20" class="sdl"><title>NR: {nr:.0f} ms</title></rect>')
+        o.append(f'<rect x="{X0 + nr * PX / 2.5 + 1:.1f}" y="{y}" width="{wms * PX / 2.5:.1f}" height="20" class="sW"><title>window: {wms:.1f} ms</title></rect>')
+        o.append(f'<text x="{X0 + (nr + wms) * PX / 2.5 + 10:.1f}" y="{y + 15}" class="lb">{1000 / wps:.0f} ms, {wps:.1f}/s · NR {nr:.0f} ms, window {wms:.1f} ms</text>')
+        y += 30
+    for v in range(0, 100, 20):
+        o.append(f'<line x1="{X0 + v * PX / 2.5:.1f}" x2="{X0 + v * PX / 2.5:.1f}" y1="{y - 8}" y2="{y - 3}" class="gr"/><text x="{X0 + v * PX / 2.5:.1f}" y="{y + 9}" class="lb" text-anchor="middle">{v}</text>')
+    o.append(f'<text x="{X0 + 40 * PX / 2.5:.1f}" y="{y + 25}" class="lb axt" text-anchor="middle">Time in the cycle (ms)</text>')
+    # timeline
+    T = max(r[0] for r in m1) or 1
+    y0, h = 322, 110
+    o.append(f'<text x="0" y="{y0 - 18}" class="t">Window width over the run (5 s means); red: an AGV on the pool</text>')
+    on, bands = {}, []
+    for t, a, md in sorted(tr.get("slmode", [])):
+        if md == 2:
+            on[a] = t
+        elif a in on:
+            bands.append((on.pop(a), t))
+    bands += [(t, T) for t in on.values()]
+    sx = lambda t: X0 + max(0, min(T, t)) / T * 860
+    sy = lambda v: y0 + h - v / 25 * h
+    for a, b in bands:
+        if b > 0:
+            o.append(f'<rect x="{sx(a):.1f}" y="{y0}" width="{max(1, sx(b) - sx(a)):.1f}" height="{h}" class="m2b"/>')
+    for v in (0, 5, 10, 15, 20, 25):
+        o.append(f'<line x1="{X0}" x2="{X0 + 860}" y1="{sy(v):.1f}" y2="{sy(v):.1f}" class="gr"/><text x="{X0 - 6}" y="{sy(v) + 4:.1f}" class="lb" text-anchor="end">{v}</text>')
+    o.append(f'<path d="M{X0} {sy(25):.1f} H{X0 + 860}" class="wl2"/><text x="{X0 + 864}" y="{sy(25) + 4:.1f}" class="lb">fixed</text>')
+    o.append('<path class="wl" d="' + " ".join(f"{'M' if j == 0 else 'L'}{sx(r[0]):.1f} {sy(r[2]):.1f}" for j, r in enumerate(m1)) + '"/>')
+    for m in range(0, int(T / 60) + 1, 2):
+        o.append(f'<text x="{sx(m * 60):.1f}" y="{y0 + h + 16}" class="lb" text-anchor="middle">{m} min</text>')
+    o.append(f'<text x="{X0 - 52}" y="{y0 + h / 2:.1f}" class="lb axt" transform="rotate(-90 {X0 - 52} {y0 + h / 2:.1f})" text-anchor="middle">Window width (ms)</text>')
+    o.append(f'<text x="{X0 + 430}" y="{y0 + h + 34}" class="lb axt" text-anchor="middle">Time in the run (min)</text>')
+    o.append('</svg></div>')
+    nb = len(tr.get("slxbad", []))
+    full = (f"Over the run, {g['cut']} windows were full (more asked than 25 ms holds, every grant shrunk alike) and {g['ooc']} "
+            f"had a remote UE behind a relay. ") if g["lines"] else ""
+    o.append('<div class="bd" style="border-top:1px solid var(--line)"><p class="hint" style="max-width:110ch">'
+             'Mode 1 as in TS 38.321 (5.22.1.6), on the boards: each AGV whose UE has an NR session adds a <b>sidelink buffer status report</b> '
+             '(bytes and packets waiting) to its uplink. After slot 9 the gNB bridge turns the reports into <b>grants</b>: '
+             'one slice of the window per AGV, sized to its report (1 Mbit/s plus the per-packet cost), 0.8 ms apart, the first one 1 ms after the '
+             'announcement, the order rotating each window; then a <b>pool</b> for AGVs out of coverage (mode 2), 4 ms, kept at 8 ms or more while a relay reports '
+             'that it carries one, and grown when the gNB board hears it busy (CBR above 0.45). The announcement carries the grants; '
+             'each board (nrlink v7) holds the packets the controller staged on it and sends them only in its own slice, timed in microseconds '
+             'from the announcement, then reports what it sent. The window ends with the last slice, so a quiet frame gives the air back to NR. '
+             + full
+             + (f'{nb} sidelink messages arrived cut short and were dropped before reaching a UE (see findings).' if nb else '')
+             + '</p></div>')
+    return "\n".join(o)
+
+
 LOOP_M = 124.0  # m, one lap (agv_chain.LOOP)
 COMPARE = {  # trace -> (what changed, how the AGVs drive, relay rule, holds, uplink while attaching)
     "cover_L1_w25": ("Coverage by position", "spread out, a third of a lap apart", "any AGV with a session, sticky (less busy) pick", "none", "dropped"),
@@ -157,6 +305,7 @@ COMPARE = {  # trace -> (what changed, how the AGVs drive, relay rule, holds, up
     "cover_p8lastq_L1_w25": ("Uplink queued", "platoon, 8 m gaps", "the nearest, only if nearer than the gNB", "the only AGV with a session stops at the door", "queued up to 5 s"),
     "cover_p8onespread_L1_w25": ("One sidelink at a time", "platoon, 8 m gaps, but only the AGVs behind wait, so it comes apart", "the nearest, only if nearer than the gNB", "an AGV with a session stops at the door while another is on the sidelink", "queued up to 5 s"),
     "cover_p8sl_L1_w25": ("Sidelink kept until the NR link is up", "platoon kept together; an AGV on the sidelink stops before it would drive out of its relay's reach, until its own session is up", "the nearest, only if nearer than the gNB", "as above, plus that stop", "queued up to 5 s (not needed)"),
+    "cover_m1_L1_w25": ("Sidelink mode 1", "platoon kept together, as above", "as above; on the air, each AGV with its own NR session reports its sidelink buffer (an SL-BSR in its uplink) and the gNB grants it a slice of the window sized to it (mode 1, TS 38.321); an AGV out of coverage uses a pool at the end of the window (mode 2); the window is only as long as the grants and the pool", "as above", "queued up to 3 s until the link has its address"),
     "cover_l3e_L1_w25": ("Secured relay, measured links, QoS, report to the SMF", "platoon kept together, as above", "as above, plus: SD-RSRP from the boards' measured beacons (each link's deviation from its calibrated level, layer-3 filtered); PC5-S integrity protected and the remote's traffic and DHCP in ESP (AES-GCM, keys per link after TS 33.503); positioning and LiDAR as PQI 58 and 59, mapped to 5QI 7 and 9 with a priority queue each; Remote UE Report as NAS (TS 24.501) on the relay PDU session, answered by the SMF", "as above", "queued up to 3 s until the link has its address"),
     "cover_l3b_L1_w25": ("3GPP procedures for the relay", "platoon kept together, as above", "SIB12-style thresholds (TS 38.331): a relay only while its Uu RSRP is in [−95, −31] dBm and its relay PDU session is up; a remote only below −100 dBm, from relays heard above −90 dBm SD-RSRP, 2 dB to reselect; PC5-S link set-up (TS 24.554) with null security, the address by DHCPv4 from the relay, the remote's traffic NATed into the relay's own PDU session for DNN relay", "as above; the relay's reach is now the SD-RSRP threshold", "queued up to 3 s until the link has its address"),
     "cover_l3_L1_w25": ("Layer-3 relay, first version", "platoon kept together, as above", "the remote picks: the strongest discovery announcement (SD-RSRP) above its own Uu signal, 2 dB hysteresis; then a direct link request and accept, and the relay reports it up (Remote UE Report); the IP packets are routed and NATed by the relay's kernel", "as above", "queued up to 3 s until the direct link is up"),
@@ -164,7 +313,7 @@ COMPARE = {  # trace -> (what changed, how the AGVs drive, relay rule, holds, up
 }
 
 
-CMPNOTES = ['<b>Spread out</b>, the AGVs a third of a lap apart: every relay is in reach somewhere and almost nothing is lost, but the relay can be across the floor, farther than the gNB, which a real sidelink would not reach.', '<b>Platoon, relays in reach</b>: only an AGV nearer than the gNB may relay. In a convoy, all three end up in the cold store together, and 8 % of the uplink is lost (1,083 messages), 105 s with no AGV on the gNB at all.', '<b>Last link holds</b>: the last AGV with a session stops at the door, so the platoon is never cut off, but the leader, out of the store and attaching, is by then farther from the held AGV than the gNB: 80 messages lost, once a lap. <b>Queuing the uplink</b> for up to 5 s while its own UE attaches brings that to 1.', '<b>One sidelink at a time</b>: only the AGVs behind ever waited, so after a few holds the convoy came apart around the loop and the AGV in the store had no relay in reach: 12 % lost. (With the convoy closed into a ring, every AGV counted as a follower and skipped the checkpoint stops, hence the faster pace.)', '<b>Platoon kept together</b>: an AGV with a session waits for the one behind, so the AGV at the door is always near enough to relay. 0 of 15,249 uplink messages lost; 2 % arrive after more than 1 s, mostly queued while an AGV leaving the store attaches. The cost is pace: about 22 laps an hour against 29, and the sidelink&#x27;s p90 rises to about 400 ms.', '<b>Sidelink kept until the NR link is up</b>: leaving the store, the leader used to drive away from its relay at the door before its own UE had attached, and its uplink waited in the queue. Now an AGV on the sidelink stops while its relay is still 2 m nearer than the gNB and drives on once its session is up: 6 stops in 14 minutes, all AGV A (the leader, whose relay is behind it), about 3 s each. 0 uplink lost, nothing queued, messages over 1 s down from 323 to 77, and the sidelink&#x27;s p90 back down to 287 ms, at no cost in pace.', '<b>Layer-3 relay</b>, first version (19 Nov): the same driving, but the relay is now chosen and run as in TS 23.304. The remote picks its relay from discovery announcements (SD-RSRP), sets up a direct link (request to accept: 129 ms median, 26 links) and gets an IP address on it; the relay reports it to the edge (56 Remote UE Reports in 16 minutes) and routes and NATs its packets in the kernel. In 15 minutes: 2 of 16,238 uplink messages lost, both LiDAR scans on an AGV&#x27;s own UE, none through a relay. The 132 over 1 s came in two bursts around re-attaches, 92 of them from AGVs on their own UE. Sidelink positioning 189 ms p50, 305 ms p90: about 10–20 ms more than the application relay, at the same pace.', '<b>3GPP procedures for the relay</b> (19 Nov): who may relay and who may use a relay now follows SIB12-style thresholds (TS 38.331): an AGV announces itself only while its Uu RSRP is between −95 and −31 dBm and its <b>relay PDU session</b> (DNN relay) is up; an AGV selects a relay only below −100 dBm, from announcements above −90 dBm SD-RSRP. The link is set up with the TS 24.554 PC5-S exchange (request, security mode command and complete with null algorithms, accept with &quot;IP address configuration: DHCPv4 server&quot;), and the remote gets its address by <b>DHCPv4</b> from the relay; the relay reports it with that address. Set-up takes 651 ms (median of 23 links, 567–777 ms) instead of 129 ms: 8 messages over the sidelink instead of 2, none retransmitted, none rejected. In 15 minutes: 1 of 16,260 uplink messages lost (on an AGV&#x27;s own UE), 21 over 1 s instead of 132, 11 stops to keep a relay in reach instead of 17 (the reach is now the SD-RSRP threshold, about 34 m). Delays are 30–45 ms higher on every path, also on an AGV&#x27;s own UE (positioning 185 ms p50, against 139): most likely the second PDU session on every UE, not yet checked.', '<b>Secured relay, measured links, QoS, report to the SMF</b>, the live scenario since 19 Nov: four more steps. <b>PC5 security</b>: keys per link from both sides&#x27; nonces (KNRP-sess after TS 33.503, the root generated per run instead of provisioned), every PC5-S message from the security mode command on carries a MAC, and the remote&#x27;s IP traffic and DHCP go in ESP (AES-GCM-128) over the sidelink. <b>Measured SD-RSRP</b>: each board pair is calibrated on its first 40 beacons and the selection uses the path-loss model plus the link&#x27;s measured, filtered deviation (−9 to +3.5 dB seen). <b>QoS</b>: positioning PQI 58 → 5QI 7, LiDAR PQI 59 → 5QI 9, carried as DSCP and served by a priority queue on every interface that sends relayed traffic (OAI has one QoS flow per session, so no separate flows on Uu). <b>Remote UE Report over NAS</b>: the relay&#x27;s UE sends it in UL NAS transport on its relay PDU session; a patched free5GC SMF decodes it, tracks each relay&#x27;s remote UEs and answers: 50 reports, 50 responses, about 0.1–0.2 s each. In 15 minutes: 2 of 16,256 uplink messages lost, both on an AGV&#x27;s own UE, none through a relay; 25 over 1 s; link set-up 683 ms median (26 links, 530–932 ms), no MAC failures; relayed positioning 209 · 346 ms, the same as without security. A run between the two (security and measured links, no QoS) gave the same numbers; one recorded while the SMF and the UE were being rebuilt on the same PCs is not used.']
+CMPNOTES = ['<b>Spread out</b>, the AGVs a third of a lap apart: every relay is in reach somewhere and almost nothing is lost, but the relay can be across the floor, farther than the gNB, which a real sidelink would not reach.', '<b>Platoon, relays in reach</b>: only an AGV nearer than the gNB may relay. In a convoy, all three end up in the cold store together, and 8 % of the uplink is lost (1,083 messages), 105 s with no AGV on the gNB at all.', '<b>Last link holds</b>: the last AGV with a session stops at the door, so the platoon is never cut off, but the leader, out of the store and attaching, is by then farther from the held AGV than the gNB: 80 messages lost, once a lap. <b>Queuing the uplink</b> for up to 5 s while its own UE attaches brings that to 1.', '<b>One sidelink at a time</b>: only the AGVs behind ever waited, so after a few holds the convoy came apart around the loop and the AGV in the store had no relay in reach: 12 % lost. (With the convoy closed into a ring, every AGV counted as a follower and skipped the checkpoint stops, hence the faster pace.)', '<b>Platoon kept together</b>: an AGV with a session waits for the one behind, so the AGV at the door is always near enough to relay. 0 of 15,249 uplink messages lost; 2 % arrive after more than 1 s, mostly queued while an AGV leaving the store attaches. The cost is pace: about 22 laps an hour against 29, and the sidelink&#x27;s p90 rises to about 400 ms.', '<b>Sidelink kept until the NR link is up</b>: leaving the store, the leader used to drive away from its relay at the door before its own UE had attached, and its uplink waited in the queue. Now an AGV on the sidelink stops while its relay is still 2 m nearer than the gNB and drives on once its session is up: 6 stops in 14 minutes, all AGV A (the leader, whose relay is behind it), about 3 s each. 0 uplink lost, nothing queued, messages over 1 s down from 323 to 77, and the sidelink&#x27;s p90 back down to 287 ms, at no cost in pace.', '<b>Layer-3 relay</b>, first version (19 Nov): the same driving, but the relay is now chosen and run as in TS 23.304. The remote picks its relay from discovery announcements (SD-RSRP), sets up a direct link (request to accept: 129 ms median, 26 links) and gets an IP address on it; the relay reports it to the edge (56 Remote UE Reports in 16 minutes) and routes and NATs its packets in the kernel. In 15 minutes: 2 of 16,238 uplink messages lost, both LiDAR scans on an AGV&#x27;s own UE, none through a relay. The 132 over 1 s came in two bursts around re-attaches, 92 of them from AGVs on their own UE. Sidelink positioning 189 ms p50, 305 ms p90: about 10–20 ms more than the application relay, at the same pace.', '<b>3GPP procedures for the relay</b> (19 Nov): who may relay and who may use a relay now follows SIB12-style thresholds (TS 38.331): an AGV announces itself only while its Uu RSRP is between −95 and −31 dBm and its <b>relay PDU session</b> (DNN relay) is up; an AGV selects a relay only below −100 dBm, from announcements above −90 dBm SD-RSRP. The link is set up with the TS 24.554 PC5-S exchange (request, security mode command and complete with null algorithms, accept with &quot;IP address configuration: DHCPv4 server&quot;), and the remote gets its address by <b>DHCPv4</b> from the relay; the relay reports it with that address. Set-up takes 651 ms (median of 23 links, 567–777 ms) instead of 129 ms: 8 messages over the sidelink instead of 2, none retransmitted, none rejected. In 15 minutes: 1 of 16,260 uplink messages lost (on an AGV&#x27;s own UE), 21 over 1 s instead of 132, 11 stops to keep a relay in reach instead of 17 (the reach is now the SD-RSRP threshold, about 34 m). Delays are 30–45 ms higher on every path, also on an AGV&#x27;s own UE (positioning 185 ms p50, against 139): most likely the second PDU session on every UE, not yet checked.', '<b>Secured relay, measured links, QoS, report to the SMF</b>, the live scenario since 19 Nov: four more steps. <b>PC5 security</b>: keys per link from both sides&#x27; nonces (KNRP-sess after TS 33.503, the root generated per run instead of provisioned), every PC5-S message from the security mode command on carries a MAC, and the remote&#x27;s IP traffic and DHCP go in ESP (AES-GCM-128) over the sidelink. <b>Measured SD-RSRP</b>: each board pair is calibrated on its first 40 beacons and the selection uses the path-loss model plus the link&#x27;s measured, filtered deviation (−9 to +3.5 dB seen). <b>QoS</b>: positioning PQI 58 → 5QI 7, LiDAR PQI 59 → 5QI 9, carried as DSCP and served by a priority queue on every interface that sends relayed traffic (OAI has one QoS flow per session, so no separate flows on Uu). <b>Remote UE Report over NAS</b>: the relay&#x27;s UE sends it in UL NAS transport on its relay PDU session; a patched free5GC SMF decodes it, tracks each relay&#x27;s remote UEs and answers: 50 reports, 50 responses, about 0.1–0.2 s each. In 15 minutes: 2 of 16,256 uplink messages lost, both on an AGV&#x27;s own UE, none through a relay; 25 over 1 s; link set-up 683 ms median (26 links, 530–932 ms), no MAC failures; relayed positioning 209 · 346 ms, the same as without security. A run between the two (security and measured links, no QoS) gave the same numbers; one recorded while the SMF and the UE were being rebuilt on the same PCs is not used.', '<b>Sidelink mode 1</b> (20 Nov), the live scenario: the gNB now schedules the sidelink. Every AGV with its own NR session adds a sidelink buffer status report to its uplink, and the gNB gives it a slice of the next window sized to it; the AGV out of coverage sends in a pool at the end of the window (mode 2). The boards (nrlink v7) hold the staged packets and send only in their slice. The window shrank from 25 ms fixed (10.3 ms of it used) to 16.4 ms on average (grants, guards and the pool), but the NR part of the cycle stayed at about 57 ms, so cycles went only from 12.3 to 13.5 a second. The AGVs on their own NR session did as before (0–0.2 % lost). <b>The remote did not</b>: 9.9 % of its positioning messages and 15.8 % of its LiDAR scans lost, against 0 %, and its positioning took 259 ms instead of 209 (p50). The cause is below the relay: 1.5–2 % of the sidelink UEs&#x27; items never arrived (0–0.3 % with the fixed window), so the OAI UEs waited for the missing pieces until they were more than 400 ms late and dropped them. The messages that did arrive cut short (9–10 bytes missing, the same at every receiver) point to bytes lost on the serial line into the sending board, which now receives the packets ahead of its slice while it is busy passing on everything it hears. A test that stops staging while a window is on the air is running; the pool was never full (about 3 of 6–8 ms used).']
 
 
 def cover_metrics(tr):
@@ -248,14 +397,16 @@ def main():
     rnd = lambda o: round(o, 3) if isinstance(o, float) else [rnd(x) for x in o] if isinstance(o, list) else {k: rnd(v) for k, v in o.items()} if isinstance(o, dict) else o
     for k, tr in enumerate(runs.values()):                     # headings to 0.01 rad; positions at 0.2 s but in the two newest runs
         if k >= 1:
-            tr["pos"] = tr["pos"][::2]
+            tr["pos"] = tr["pos"][::2 if k < 3 else 3]           # older runs at 0.4 s, from the fourth on 0.6 s
         for p in tr["pos"]:
             for a in p[1]:
                 if len(a) > 2 and isinstance(a[2], float):
                     a[2] = round(a[2], 2)
     json.dump(rnd(runs), open(f"{P}/agv-dual-runs.json", "w"), separators=(",", ":"))   # ms / mm: keeps the file under 16 MB
     style = chain[chain.index("<style>"):chain.index("</style>")]
-    head = '<meta charset="utf-8">\n' + chain[:chain.index("<style>")].replace("<title>AGV Relay Chain</title>", "<title>AGV Dual Gateway</title>")
+    head = '<meta charset="utf-8">\n' + chain[:chain.index("<style>")].replace("<title>AGV Relay Chain</title>", "<title>AGV Dual Gateway</title>") \
+        .replace("family=Barlow+Semi+Condensed:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap",
+                 "family=Space+Grotesk:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap")
     js = chain[chain.index("<script>") + 8:]
     consts = "\n".join(l for l in js.splitlines() if re.match(r"const (\$|W|RACKS|ROUTE|CPV|CPN|POLE|AGV|RCOL|FLOWN) ", l))
     lib = "\n".join([
@@ -264,7 +415,7 @@ def main():
         grab_fn(js, "function drawTimeline("), grab_fn(js, "function drawScatter("),
         grab_fn(js, "function lo("), grab_fn(js, "class Replay ")])
     findings = open(f"{S}/dual_findings.html", encoding="utf-8").read() if os.path.exists(f"{S}/dual_findings.html") else ""
-    page = TEMPLATE.replace("%HEAD%", head).replace("%STYLE%", style + EXTRA_CSS).replace("%RESULTS%", results_table(runs)) \
+    page = TEMPLATE.replace("%HEAD%", head).replace("%STYLE%", style + EXTRA_CSS + BRAND_CSS).replace("%RESULTS%", results_table(runs)) \
         .replace("%FINDINGS%", findings).replace("%COVERTABLE%", cover_table(runs)).replace("%COMPARE%", compare_table(runs)).replace("%CMPNOTES%", "".join(f"<li>{n}</li>" for n in CMPNOTES)).replace("%CONSTS%", consts).replace("%LIB%", lib).replace("%SVG%", SVG)
     l3 = next((runs[k] for k, n, *_ in DUAL if n == "cover_l3e_L1_w25" and k in runs), None)
     if l3:
@@ -274,11 +425,102 @@ def main():
                 f"LiDAR {f('remote|lidar', 'p50'):.0f} · {f('remote|lidar', 'p90'):.0f} ms, command {f('remote|cmd', 'p50'):.0f} · {f('remote|cmd', 'p90'):.0f} ms")
     else:
         meas = "L1, measured through the relay: run not recorded yet"
-    page = page.replace("%SEQMEAS%", meas)
+    page = page.replace("%SEQMEAS%", meas).replace("%LOGO_TUD%", logo("tud_logo.jpg", "image/jpeg")) \
+        .replace("%LOGO_CN%", logo("comnets_logo.png", "image/png")).replace("%LOGO_DCRG%", logo("dcrg-logo-navy.png", "image/png")).replace("%M1SLOT%", m1_section(runs))
     page = positioning(page)
+    page = page.replace('  <section class="card" aria-label="Window tests" id="results"', run_history(runs, DUAL) + '  <section class="card" aria-label="Window tests" id="results"', 1)
+    page = page.replace('  <section class="card" aria-label="Two gateways, one remote" id="dual"', ROUTES + '  <section class="card" aria-label="Two gateways, one remote" id="dual"', 1)
+    page = annexify(page)
+    page = page.replace("</main>", deck_html(logo("dcrg-logo-navy.png", "image/png")) + STORY_HTML + NFAPI_HTML + "</main>", 1).replace("</style>", STORY_CSS + NFAPI_CSS + ANNEX_CSS + RH_CSS + DECK_CSS + "</style>", 1)
+    k = page.rindex("<script>", 0, page.rindex("(function views")) if "(function views" in page else page.rindex("<script>")
+    page = page[:k] + "<script>" + STORY_JS + NFAPI_JS + DECK_JS + "</script>\n" + page[k:]
     open(f"{P}/agv-dual-gateway.html", "w", encoding="utf-8").write(page)
     print(f"agv-dual-gateway.html {len(page)} bytes, runs: {list(runs)}")
 
+
+def logo(name, mime):
+    import base64
+    b = open(f"{S}/brand/{name}", "rb").read()
+    if name == "dcrg_logo.svg":                      # the package's artboard has wide margins: crop to the mark and text
+        b = b.replace(b'viewBox="0 0 937.68 566.93"', b'viewBox="40 40 862 452"')
+    return f"data:{mime};base64," + base64.b64encode(b).decode()
+
+
+# TU Dresden blue #00008C, ComNets navy #00305D, blue #0E669F / #2C94CC, light #84CFED, Telekom magenta #E20074.
+# The AGV role colours (blue, green, red) stay those of the boards' LEDs; only their shades follow the palette.
+BRAND_CSS = """
+/* comnets-web-design: light only, the ComNets palette, Space Grotesk / IBM Plex Sans / IBM Plex Mono */
+:root, :root[data-theme="dark"] {
+  --navy: #022E57; --blue: #2C93CC; --blue-deep: #0D659E; --blue-light: #83CFED; --magenta: #E20073;
+  --bg-alt: #EBF2F6; --text-muted: #587590; --border: #D5E0E8; --tag-bg: #D9E7F0;
+  --ok: #1E8E5A; --warn: #B7791F; --error: #C62828; --idle: #8FA3B5;
+  --bg: #EBF2F6; --panel: #FFFFFF; --panel-2: #EBF2F6; --line: #D5E0E8; --ink: #022E57; --ink-2: #587590; --ink-3: #587590;
+  --uu: #2C93CC; --pc5: #E20073; --core: #022E57; --bad: #C62828;
+  --rpivot: #2C93CC; --rrelay: #1E8E5A; --rremote: #C62828; --rack: #D5E0E8; --floor: #FFFFFF;
+  --display: "IBM Plex Sans", sans-serif; --head: "Space Grotesk", sans-serif; --mono: "IBM Plex Mono", monospace;
+  --r: 4px; color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #EBF2F6; --panel: #FFFFFF; --panel-2: #EBF2F6; --line: #D5E0E8; --ink: #022E57; --ink-2: #587590; --ink-3: #587590;
+    --uu: #2C93CC; --pc5: #E20073; --core: #022E57; --bad: #C62828; --ok: #1E8E5A;
+    --rpivot: #2C93CC; --rrelay: #1E8E5A; --rremote: #C62828; --rack: #D5E0E8; --floor: #FFFFFF; color-scheme: light;
+  }
+}
+html { scroll-padding-top: 88px; }
+body { background: var(--bg-alt); color: var(--navy); font: 15px/1.5 var(--display); margin: 0; }
+h1, h2, h3, .t, .card .hd h2 { font-family: var(--head); font-weight: 600; color: var(--navy); }
+header.top h1 { font-size: clamp(28px, 3vw, 36px); letter-spacing: -.01em; }
+.card .hd h2 { font-size: 19px; }
+svg .t, .slotsvg .t, .cvsvg .t { font-family: var(--head); fill: var(--navy); }
+.wrap { max-width: 1440px; padding-left: max(16px, min(32px, 3vw), env(safe-area-inset-left, 0px)); padding-right: max(16px, min(32px, 3vw), env(safe-area-inset-right, 0px)); padding-top: 24px; gap: 24px; }
+.card { background: #fff; border: 1px solid var(--border); border-radius: 4px; box-shadow: none; }
+section[data-tab] { scroll-margin-top: 88px; }
+svg text.axt { font: 600 13px var(--display); fill: var(--text-muted); }
+[hidden] { display: none !important; }
+a { color: var(--blue-deep); }
+.label { letter-spacing: .12em; color: var(--text-muted); }
+.pill { background: var(--tag-bg); border: 0; color: var(--blue-deep); font-family: var(--display); }
+.pill .dot { background: var(--magenta); }
+button, select, input { border-radius: 3px; }
+:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
+/* top bar */
+.appbar { position: sticky; top: 0; z-index: 20; display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 12px 24px;
+          min-height: 72px; padding: 8px max(16px, min(32px, 3vw)); padding-top: max(8px, env(safe-area-inset-top, 0px));
+          background: #fff; border-bottom: 1px solid var(--border); }
+.ab-l { display: flex; align-items: center; gap: 16px; min-width: 0; }
+.ab-logo { height: 48px; width: auto; display: block; margin: 0 4px; }
+.ab-div { width: 1px; height: 32px; background: var(--border); flex: none; }
+.ab-name { font: 600 18px var(--head); color: var(--navy); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ab-r { display: flex; justify-content: flex-end; }
+.chip { display: inline-flex; align-items: center; gap: 8px; padding: 6px 12px; border-radius: 999px; background: var(--tag-bg);
+        color: var(--navy); font: 600 13px var(--display); white-space: nowrap; }
+.chip .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--idle); }
+.chip .dot.live { background: var(--ok); } .chip .dot.rec { background: var(--blue-deep); } .chip .dot.off { background: var(--error); } .chip .dot.stale { background: var(--warn); } .chip .dot.idle { background: var(--idle); }
+.seg { display: flex; gap: 2px; padding: 4px; background: var(--tag-bg); border-radius: 8px; max-width: 100%; overflow-x: auto; scrollbar-width: none; }
+.seg button { display: inline-flex; align-items: center; gap: 8px; height: 40px; padding: 0 14px; border: 1px solid transparent;
+              border-radius: 6px; background: transparent; color: var(--navy); font: 500 14px var(--display); cursor: pointer;
+              white-space: nowrap; transition: background .15s ease-out, border-color .15s ease-out; }
+.seg button svg { fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; flex: none; }
+.seg button:hover { background: rgba(255, 255, 255, .55); }
+.seg button[aria-selected="true"] { background: #fff; border-color: var(--border); font-weight: 600; }
+@media (pointer: coarse) { .seg button { height: 44px; } }
+@media (max-width: 1520px) { .appbar { grid-template-columns: 1fr auto; } .seg { grid-column: 1 / -1; grid-row: 2; justify-self: center; } }
+@media (max-width: 900px) { .ab-logo { height: 40px; } }
+@media (max-width: 600px) { .ab-logo { height: 32px; } .ab-name { font-size: 16px; } .seg { justify-self: stretch; } .appbar { gap: 8px 12px; } }
+/* tabs inside panels: plain text, navy underline */
+.tabs { border-bottom: 1px solid var(--border); }
+.tabs [role="tab"] { border: 0 !important; border-radius: 0 !important; background: transparent !important; box-shadow: none !important;
+                     font: 500 15px var(--display) !important; color: var(--text-muted) !important; padding: 10px 14px 9px !important; }
+.tabs [role="tab"][aria-selected="true"] { color: var(--navy) !important; font-weight: 600 !important; box-shadow: inset 0 -2px 0 var(--navy) !important; }
+/* credits */
+.credits { max-width: 1440px; margin: 8px auto 0; padding: 24px max(16px, min(32px, 3vw)) 40px; display: flex; flex-wrap: wrap; align-items: center;
+           gap: 16px 40px; border-top: 1px solid var(--border); }
+.credits img { height: 48px; width: auto; display: block; }
+.credits .cr-dcrg { height: 56px; }
+.credits .cr-t { flex: 1 1 100%; color: var(--text-muted); font-size: 13px; }
+@media (prefers-reduced-motion: reduce) { .seg button { transition: none; } }
+"""
 
 EXTRA_CSS = """
 .cvsvg { width: 100%; min-width: 720px; height: auto; display: block; }
@@ -297,7 +539,7 @@ EXTRA_CSS = """
 .flowp h3 { font: 600 1rem var(--display); margin: 0; }
 .flowp .fs { font: .78rem var(--mono); color: var(--ink-3); margin: 2px 0 6px; }
 .flowp .fq { font: .8rem var(--mono); color: var(--ink-2); margin: 4px 0 0; }
-.flowp canvas { width: 100%; height: 190px; display: block; }
+.flowp canvas { width: 100%; height: 214px; display: block; }
 #replay .charts { grid-template-columns: 1fr; }
 .bd > * { min-width: 0; }
 .net .diagram { overflow-x: auto; padding: 6px 4px 2px; border-bottom: 1px solid var(--line); }
@@ -356,6 +598,12 @@ EXTRA_CSS = """
 .slotsvg .sB { fill: var(--rpivot); } .slotsvg .sG { fill: var(--rrelay); } .slotsvg .sR { fill: var(--rremote); }
 .slotsvg .sF { fill: color-mix(in srgb, var(--pc5) 25%, var(--panel)); }
 .slotsvg .sF + .sl { fill: var(--ink-2); }
+.slotsvg .sA { fill: var(--rpivot); } .slotsvg .sA2 { fill: color-mix(in srgb, var(--rpivot) 65%, var(--panel)); }
+.slotsvg .sA3 { fill: color-mix(in srgb, var(--rpivot) 40%, var(--panel)); } .slotsvg .sA3 + .sl { fill: var(--ink); }
+.slotsvg .sPool { fill: color-mix(in srgb, var(--rremote) 55%, var(--panel)); }
+.slotsvg .sGd { fill: var(--line); } .slotsvg .wl { fill: none; stroke: var(--pc5); stroke-width: 2; stroke-linejoin: round; }
+.slotsvg .wl2 { fill: none; stroke: var(--ink-3); stroke-width: 1.2; stroke-dasharray: 5 4; }
+.slotsvg .m2b { fill: color-mix(in srgb, var(--rremote) 14%, transparent); } .slotsvg .gr { stroke: var(--line); stroke-width: 1; }
 .slotsvg .br { fill: none; stroke: var(--ink-3); stroke-width: 1.2; }
 .arch2 svg { width: 100%; min-width: 760px; height: auto; display: block; }
 .arch2 .bx { fill: var(--panel-2); stroke: var(--line); stroke-width: 1.4; }
@@ -422,51 +670,24 @@ SVG = """<svg viewBox="0 0 1000 340" role="img" aria-label="Two AGVs attached to
 </svg>"""
 
 TEMPLATE = r"""%HEAD%%STYLE%</style>
+<header class="appbar">
+  <div class="ab-l"><img src="%LOGO_DCRG%" alt="Deterministic Communication Research Group" class="ab-logo"><span class="ab-div" aria-hidden="true"></span><span class="ab-name">AGV Dual Gateway</span></div>
+  <nav class="seg" role="tablist" aria-label="Views" id="seg"></nav>
+  <div class="ab-r"><span class="chip" id="datachip"><span class="dot rec"></span>Recorded</span></div>
+</header>
 <main class="wrap">
-  <header class="top">
+  <header class="top" data-tab="overview">
     <div class="title">
       <h1>AGV Dual Gateway</h1>
-      <div class="sub">Three AGVs, one gNB on a pole. The two AGVs nearest the pole are both connected to the gNB: each is a <b>gateway</b> with its own UE and PDU session, and sends its own data straight up. The third, the <b>remote</b>, is one sidelink hop from either gateway and chooses, for each message, which one to send through. A variant of the <a href="https://claude.ai/artifact/HmRQJySnJCGZ5MnJPLWGWs">AGV relay chain</a>, run on the same four boards. The live scenario is now <a href="#coverage">coverage</a>: an AGV in the shielded cold store reaches the edge through another AGV acting as a <b>layer-3 UE-to-network relay</b>, as in 3GPP TS 23.304: it discovers the relay, sets up a PC5 direct link, gets an IP address from it, and its IP packets are routed and NATed into the relay&#x27;s PDU session.</div>
+      <div class="sub">Three AGVs, one gNB on a pole. The two AGVs nearest the pole are both connected to the gNB: each is a <b>gateway</b> with its own UE and PDU session, and sends its own data straight up. The third, the <b>remote</b>, is one sidelink hop from either gateway and chooses, for each message, which one to send through. A variant of the <a href="https://claude.ai/artifact/HmRQJySnJCGZ5MnJPLWGWs">AGV relay chain</a>, run on the same four boards. The live scenario is now <a href="#coverage">coverage</a>: an AGV in the shielded cold store reaches the edge through another AGV acting as a <b>layer-3 UE-to-network relay</b>, as in 3GPP TS 23.304: it discovers the relay, sets up a PC5 direct link, gets an IP address from it, and its IP packets are routed and NATed into the relay&#x27;s PDU session. Since 20 Nov the gNB also schedules the sidelink (<a href="#sequences">mode 1</a>): each AGV with an NR session gets its own slice of the window, the remote a shared pool.</div>
     </div>
-    <span class="pill"><span class="dot"></span>board runs 12–19 Nov 2026 · OAI gNB and nrUE1–3, OAI NR sidelink (mode 2), free5GC · layer-3 relay since 19 Nov</span>
+    <span class="pill"><span class="dot"></span>board runs 12–20 Nov 2026 · OAI gNB and nrUE1–3, OAI NR sidelink, free5GC · layer-3 relay since 19 Nov · sidelink mode 1 since 20 Nov</span>
   </header>
 
-  <section class="card" aria-label="Architecture">
-    <div class="hd"><h2>Two gateways, one remote</h2><span class="meta">blue Uu (NR to the gNB) · amber PC5 (sidelink)</span></div>
-    <div class="bd scroll arch2">%SVG%</div>
-    <div class="bd" style="border-top:1px solid var(--line)">
-      <span class="label">A remote pose, step by step (the dual-gateway runs: relayed by the application)</span>
-      <ol class="steps2">
-        <li>The remote AGV's computer makes a pose message (position, detections, timestamp).</li>
-        <li>It looks at the last beacons it heard from the two gateways. Each beacon carries the gateway's position, whether its PDU session is up and settled (8 s after the attach), and how many bytes it sent up since its last beacon.</li>
-        <li>It picks a gateway from them. In the recorded runs the rule is &quot;load&quot;: the gateway that sent less, decided again at every beacon, so the remote&#x27;s traffic alternates between the two. The live scenario uses &quot;sticky&quot;: the remote stays on its gateway at least 5 s and moves only when the other one&#x27;s beacon shows it sent under 60 % as much, so the gateway serving it changes every few seconds at most. A gateway whose session is not settled is not picked; if neither is, it uses the one whose session is up.</li>
-        <li>The message crosses one PC5 hop to that gateway, over OAI's NR sidelink: the remote's sidelink UE for that pair, inside the gNB's sidelink window, then the gateway's sidelink UE.</li>
-        <li>The gateway's computer hands it to its own nrUE, which sends it up in its own uplink grants, beside the gateway's own messages.</li>
-        <li>gNB, UPF, edge server: the edge logs the arrival time and the address it came from.</li>
-        <li>The edge sends each AGV's commands to the address its last message came from, so a command for the remote comes down through the gateway it last used, which passes it over their PC5 link.</li>
-      </ol>
-      <p class="hint" style="max-width:110ch;margin:10px 0 0">In these runs the gateways relay at the application: the gateway&#x27;s program receives the remote&#x27;s message and sends it again as its own. The coverage scenario now relays at layer 3 instead (<code>--relay l3</code>, see <a href="#sequences">Packet sequence</a>): the remote sends ordinary IP packets to the edge from an address its relay gave it, and the relay&#x27;s kernel routes and NATs them into its PDU session without the program seeing them.</p>
-    </div>
-    <div class="bd scroll" style="border-top:1px solid var(--line)">
-      <span class="label">Against the relay chain</span>
-      <table class="cmpt">
-        <thead><tr><th></th><th>Relay chain (option 3)</th><th>Dual gateway</th></tr></thead>
-        <tbody>
-          <tr><td>UEs attached</td><td>pivot's and relay's; only the pivot's carries traffic, the relay's waits</td><td>both gateways', both carry traffic</td></tr>
-          <tr><td>The farthest AGV's uplink</td><td>two PC5 hops: remote → relay → pivot</td><td>one PC5 hop, to the gateway it picks</td></tr>
-          <tr><td>The middle AGV's uplink</td><td>one PC5 hop to the pivot</td><td>its own UE, no hop</td></tr>
-          <tr><td>Downlink commands</td><td>all through the pivot's UE, then down the chain</td><td>through the UE the AGV's last message used</td></tr>
-          <tr><td>Role change</td><td>the new pivot's UE attaches while the old one carries on</td><td>the new gateway's UE attaches while the old gateway, now remote, keeps its session until both gateways are settled</td></tr>
-          <tr><td>How a hop is relayed</td><td>by the application, one hop at a time</td><td>by the application in these runs; at layer 3 (IP routing and NAT) in the live coverage scenario</td></tr>
-          <tr><td>LEDs</td><td>pivot blue · relay green · remote red</td><td>red the remote · blue the gateway the remote sends through now (NR and sidelink) · green the other gateway (NR only); blinking while that AGV&#x27;s UE attaches</td></tr>
-        </tbody>
-      </table>
-    </div>
-  </section>
 
 
 
-  <section class="card net" aria-label="Architecture" id="arch">
+  <section class="card net" aria-label="Architecture" id="arch" data-tab="overview">
     <div class="hd"><h2>Architecture</h2><span class="meta" id="archnow">follows the replay below · click any box or link</span></div>
     <div class="diagram"><svg id="arch3" role="img" aria-label="Architecture: free5GC, OpenAirInterface, host software and the NXP boards across the core PC and the UE PC, coloured by each AGV's LED in the replay"></svg></div>
     <div class="side">
@@ -482,15 +703,16 @@ TEMPLATE = r"""%HEAD%%STYLE%</style>
     </div>
   </section>
 
-  <section class="card" aria-label="Packet sequence and slot scheme" id="sequences">
+  <section class="card" aria-label="Packet sequence and slot scheme" id="sequences" data-tab="overview">
     <div class="hd"><h2>Packet sequence and slot scheme</h2><span class="meta">a remote positioning message and a command, through a layer-3 relay · how NR and the sidelink share the air</span></div>
     <div class="tabs" role="tablist" aria-label="View">
       <button type="button" role="tab" id="tab-seq" aria-controls="opt-seq" aria-selected="true" style="--c:var(--rremote)">Packet sequence · layer-3 relay</button>
       <button type="button" role="tab" id="tab-app" aria-controls="opt-app" aria-selected="false" tabindex="-1" style="--c:var(--rpivot)">Application relay (dual runs)</button>
-      <button type="button" role="tab" id="tab-slot" aria-controls="opt-slot" aria-selected="false" tabindex="-1" style="--c:var(--pc5)">Slot scheme</button>
+      <button type="button" role="tab" id="tab-slot" aria-controls="opt-slot" aria-selected="false" tabindex="-1" style="--c:var(--pc5)">Slot scheme · fixed window</button>
+      <button type="button" role="tab" id="tab-m1" aria-controls="opt-m1" aria-selected="false" tabindex="-1" style="--c:var(--rpivot)">Sidelink mode 1</button>
     </div>
     <div role="tabpanel" id="opt-seq" aria-labelledby="tab-seq" tabindex="0">
-      <div class="bd scroll arch2"><svg viewBox="0 0 1000 760" role="img" aria-label="Sequence of the layer-3 relay with 3GPP procedures: discovery under configured thresholds, PC5-S direct link set-up with security mode, DHCPv4 from the relay, the Remote UE Report up the relay PDU session, then a remote positioning message as IP through the relay's kernel, GRE tunnel and NAT into the relay PDU session, and a command back">
+      <div class="bd scroll arch2"><svg viewBox="0 0 1000 930" role="img" aria-label="Sequence of the layer-3 relay with 3GPP procedures and sidelink mode 1: discovery under configured thresholds, PC5-S direct link set-up with security mode, DHCPv4 from the relay, the Remote UE Report up the relay PDU session, then a remote positioning message as IP through the relay's kernel, GRE tunnel and NAT into the relay PDU session, and a command back">
   <g class="lb" text-anchor="middle">
     <text x="80" y="22">Remote AGV</text><text x="80" y="38">app + SL UE</text>
     <text x="280" y="22">Relay&#x27;s SL UE</text><text x="280" y="38">routing, DHCPv4</text>
@@ -498,7 +720,7 @@ TEMPLATE = r"""%HEAD%%STYLE%</style>
     <text x="680" y="22">gNB</text><text x="680" y="38">board, PNF, VNF</text>
     <text x="890" y="22">AMF, SMF, UPF, edge</text><text x="890" y="38">core PC</text>
   </g>
-  <path d="M80 48 V750 M280 48 V750 M480 48 V750 M680 48 V750 M890 48 V750" class="bcn"/>
+  <path d="M80 48 V900 M280 48 V900 M480 48 V900 M680 48 V900 M890 48 V900" class="bcn"/>
   <text x="90" y="64" class="s">A · once per link, in the windows · relay: Uu in [−95, −31] dBm and relay session up</text>
   <path d="M280 88 L90 88" class="pc5 alt" marker-end="url(#d-pc5)"/>
   <text x="120" y="82" class="lp">announce (Model A, RSC)</text>
@@ -526,7 +748,7 @@ TEMPLATE = r"""%HEAD%%STYLE%</style>
   <text x="90" y="408" class="s">B · every message: IP in ESP, the relay&#x27;s program never sees it</text>
   <text x="96" y="432" class="s">1 positioning: UDP 10.40.x.2 → edge, DSCP 34 (PQI 58)</text>
   <path d="M80 460 L270 460" class="pc5" marker-end="url(#d-pc5)"/>
-  <text x="96" y="452" class="lp">2 ESP over PC5</text>
+  <text x="96" y="452" class="lp">2 ESP over PC5, in the pool</text>
   <path d="M280 494 L470 494" class="bcn" marker-end="url(#d-uu)"/>
   <text x="290" y="486" class="lb">3 ESP off, iif oaitun → GRE</text>
   <path d="M480 528 L670 528" class="uu" marker-end="url(#d-uu)"/>
@@ -540,11 +762,22 @@ TEMPLATE = r"""%HEAD%%STYLE%</style>
   <path d="M480 672 L290 672" class="bcn" marker-end="url(#d-uu)"/>
   <text x="306" y="664" class="lb">8 un-NAT, GRE back</text>
   <path d="M280 706 L90 706" class="pc5" marker-end="url(#d-pc5)"/>
-  <text x="120" y="698" class="lp">9 PC5 (ESP), next window</text>
-  <text x="90" y="732" class="s">%SEQMEAS%</text>
-  <text x="90" y="752" class="lb">dashed: signalling · solid: data · dotted: inside the relay AGV (no radio)</text>
+  <text x="120" y="698" class="lp">9 PC5 (ESP), in the relay&#x27;s slice</text>
+  <text x="90" y="740" class="s">C · every NR frame, sidelink mode 1 (since 20 Nov): who sends when in the window</text>
+  <path d="M480 772 L670 772" class="uu alt" marker-end="url(#d-uu)"/>
+  <text x="490" y="764" class="lu">SL-BSR in the poll answer</text>
+  <text x="490" y="790" class="lb">bytes, packets; flag: carries a remote</text>
+  <path d="M680 816 L90 816" class="uu alt" marker-end="url(#d-uu)"/>
+  <text x="300" y="808" class="lu">window after slot 9: a slice per AGV, then the pool</text>
+  <path d="M280 848 L90 848" class="pc5" marker-end="url(#d-pc5)"/>
+  <text x="120" y="842" class="lp">relay&#x27;s slice (mode 1)</text>
+  <path d="M80 878 L270 878" class="pc5" marker-end="url(#d-pc5)"/>
+  <text x="96" y="872" class="lp">pool (mode 2)</text>
+  <text x="300" y="878" class="lb">the remote has no NR session, so no grant</text>
+  <text x="90" y="904" class="s">%SEQMEAS%</text>
+  <text x="90" y="922" class="lb">dashed: signalling · solid: data · dotted: inside the relay AGV (no radio)</text>
 </svg></div>
-      <div class="bd" style="border-top:1px solid var(--line)"><p class="hint" style="max-width:110ch;margin:0">As a layer-3 UE-to-network relay in TS 23.304, with the procedures of TS 24.554 and the thresholds of TS 38.304 / 38.331. <b>A</b>: the thresholds are configured as SIB12 would carry them (field names of SL-RelayUE-Config, SL-RemoteUE-Config, SL-ReselectionConfig). An AGV whose Uu RSRP is between threshLowRelay (−95 dBm) and threshHighRelay (−31 dBm), whose session has settled and whose <b>relay PDU session</b> (DNN relay, its second session) is up, sends a Model A discovery announcement with the relay service code on each PC5 link every 0.5 s. An AGV whose Uu falls below threshHighRemote (−100 dBm) picks the strongest announcement above sl-RSRP-Thresh (−90 dBm), keeping its relay unless another is 2 dB stronger, and sets up the link with PC5-S: request, security mode command and complete (null algorithms), accept with &quot;IP address configuration: DHCPv4 server&quot;. It then asks the relay&#x27;s DHCPv4 server for an address from that relay&#x27;s pool, and the relay sends a Remote UE Report with it up the relay PDU session. When the remote has its own session again it releases the address and the link (DHCPRELEASE, DIRECT LINK RELEASE REQUEST / ACCEPT), and the relay reports that too. <b>B</b>: the remote&#x27;s app sends ordinary UDP to the edge. Inside the relay AGV a policy route sends what arrives on the sidelink through a GRE tunnel to the nrUE&#x27;s namespace, which masquerades it into the relay PDU session (12.1.2.0/24), apart from the relay&#x27;s own traffic (12.1.1.0/24). Since then: the security mode command picks real algorithms, the keys come from both sides&#x27; nonces (after TS 33.503) and every PC5-S message from it on carries a MAC; the remote&#x27;s traffic and DHCP go in ESP (AES-GCM) over the sidelink, its DSCP copied to the ESP header, so each flow keeps its QoS class (positioning PQI 58 → 5QI 7, LiDAR PQI 59 → 5QI 9) to the relay session&#x27;s priority queue; the SD-RSRP adds each link&#x27;s measured deviation to the path-loss model; and the Remote UE Report goes as NAS to the SMF, which answers it (a copy still goes to the edge for this page). Emulated: the PC5 discovery and PC5-S messages and DHCP go as UDP over the sidelink IP (OAI&#x27;s sidelink carries only IP); the PC5-S information elements are tag-length-value; the PC5 root key is generated per run, not provisioned; ESP stands in for PDCP ciphering on PC5; the distance part of the SD-RSRP is modelled, since the boards share a desk.</p></div>
+      <div class="bd" style="border-top:1px solid var(--line)"><p class="hint" style="max-width:110ch;margin:0">As a layer-3 UE-to-network relay in TS 23.304, with the procedures of TS 24.554 and the thresholds of TS 38.304 / 38.331. <b>A</b>: the thresholds are configured as SIB12 would carry them (field names of SL-RelayUE-Config, SL-RemoteUE-Config, SL-ReselectionConfig). An AGV whose Uu RSRP is between threshLowRelay (−95 dBm) and threshHighRelay (−31 dBm), whose session has settled and whose <b>relay PDU session</b> (DNN relay, its second session) is up, sends a Model A discovery announcement with the relay service code on each PC5 link every 0.5 s. An AGV whose Uu falls below threshHighRemote (−100 dBm) picks the strongest announcement above sl-RSRP-Thresh (−90 dBm), keeping its relay unless another is 2 dB stronger, and sets up the link with PC5-S: request, security mode command and complete (null algorithms), accept with &quot;IP address configuration: DHCPv4 server&quot;. It then asks the relay&#x27;s DHCPv4 server for an address from that relay&#x27;s pool, and the relay sends a Remote UE Report with it up the relay PDU session. When the remote has its own session again it releases the address and the link (DHCPRELEASE, DIRECT LINK RELEASE REQUEST / ACCEPT), and the relay reports that too. <b>B</b>: the remote&#x27;s app sends ordinary UDP to the edge. Inside the relay AGV a policy route sends what arrives on the sidelink through a GRE tunnel to the nrUE&#x27;s namespace, which masquerades it into the relay PDU session (12.1.2.0/24), apart from the relay&#x27;s own traffic (12.1.1.0/24). Since then: the security mode command picks real algorithms, the keys come from both sides&#x27; nonces (after TS 33.503) and every PC5-S message from it on carries a MAC; the remote&#x27;s traffic and DHCP go in ESP (AES-GCM) over the sidelink, its DSCP copied to the ESP header, so each flow keeps its QoS class (positioning PQI 58 → 5QI 7, LiDAR PQI 59 → 5QI 9) to the relay session&#x27;s priority queue; the SD-RSRP adds each link&#x27;s measured deviation to the path-loss model; and the Remote UE Report goes as NAS to the SMF, which answers it (a copy still goes to the edge for this page). Emulated: the PC5 discovery and PC5-S messages and DHCP go as UDP over the sidelink IP (OAI&#x27;s sidelink carries only IP); the PC5-S information elements are tag-length-value; the PC5 root key is generated per run, not provisioned; ESP stands in for PDCP ciphering on PC5; the distance part of the SD-RSRP is modelled, since the boards share a desk. <b>C</b>, since 20 Nov: the sidelink is scheduled by the gNB (mode 1, TS 38.321). The relay, and every other AGV with its own NR session, reports its sidelink buffer in its uplink; the gNB gives each a slice of the next window sized to it, and the window ends with a pool for AGVs out of coverage (mode 2), which is where the remote sends. The boards (nrlink v7) hold the staged packets and send them only in their slice. See the <i>Sidelink mode 1</i> tab.</p></div>
     </div>
     <div role="tabpanel" id="opt-app" aria-labelledby="tab-app" tabindex="0" hidden>
       <div class="bd scroll arch2"><svg viewBox="0 0 1000 470" role="img" aria-label="Sequence of a remote pose up through the gateway serving it, and of a command back">
@@ -640,9 +873,39 @@ TEMPLATE = r"""%HEAD%%STYLE%</style>
 <text x="798" y="369" class="lb">128 ms, 7.8/s · Uu 61 %</text>
 </svg></div>
     </div>
-    <div class="bd" style="border-top:1px solid var(--line)"><p class="hint" style="max-width:110ch">Air sharing as in the relay chain: after slot 9 of every TDD frame the gNB bridge announces a 25 ms sidelink window and stays off the air; the boards carry the sidelink UEs&#x27; slots (PSBCH, SCI, transport blocks) only inside it, beacons first. The rest of the frame the boards carry the gNB&#x27;s slots: downlink to every attached UE, and polls that each attached UE&#x27;s board answers with its uplink. The gNB board&#x27;s LED shows this split: a green flash for each NR stretch, a blue one for each window. With the layer-3 relay nothing changes on the air: the PC5 signalling and the remote&#x27;s IP packets are transport blocks of the sidelink UEs like any other, and the relay&#x27;s uplink, its own and its remote&#x27;s, goes in its own UE&#x27;s grants. An AGV on its own UE skips the sidelink entirely.</p></div>
+    <div role="tabpanel" id="opt-m1" aria-labelledby="tab-m1" tabindex="0" hidden>
+%M1SLOT%
+    </div>
+    <div class="bd" style="border-top:1px solid var(--line)"><p class="hint" style="max-width:110ch"><b>Fixed window</b> (the slot scheme tab), air sharing as in the relay chain: after slot 9 of every TDD frame the gNB bridge announces a 25 ms sidelink window and stays off the air; the boards carry the sidelink UEs&#x27; slots (PSBCH, SCI, transport blocks) only inside it, beacons first. The rest of the frame the boards carry the gNB&#x27;s slots: downlink to every attached UE, and polls that each attached UE&#x27;s board answers with its uplink. The gNB board&#x27;s LED shows this split: a green flash for each NR stretch, a blue one for each window. With the layer-3 relay nothing changes on the air: the PC5 signalling and the remote&#x27;s IP packets are transport blocks of the sidelink UEs like any other, and the relay&#x27;s uplink, its own and its remote&#x27;s, goes in its own UE&#x27;s grants. An AGV on its own UE skips the sidelink entirely.</p></div>
   </section>
-  <section class="card" aria-label="Window tests" id="results">
+  <section class="card" aria-label="Replay" id="replay" data-tab="replay">
+    <div class="hd"><h2>Replay of the board runs</h2><span class="meta" id="rmeta"></span></div>
+    <div class="ctl">
+      <label for="run">Run <select id="run"></select></label>
+      <button type="button" id="rplay">Pause</button>
+      <label for="rspeed">Speed <select id="rspeed"><option value="1">1×</option><option value="2">2×</option><option value="5" selected>5×</option><option value="10">10×</option></select></label>
+      <label for="rpos" style="flex:1 1 220px">Time <input type="range" id="rpos" min="0" max="1000" value="0" style="width:100%"></label>
+      <span class="clock" id="rclock">t = 0 s</span>
+    </div>
+    <div class="simgrid">
+      <div class="floorwrap">
+        <canvas id="floor2" style="aspect-ratio:48/31" role="img" aria-label="Replay: AGV positions, roles, both gateways' Uu links and the remote's sidelink to the gateway it uses"></canvas>
+        <div class="key" style="margin-top:8px"><span id="fkey">AGV colour = its board&#x27;s LED: red remote, blue the gateway serving it, green the other gateway</span><span id="fkey2">magenta solid: the remote&#x27;s sidelink to the gateway serving it</span><span>dots: sidelink hops as the boards received them</span></div>
+      </div>
+      <div class="side" id="agvs2"></div>
+    </div>
+    <div class="charts">
+      <div>
+        <span class="label">Roles over the last 120 s</span>
+        <canvas id="timeline2" style="height:152px" role="img" aria-label="Roles of the AGVs during the run"></canvas>
+      </div>
+    </div>
+    <div class="bd" style="border-top:1px solid var(--line)">
+      <span class="label">One-way delay by traffic flow, every message, last 60 s · colour = the sender&#x27;s LED when it was sent</span>
+      <div class="flow3" id="flows2" style="margin-top:8px"></div>
+    </div>
+  </section>
+  <section class="card" aria-label="Window tests" id="results" data-tab="runs">
     <div class="hd"><h2>Board runs: sidelink window widths</h2><span class="meta">ten minutes a run, from minute 1 · pose p50 and loss</span></div>
     <div class="bd scroll">
       <table>
@@ -659,7 +922,7 @@ TEMPLATE = r"""%HEAD%%STYLE%</style>
   </section>
 
 
-  <section class="card" aria-label="Coverage route" id="coverage">
+  <section class="card" aria-label="Coverage route" id="coverage" data-tab="coverage">
     <div class="hd"><h2>Coverage: where the gNB does not reach</h2><span class="meta">the live scenario since 13 Nov · <code>--topology cover</code></span></div>
     <div class="bd">
       <p style="margin:0 0 10px;max-width:110ch">The AGVs drive the same loop as a platoon: A leads and stops at the checkpoints, B and C follow 8 m apart, and an AGV with a session waits for the one behind it when the gap grows past 14 m. Whether an AGV can use the gNB depends on where it is, not on its rank by distance. A log-distance path loss (n = 3.5 among racks) puts the signal at about −80 dBm almost everywhere on the floor; the far corner is a shielded cold store (insulated steel panels), which adds up to 32 dB over the first 3 m past its door line. Inside, the signal falls to −118 dBm. Below −100 dBm an AGV stops sending on its own UE and goes over one sidelink hop through another AGV that still has a session. Since 19 Nov that AGV is a <b>layer-3 UE-to-network relay</b> as in TS 23.304: with thresholds configured as SIB12 would carry them, every AGV whose Uu RSRP is between −95 and −31 dBm and whose relay PDU session is up sends a discovery announcement on its PC5 links every 0.5 s; an AGV below −100 dBm measures each one&#x27;s SD-RSRP (the same path-loss law, no store walls, since the door is open), keeps only relays above −90 dBm (about 34 m), takes the strongest (2 dB to reselect), sets up the link with PC5-S and gets its address by DHCPv4 from that relay. Once on a relay it keeps it until its own session is up, and stops before the relay&#x27;s SD-RSRP would fall within 2 dB of −90 dBm. Before, the controller simply picked the nearest AGV with a session, and only one nearer than the gNB; below −110 dBm for 1 s its UE has a radio link failure and is stopped, which really drops its connection to the gNB. Back above −100 dBm for 2 s it attaches again, and keeps using the sidelink until its session has settled (attach 3.7 s median, then 8 s). Only one AGV is on the sidelink at a time: an AGV with a session stops 1.5 m before the dead zone while another AGV is on the sidelink, either because it is that AGV&#x27;s relay or because going in would need a second sidelink. The AGV on the sidelink never waits: it drives on until it has its own direct connection again (session up and settled), and then the AGV at the door goes in. Coming out of the store, an AGV keeps its sidelink until its own session is up (about 3.7 s): if driving on would take it out of its relay&#x27;s reach, with the relay no longer nearer than the gNB, it stops 2 m short of that and waits for its session. In practice that is the leader, whose relay waits at the door behind it. As a fallback the app also queues the uplink for up to 5 s while its own UE attaches, and up to 3 s while a direct link is set up.</p>
@@ -689,14 +952,14 @@ TEMPLATE = r"""%HEAD%%STYLE%</style>
 <text x="654" y="250" class="lb" text-anchor="middle">80 m</text>
 <text x="802" y="250" class="lb" text-anchor="middle">100 m</text>
 <text x="950" y="250" class="lb" text-anchor="middle">120 m</text>
-<text x="60" y="274" class="lb">distance along the loop from checkpoint A (124 m); the gNB signal per resource element, dBm</text>
+<text x="520" y="274" class="lb axt" text-anchor="middle">Distance along the loop from checkpoint A (m)</text><text x="14" y="125" class="lb axt" text-anchor="middle" transform="rotate(-90 14 125)">gNB signal per resource element (dBm)</text>
 </svg></div>
       <div style="margin-top:12px">%COVERTABLE%</div>
       <p class="hint" style="max-width:110ch;margin:8px 0 0">The boards sit on one desk, so the radio itself never fades: the controller applies this model, stopping and starting each AGV&#x27;s UE exactly as a lost and regained connection would. The sidelink is assumed to reach through the store&#x27;s open door to the AGVs behind (8–16 m away, always nearer than the gNB); only the gNB&#x27;s signal is blocked. LEDs: <b style="color:var(--rremote)">red</b> sends over the sidelink (out of coverage or re-attaching; blinking while its UE attaches), <b style="color:var(--rpivot)">blue</b> in coverage and carrying another AGV&#x27;s traffic, <b style="color:var(--rrelay)">green</b> in coverage, its own UE only. The gNB board flashes green for NR slots and blue for the sidelink windows.</p>
     </div>
   </section>
 
-  <section class="card" aria-label="Coverage runs compared" id="compare">
+  <section class="card" aria-label="Coverage runs compared" id="compare" data-tab="coverage">
     <div class="hd"><h2>Coverage runs compared: towards no lost packets</h2><span class="sub">every step kept as a run in the replay above</span></div>
     <div class="bd">
       <p style="max-width:110ch;margin:0">Each change to the coverage scenario, run on the boards for 10–15 minutes with the first minute left out. Lost counts the AGVs&#x27; uplink messages (positioning and LiDAR) that never reached the edge; over 1 s are the ones that arrived, late. The hint under each run is the AGVs&#x27; pace: holding at the door costs laps.</p>
@@ -705,10 +968,10 @@ TEMPLATE = r"""%HEAD%%STYLE%</style>
     </div>
   </section>
 
-  <section class="card" aria-label="Traffic flows" id="traffic">
+  <section class="card" aria-label="Traffic flows" id="traffic" data-tab="replay">
     <div class="hd"><h2>Traffic flows</h2><span class="meta">per AGV · packet size and frequency · the same in every scenario</span></div>
     <div class="scroll"><table><thead><tr><th>Flow</th><th>Dir</th><th>Payload</th><th>IP packet</th><th>Air packets</th><th>Rate L1 · L2 · L3</th><th>Interval</th><th>kbit/s per AGV</th></tr></thead><tbody><tr><td><b>Positioning</b><br><span class="hint">position, heading, detections; ±10 % jitter</span></td><td>up</td><td class="mono">30–70 B</td><td class="mono">58–98 B</td><td class="mono">1</td><td class="mono">5 · 10 · 20 Hz</td><td class="mono">200 · 100 · 50 ms</td><td class="mono">3.1 · 6.2 · 12.5</td></tr><tr><td><b>LiDAR</b><br><span class="hint">a downsampled scan</span></td><td>up</td><td class="mono">752 B</td><td class="mono">780 B</td><td class="mono">4</td><td class="mono">1 · 2 · 4 Hz</td><td class="mono">1000 · 500 · 250 ms</td><td class="mono">6.2 · 12.5 · 25.0</td></tr><tr><td><b>Commands</b><br><span class="hint">stop/go from the edge, to each AGV</span></td><td>down</td><td class="mono">40 B</td><td class="mono">68 B</td><td class="mono">1</td><td class="mono">2 · 2 · 2 Hz</td><td class="mono">500 · 500 · 500 ms</td><td class="mono">1.1 · 1.1 · 1.1</td></tr><tr><td><b>Discovery announcement</b><br><span class="hint">PC5, relay to its peers; layer-3 relay only</span></td><td>PC5</td><td class="mono">15 B</td><td class="mono">43 B</td><td class="mono">1</td><td class="mono">2 Hz per link</td><td class="mono">500 ms</td><td class="mono">0.7 per link</td></tr><tr><td><b>Link set-up</b><br><span class="hint">PC5-S request, security mode command and complete, accept; then DHCPv4 discover, offer, request, ack; per link</span></td><td>PC5</td><td class="mono">6–32 B · 253 B</td><td class="mono">34–60 B · 281 B</td><td class="mono">1 · 2</td><td class="mono">once per link</td><td class="mono">–</td><td class="mono">–</td></tr><tr><td><b>Remote UE Report</b><br><span class="hint">relay to the edge up its relay PDU session, per lease and release</span></td><td>up</td><td class="mono">≈ 85 B</td><td class="mono">≈ 113 B</td><td class="mono">1</td><td class="mono">a few a minute</td><td class="mono">–</td><td class="mono">–</td></tr><tr><td><b>Uplink, one AGV</b></td><td>up</td><td></td><td></td><td></td><td></td><td></td><td class="mono">9.4 · 18.7 · 37.4</td></tr><tr><td><b>Uplink, the fleet</b></td><td>up</td><td></td><td></td><td></td><td></td><td></td><td class="mono">28 · 56 · 112</td></tr></tbody></table></div>
-    <div class="bd scroll" style="border-top:1px solid var(--line)"><svg class="cvsvg" viewBox="0 0 1000 250" role="img" aria-label="One second of one AGV&#x27;s traffic at L1 and L2: positioning messages several times a second, one or two LiDAR scans of four air packets, and two commands down">
+    <div class="bd scroll" style="border-top:1px solid var(--line)"><svg class="cvsvg" viewBox="-28 0 1028 278" role="img" aria-label="One second of one AGV&#x27;s traffic at L1 and L2: positioning messages several times a second, one or two LiDAR scans of four air packets, and two commands down">
 <text x="0" y="60" class="t">L1</text>
 <text x="40" y="45" class="lb">Positioning</text>
 <line x1="120" x2="980" y1="50" y2="50" class="grid"/>
@@ -754,42 +1017,55 @@ TEMPLATE = r"""%HEAD%%STYLE%</style>
 <line x1="120" x2="980" y1="212" y2="212" class="grid"/>
 <rect x="335.0" y="196" width="7.5" height="16" class="f2"><title>Commands: 68 B</title></rect>
 <rect x="765.0" y="196" width="7.5" height="16" class="f2"><title>Commands: 68 B</title></rect>
-<text x="120" y="246" class="lb" text-anchor="middle">0 ms</text>
-<text x="335" y="246" class="lb" text-anchor="middle">250 ms</text>
-<text x="550" y="246" class="lb" text-anchor="middle">500 ms</text>
-<text x="765" y="246" class="lb" text-anchor="middle">750 ms</text>
-<text x="980" y="246" class="lb" text-anchor="end">1000 ms</text>
+<text x="120" y="246" class="lb" text-anchor="middle">0</text>
+<text x="335" y="246" class="lb" text-anchor="middle">250</text>
+<text x="550" y="246" class="lb" text-anchor="middle">500</text>
+<text x="765" y="246" class="lb" text-anchor="middle">750</text>
+<text x="980" y="246" class="lb" text-anchor="end">1000</text>
+<text x="550" y="270" class="lb axt" text-anchor="middle">Time within one second (ms)</text>
+<text x="-14" y="125" class="lb axt" text-anchor="middle" transform="rotate(-90 -14 125)">Flow, per traffic level</text>
 </svg></div>
     <div class="bd" style="border-top:1px solid var(--line)"><p class="hint" style="max-width:110ch;margin:0">IP packet = payload + 28 B (IPv4 + UDP). An air packet carries up to 255 B, so a LiDAR scan crosses each radio hop as 4 packets and a positioning message or a command as 1. Through the layer-3 relay a remote&#x27;s IP packet crosses the sidelink as it is; inside the relay AGV the GRE tunnel adds 24 B, off the air (the application relay of the dual runs added a 2 B hop header instead). Commands come from the edge every 500 ms to each AGV, to the address and port its last message came from: for a remote, its relay&#x27;s NAT address, which sends them on. PC5 signalling: announcements from every AGV allowed to relay, four PC5-S messages and four DHCPv4 messages to set up a link and two of each kind to end it, and a Remote UE Report up the relay&#x27;s relay PDU session for each lease and release.</p></div>
   </section>
-  <section class="card" aria-label="Replay" id="replay">
-    <div class="hd"><h2>Replay of the board runs</h2><span class="meta" id="rmeta"></span></div>
-    <div class="ctl">
-      <label for="run">Run <select id="run"></select></label>
-      <button type="button" id="rplay">Pause</button>
-      <label for="rspeed">Speed <select id="rspeed"><option value="1">1×</option><option value="2">2×</option><option value="5" selected>5×</option><option value="10">10×</option></select></label>
-      <label for="rpos" style="flex:1 1 220px">Time <input type="range" id="rpos" min="0" max="1000" value="0" style="width:100%"></label>
-      <span class="clock" id="rclock">t = 0 s</span>
-    </div>
-    <div class="simgrid">
-      <div class="floorwrap">
-        <canvas id="floor2" style="aspect-ratio:48/31" role="img" aria-label="Replay: AGV positions, roles, both gateways' Uu links and the remote's sidelink to the gateway it uses"></canvas>
-        <div class="key" style="margin-top:8px"><span id="fkey">AGV colour = its board&#x27;s LED: red remote, blue the gateway serving it, green the other gateway</span><span id="fkey2">amber solid: the remote&#x27;s sidelink to the gateway serving it</span><span>dots: sidelink hops as the boards received them</span></div>
-      </div>
-      <div class="side" id="agvs2"></div>
-    </div>
-    <div class="charts">
-      <div>
-        <span class="label">Roles over the last 120 s</span>
-        <canvas id="timeline2" style="height:132px" role="img" aria-label="Roles of the AGVs during the run"></canvas>
-      </div>
-    </div>
+  <section class="card" aria-label="Two gateways, one remote" id="dual" data-tab="gateways">
+    <div class="hd"><h2>Two gateways, one remote</h2><span class="meta">blue Uu (NR to the gNB) · magenta PC5 (sidelink)</span></div>
+    <div class="bd scroll arch2">%SVG%</div>
     <div class="bd" style="border-top:1px solid var(--line)">
-      <span class="label">One-way delay by traffic flow, every message, last 60 s · colour = the sender&#x27;s LED when it was sent</span>
-      <div class="flow3" id="flows2" style="margin-top:8px"></div>
+      <span class="label">A remote pose, step by step (the dual-gateway runs: relayed by the application)</span>
+      <ol class="steps2">
+        <li>The remote AGV's computer makes a pose message (position, detections, timestamp).</li>
+        <li>It looks at the last beacons it heard from the two gateways. Each beacon carries the gateway's position, whether its PDU session is up and settled (8 s after the attach), and how many bytes it sent up since its last beacon.</li>
+        <li>It picks a gateway from them. In the recorded runs the rule is &quot;load&quot;: the gateway that sent less, decided again at every beacon, so the remote&#x27;s traffic alternates between the two. The live scenario uses &quot;sticky&quot;: the remote stays on its gateway at least 5 s and moves only when the other one&#x27;s beacon shows it sent under 60 % as much, so the gateway serving it changes every few seconds at most. A gateway whose session is not settled is not picked; if neither is, it uses the one whose session is up.</li>
+        <li>The message crosses one PC5 hop to that gateway, over OAI's NR sidelink: the remote's sidelink UE for that pair, inside the gNB's sidelink window, then the gateway's sidelink UE.</li>
+        <li>The gateway's computer hands it to its own nrUE, which sends it up in its own uplink grants, beside the gateway's own messages.</li>
+        <li>gNB, UPF, edge server: the edge logs the arrival time and the address it came from.</li>
+        <li>The edge sends each AGV's commands to the address its last message came from, so a command for the remote comes down through the gateway it last used, which passes it over their PC5 link.</li>
+      </ol>
+      <p class="hint" style="max-width:110ch;margin:10px 0 0">In these runs the gateways relay at the application: the gateway&#x27;s program receives the remote&#x27;s message and sends it again as its own. The coverage scenario now relays at layer 3 instead (<code>--relay l3</code>, see <a href="#sequences">Packet sequence</a>): the remote sends ordinary IP packets to the edge from an address its relay gave it, and the relay&#x27;s kernel routes and NATs them into its PDU session without the program seeing them.</p>
+    </div>
+    <div class="bd scroll" style="border-top:1px solid var(--line)">
+      <span class="label">Against the relay chain</span>
+      <table class="cmpt">
+        <thead><tr><th></th><th>Relay chain (option 3)</th><th>Dual gateway</th></tr></thead>
+        <tbody>
+          <tr><td>UEs attached</td><td>pivot's and relay's; only the pivot's carries traffic, the relay's waits</td><td>both gateways', both carry traffic</td></tr>
+          <tr><td>The farthest AGV's uplink</td><td>two PC5 hops: remote → relay → pivot</td><td>one PC5 hop, to the gateway it picks</td></tr>
+          <tr><td>The middle AGV's uplink</td><td>one PC5 hop to the pivot</td><td>its own UE, no hop</td></tr>
+          <tr><td>Downlink commands</td><td>all through the pivot's UE, then down the chain</td><td>through the UE the AGV's last message used</td></tr>
+          <tr><td>Role change</td><td>the new pivot's UE attaches while the old one carries on</td><td>the new gateway's UE attaches while the old gateway, now remote, keeps its session until both gateways are settled</td></tr>
+          <tr><td>How a hop is relayed</td><td>by the application, one hop at a time</td><td>by the application in these runs; at layer 3 (IP routing and NAT) in the live coverage scenario</td></tr>
+          <tr><td>LEDs</td><td>pivot blue · relay green · remote red</td><td>red the remote · blue the gateway the remote sends through now (NR and sidelink) · green the other gateway (NR only); blinking while that AGV&#x27;s UE attaches</td></tr>
+        </tbody>
+      </table>
     </div>
   </section>
 </main>
+<footer class="credits">
+  <img src="%LOGO_DCRG%" alt="Deterministic Communication Research Group" class="cr-dcrg">
+  <img src="%LOGO_CN%" alt="ComNets, Deutsche Telekom Chair of Communication Networks" class="cr-cn">
+  <img src="%LOGO_TUD%" alt="Dresden University of Technology" class="cr-tud">
+  <span class="cr-t">Deterministic Communication Research Group · Deutsche Telekom Chair of Communication Networks · TU Dresden</span>
+</footer>
 <script>
 %CONSTS%
 const ROLES = ["pivot", "relay", "remote"];                 // chip classes and colours: blue, green, red
@@ -873,12 +1149,15 @@ function drawFlows(r, id) {
     $(`${id}-${f}-s`).textContent = `${size} · ${hz[lv]} Hz per AGV · ${dir} · capped at 1 s`;
     const cv = $(`${id}-${f}`), [g, w, h] = fit(cv);
     g.clearRect(0, 0, w, h);
-    const x0 = 40, x1 = w - 6, y0 = 16, y1 = h - 18, span = 60000, t1 = Math.max(r.t, span), t0 = t1 - span;
+    if (w < 60 || h < 60) continue;
+    const x0 = 54, x1 = w - 6, y0 = 16, y1 = h - 34, span = 60000, t1 = Math.max(r.t, span), t0 = t1 - span;
     const X = t => x0 + (t - t0) / span * (x1 - x0), Y = v => y1 - Math.min(1000, v) / 1000 * (y1 - y0);
     g.strokeStyle = COL["--line"]; g.lineWidth = 1; g.fillStyle = COL["--ink-3"]; g.font = `10.5px ${COL.mono}`; g.textAlign = "right";
-    [0, 250, 500, 750, 1000].forEach(v => { const y = Math.round(Y(v)) + .5; g.beginPath(); g.moveTo(x0, y); g.lineTo(x1, y); g.stroke(); g.fillText(v === 1000 ? "≥1 s" : v, x0 - 4, y + 3.5); });
-    g.textAlign = "center"; for (let s2 = Math.ceil(t0 / 20000) * 20000; s2 <= t1; s2 += 20000) if (s2 >= 0) g.fillText(Math.round(s2 / 1000) + " s", X(s2), h - 4);
-    g.textAlign = "left"; g.fillText("lost", x0 + 2, 10);
+    [0, 250, 500, 750, 1000].forEach(v => { const y = Math.round(Y(v)) + .5; g.beginPath(); g.moveTo(x0, y); g.lineTo(x1, y); g.stroke(); g.fillText(v === 1000 ? "≥1000" : v, x0 - 4, y + 3.5); });
+    g.textAlign = "center"; for (let s2 = Math.ceil(t0 / 20000) * 20000; s2 <= t1; s2 += 20000) if (s2 >= 0) g.fillText(Math.round(s2 / 1000), X(s2), y1 + 14);
+    g.font = `600 12px ${COL.disp}`; g.fillText((typeof LV !== "undefined" && r === LV.rep) ? "Time since the live view started (s)" : "Time in the run (s)", (x0 + x1) / 2, h - 3);
+    g.save(); g.translate(11, (y0 + y1) / 2); g.rotate(-Math.PI / 2); g.fillText("One-way delay (ms)", 0, 0); g.restore(); g.font = `10.5px ${COL.mono}`;
+    g.textAlign = "right"; g.fillText("lost", x0 - 4, 9);
     const ds = []; let lost = 0, n = 0, over = 0;
     for (const rc of r.recs) {
       if (rc.flow !== f || rc.t < t0) continue;
@@ -895,6 +1174,7 @@ function drawFlows(r, id) {
   }
 }
 function drawTimelineDual(r, cv) {
+  if (!cv || cv.offsetWidth < 60) return;
   const [g, w, h] = fit(cv);
   g.clearRect(0, 0, w, h);
   const x0 = 26, x1 = w - 4, span = 120000, t1 = Math.max(r.t, span), t0 = t1 - span, X = t => x0 + (t - t0) / span * (x1 - x0);
@@ -913,11 +1193,13 @@ function drawTimelineDual(r, cv) {
   g.fillStyle = COL["--ink-3"]; g.font = `10.5px ${COL.mono}`; g.textAlign = "center";
   if (!isCover(r)) r.history.forEach(e => { if (e.t > t0 && e.t > 0) g.fillRect(X(e.t) - .5, 2, 1, 3 * (rowH + 6)); });
   const yb = 6 + 3 * (rowH + 6) + 8;
-  for (let s = Math.ceil(t0 / 30000) * 30000; s <= t1; s += 30000) if (s >= 0) g.fillText(Math.round(s / 1000) + " s", X(s), Math.min(h - 2, yb));
+  for (let s = Math.ceil(t0 / 30000) * 30000; s <= t1; s += 30000) if (s >= 0) g.fillText(Math.round(s / 1000), X(s), Math.min(h - 2, yb));
+  g.font = `600 12px ${COL.disp}`; g.fillText((typeof LV !== "undefined" && r === LV.rep) ? "Time since the live view started (s) · rows: AGV, colour: its role" : "Time in the run (s) · rows: AGV, colour: its role", (x0 + x1) / 2, yb + 18);
 }
 function attaching(r, i) { for (const [tc, a, tu] of r.tr.att || []) if (a === i && tc * 1000 <= r.t && (tu === null || tu * 1000 > r.t)) return true; return false; }
 function drawFloorDual(r, cv) {
   const [g, w, h] = fit(cv);
+  if (w < 40 || h < 40) return;                       // its view is hidden (tabs): drawn when shown
   const pad = 6, sc = Math.min((w - 2 * pad) / W, (h - 2 * pad - 14) / H), ox = (w - W * sc) / 2, oy = pad;
   const X = x => ox + x * sc, Y = y => oy + y * sc;
   g.clearRect(0, 0, w, h);
@@ -962,7 +1244,7 @@ function drawFloorDual(r, cv) {
     const lab = cov ? (role === 2 && vias[a.i] === a.i ? "own UE · settling" : role === 2 ? "sidelink" + (vias[a.i] !== null && vias[a.i] !== a.i ? " via " + AGV[vias[a.i]].n : "") + (rsrpAt(a.x, a.y) < QSW ? " · no gNB" : attaching(r, a.i) ? " · attaching" : " · settling")
         : role === 0 ? "relays " + vias.map((v, k) => v === a.i && k !== a.i ? AGV[k].n : "").join("") : "own UE") + ` · ${rsrpAt(a.x, a.y).toFixed(0)} dBm`
       : (role === 2 ? "remote" + (via !== null ? " · via " + AGV[via].n : "") : role === 0 ? "gateway · serving " + AGV[c[2]].n : "gateway · NR only");
-    g.fillText((cov && holdAt(r.tr, a.i, r.t) ? "holding at the door · " : "") + lab + (a.dwell > 0 ? " · stopped" : ""), x, y - 0.6 * sc - 7);
+    g.fillText((cov && holdAt(r.tr, a.i, r.t) ? "holding at the door · " : "") + lab + (a.dwell === 2 ? " · moved by hand" : a.dwell > 0 ? " · stopped" : ""), x, y - 0.6 * sc - 7);
   });
   g.fillStyle = COL["--ink-3"]; g.textAlign = "left"; g.font = `11px ${COL.mono}`; g.fillText("0", X(0), Y(H) + 12); g.textAlign = "right"; g.fillText("48 m", X(W), Y(H) + 12);
 }
@@ -1015,7 +1297,7 @@ const AR = (() => {
     N["sl" + i] = { x: bx + 170, y: 172, agv: i, t: `SL UEs · AGV ${n}`, s: "OAI sidelink, mode 2", s2: "two: one per pair", d: `AGV ${n}&#x27;s two sidelink UEs, one in each pair it belongs to (A–B, B–C, C–A), each with its own IP over the sidelink (oaitun). With the layer-3 relay the remote&#x27;s packets go out on the one paired with its relay; the PC5 signalling (announcements, direct link request, accept, release) goes over the same IP, UDP port 6602.` };
     N["fw" + i] = { x: bx, y: 300, agv: i, t: `fwd ${n}`, s: `agvc-fwd${i + 1}`, s2: "2 sessions, NAT", d: `Sidecar in nrUE${i + 1}&#x27;s network: puts AGV ${n}&#x27;s own messages into the PDU session and hands down its commands. For the layer-3 relay, once the relay session is up, it sets up nrUE${i + 1}&#x27;s namespace as a NAT router: a GRE tunnel to each of AGV ${n}&#x27;s sidelink UEs over the AGV&#x27;s LAN, a policy route from those tunnels into the relay session (oaitun_rly), MASQUERADE, and each sidelink UE&#x27;s DHCPv4 pool routed back to it. It tells the controller the relay session is up (no announcements before that) and sends the Remote UE Reports up that session.` };
     N["sf" + i] = { x: bx + 170, y: 300, agv: i, t: `slfwd ${n}`, s: "agvc-slf sidecars", s2: "routing, DHCPv4", d: `Sidecars of AGV ${n}&#x27;s sidelink UEs. As a relay it runs a DHCPv4 server with its own pool (10.40.x.0/28), and the kernel in the sidelink UE&#x27;s namespace routes what comes in on oaitun through a GRE tunnel to nrUE${i + 1} and back. As a remote it runs the DHCPv4 client, puts the leased address on oaitun and binds AGV ${n}&#x27;s app socket to it, straight to the edge over the sidelink. The PC5 discovery (UDP 6602) and PC5-S (UDP 6603) sockets are here too.` };
-    N["bd" + i] = { x: bx + 85, y: 524, agv: i, led: 1, t: `AGV ${n} board`, s: i === 2 ? "nrlink v6, via its Pico" : "nrlink v4, USB", s2: SER[i], d: `FRDM-MCXW72 for AGV ${n}: it carries nrUE${i + 1}&#x27;s slots and AGV ${n}&#x27;s sidelink UEs&#x27; slots on the same radio. ${i === 2 ? " Its host link is the Pico on LPUART0 (a C USB bridge, 1 Mbaud, as fast as the MCU-Link port); nrlink v6 listens on both ports and answers on the one that last spoke." : ""} Its LED: red when ${n} sends over the sidelink, blue when ${n} relays another AGV (in the dual runs: serves the remote), green on its own UE only; blinking while its UE attaches.` };
+    N["bd" + i] = { x: bx + 85, y: 524, agv: i, led: 1, t: `AGV ${n} board`, s: i === 2 ? "nrlink v7, via its Pico" : "nrlink v7, USB", s2: SER[i], d: `FRDM-MCXW72 for AGV ${n}: it carries nrUE${i + 1}&#x27;s slots and AGV ${n}&#x27;s sidelink UEs&#x27; slots on the same radio. ${i === 2 ? " Its host link is the Pico on LPUART0 (a C USB bridge, 1 Mbaud, as fast as the MCU-Link port); nrlink v6 listens on both ports and answers on the one that last spoke." : ""} Its LED: red when ${n} sends over the sidelink, blue when ${n} relays another AGV (in the dual runs: serves the remote), green on its own UE only; blinking while its UE attaches.` };
   }
   for (const n of Object.values(N)) n.w = n.w || W;
   const dq = t => t.replace(/&#x27;/g, "'");
@@ -1164,8 +1446,8 @@ seqTabs();
 function pickRun() {
   const tr = RUNS[$("run").value]; rep = new DualReplay(tr); rep.seek(30000);
   const cv = tr.topology === "cover";
-  $("fkey").textContent = cv ? "AGV colour = its board's LED: red over the sidelink (no gNB, or re-attaching), blue relaying another AGV, green own UE only; shading: gNB signal below −100 dBm (amber) and −110 dBm (red)" : "AGV colour = its board's LED: red remote, blue the gateway serving it, green the other gateway";
-  $("fkey2").textContent = cv ? "blue lines: Uu to the gNB (dashed while attaching) · amber: sidelink to the AGV carrying it" : "amber solid: the remote's sidelink to the gateway serving it";
+  $("fkey").textContent = cv ? "AGV colour = its board's LED: red over the sidelink (no gNB, or re-attaching), blue relaying another AGV, green own UE only; shading: gNB signal below −100 dBm (magenta) and −110 dBm (red)" : "AGV colour = its board's LED: red remote, blue the gateway serving it, green the other gateway";
+  $("fkey2").textContent = cv ? "blue lines: Uu to the gNB (dashed while attaching) · magenta: sidelink to the AGV carrying it" : "magenta solid: the remote's sidelink to the gateway serving it";
   $("rmeta").textContent = `${tr.level} · sidelink window ${tr.window_ms} ms · ${tr.topology === "cover" ? "coverage by position: out of coverage or re-attaching, an AGV sends over the sidelink (" + (tr.relay === "l3" ? "layer-3 relay: discovery, direct link, routing and NAT" : tr.pick === "near" ? "nearest gateway, relayed by the app" : tr.pick + " pick, relayed by the app") + ")" : "remote picks " + (tr.pick === "first" ? "gateway 1 unless it is not ready" : "the less busy gateway at every beacon")}`;
 }
 fetch("agv-dual-runs.json").then(r => r.json()).then(d => {
@@ -1193,6 +1475,62 @@ readCols();
 matchMedia("(prefers-color-scheme: dark)").addEventListener("change", readCols);
 new MutationObserver(readCols).observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
 requestAnimationFrame(frame);
+// Main navigation (comnets-web-design): one view per tab, the view in the URL hash; links to a section open its view.
+(function views() {
+  const ICON = {
+    live: '<circle cx="9" cy="9" r="2"/><path d="M5.5 5.5a5 5 0 0 0 0 7M12.5 5.5a5 5 0 0 1 0 7M3 3a8.5 8.5 0 0 0 0 12M15 3a8.5 8.5 0 0 1 0 12"/>',
+    overview: '<rect x="2.5" y="2.5" width="5.5" height="5.5" rx="1"/><rect x="10" y="2.5" width="5.5" height="5.5" rx="1"/><rect x="2.5" y="10" width="5.5" height="5.5" rx="1"/><rect x="10" y="10" width="5.5" height="5.5" rx="1"/>',
+    replay: '<circle cx="9" cy="9" r="6.5"/><path d="M7.5 6.2 12 9l-4.5 2.8z"/>',
+    coverage: '<path d="M3 15V9M7 15V6M11 15V9.5M15 15V3"/>',
+    runs: '<path d="M2.5 15.5h13M4.5 13V8M8 13V4.5M11.5 13V7M15 13V10"/>',
+    gateways: '<circle cx="4" cy="13" r="2"/><circle cx="14" cy="13" r="2"/><circle cx="9" cy="4.5" r="2"/><path d="M5.2 11.4 8 6.2M12.8 11.4 10 6.2"/>',
+  };
+  const ICON2 = {
+    sidelink: '<circle cx="4" cy="12" r="2"/><circle cx="14" cy="12" r="2"/><path d="M6 12h6M9 3v4M6.5 5.5 9 3l2.5 2.5"/>',
+    slides: '<rect x="2.5" y="3.5" width="13" height="9" rx="1"/><path d="M9 12.5v3M6 15.5h6"/>',
+    nfapi: '<rect x="2.5" y="2.5" width="13" height="5" rx="1"/><rect x="2.5" y="10.5" width="13" height="5" rx="1"/><path d="M9 7.5v3"/>',
+    annex: '<path d="M4.5 2.5h6l3 3v10h-9z"/><path d="M7 9h4.5M7 12h4.5"/>',
+  };
+  Object.assign(ICON, ICON2);
+  const NAME = { live: "Live", slides: "Slides", sidelink: "Sidelink", nfapi: "nFAPI", annex: "Annex", overview: "Overview", replay: "Replay", coverage: "Coverage", runs: "Runs", gateways: "Gateways" };
+  const els = [...document.querySelectorAll("[data-tab]")];
+  let keys = [...new Set(els.map(e => e.dataset.tab))].sort((a, b) => (b === "live") - (a === "live")).filter(k => !["slides", "sidelink", "nfapi", "annex"].includes(k));
+  keys.splice(1, 0, "slides", "sidelink", "nfapi"); keys.push("annex");
+  const seg = document.getElementById("seg");
+  const btn = {};
+  for (const k of keys) {
+    const b = document.createElement("button");
+    b.type = "button"; b.setAttribute("role", "tab"); b.id = "view-" + k;
+    b.innerHTML = `<svg viewBox="0 0 18 18" width="18" height="18" aria-hidden="true">${ICON[k] || ICON.overview}</svg><span>${NAME[k] || k}</span>`;
+    b.addEventListener("click", () => { show(k); history.replaceState(null, "", "#" + k); });
+    seg.appendChild(b); btn[k] = b;
+  }
+  seg.addEventListener("keydown", e => {
+    const d = { ArrowRight: 1, ArrowLeft: -1 }[e.key]; if (!d) return;
+    const k = keys[(keys.indexOf(cur) + d + keys.length) % keys.length]; e.preventDefault();
+    show(k); history.replaceState(null, "", "#" + k); btn[k].focus();
+  });
+  let cur = null;
+  function show(k) {
+    if (!btn[k]) k = keys[0];
+    cur = k;
+    const one = k === "annex";                       // the Annex: the whole page on one tab, as before the tabs
+    document.body.classList.toggle("onepage", one);
+    for (const e of els) e.hidden = one ? ["slides", "sidelink", "nfapi"].includes(e.dataset.tab) : e.dataset.tab !== k;
+    for (const [n, b] of Object.entries(btn)) { const on = n === k; b.setAttribute("aria-selected", on); b.tabIndex = on ? 0 : -1; }
+    window.dispatchEvent(new Event("resize"));          // charts in a view that was hidden take their size again
+  }
+  function route() {
+    const h = decodeURIComponent(location.hash.slice(1));
+    if (!h || btn[h]) { show(h || keys[0]); if (h) window.scrollTo(0, 0); return; }
+    const el = document.getElementById(h);
+    const host = el && el.closest("[data-tab]");
+    show(el && el.closest(".full") ? "annex" : host ? host.dataset.tab : keys[0]);
+    if (el) requestAnimationFrame(() => el.scrollIntoView({ block: "start" }));
+  }
+  window.addEventListener("hashchange", route);
+  route();
+})();
 </script>
 """
 

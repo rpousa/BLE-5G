@@ -39,6 +39,9 @@
 #     --sl-window MS            (chain, dual) the gNB's sidelink window per frame, default 25
 #     --pc5 oai|ctl             (chain) hops over OAI's sidelink (default) or the controller's own packets
 #     --relay l3|app            (cover) layer-3 UE-to-network relay: IP forwarding + NAT in the relay AGV (default), or app-level passing on
+#     --sl-sched mode1|mode2    (chain, dual, cover) who schedules the sidelink air: mode1 = the gNB, from the UEs' SL-BSRs
+#                               (grants in a window sized to them, up to --sl-window; nrlink v7 boards), mode2 = a fixed window
+#                               the boards share (default)
 #     --level L1|L2|L3          starting load (both scenarios)
 #     --mode both|nr|ble        (agv) which technologies carry the data
 #     --tx-dbm 0|-10|-20|-30    (agv) simulated transmit power for the channel model
@@ -129,15 +132,16 @@ live_scenario() {   # sets SCN and SCN_OPTS: from the command line (and saves th
 }
 live_opt() { local o=$1; set -- $SCN_OPTS; while [ $# -gt 0 ]; do [ "$1" = "$o" ] && { echo "${2:-}"; return; }; shift; done; }
 CHAIN_BOARDS=${CHAIN_BOARDS:-2HOKMMVEX1WMP,GBAMNH4BQ3CSB,GLNAOWUSDREB4}   # AGV A, B, C (C = nrlink v6, host link through its Pico, see pico_ports.json)
-chain_bridge() {   # chain_bridge [window ms]: gnb_bridge polling nrUE1-3 with a sidelink window each frame
-  local w=${1:-25} p a
+chain_bridge() {   # chain_bridge [window ms] [mode1|mode2]: gnb_bridge polling nrUE1-3 with a sidelink window each frame
+  local w=${1:-25} m1= p a
+  [ "${2:-}" = mode1 ] && m1=" --sl-mode1"
   p=$(cat "$PID/gnb_bridge.pid" 2>/dev/null); a=$(ps -o args= -p "$p" 2>/dev/null)
   [ -n "$a" ] || die "gnb_bridge is not running: start the stack first (nrlink.sh up --role core)"
-  if [[ "$a" == *"--ues 1,2,3"*"--sl-window $w"* ]]; then ok "gnb_bridge already has --ues 1,2,3 --sl-window $w"; return 0; fi
+  if [[ "$a" == *"--ues 1,2,3"*"--sl-window $w$m1" ]]; then ok "gnb_bridge already has --ues 1,2,3 --sl-window $w$m1"; return 0; fi
   kill "$p"; for _ in $(seq 25); do kill -0 "$p" 2>/dev/null || break; sleep 0.2; done; kill -9 "$p" 2>/dev/null
   cp "$LOG/gnb_bridge.log" "$LOG/gnb_bridge.log.prev" 2>/dev/null
-  start_proc gnb_bridge "$PY" -u gnb_bridge.py --ues 1,2,3 --skip-empty --sl-window "$w"
-  wait_for 20 "gnb_bridge restarted with --ues 1,2,3 --sl-window $w" grep -q "listening on udp" "$LOG/gnb_bridge.log"
+  start_proc gnb_bridge "$PY" -u gnb_bridge.py --ues 1,2,3 --skip-empty --sl-window "$w"$m1
+  wait_for 20 "gnb_bridge restarted with --ues 1,2,3 --sl-window $w$m1" grep -q "listening on udp" "$LOG/gnb_bridge.log"
 }
 live_start() {
   local r lv; r=$(live_role); live_scenario
@@ -149,7 +153,7 @@ live_start() {
       pkill -f "[f]actory_live2\.py" 2>/dev/null; pkill -f "[f]actory_live\.py" 2>/dev/null; pkill -f "[c]amsrc --truth" 2>/dev/null
       pkill -f "[a]gv_live\.py" 2>/dev/null; pkill -f "[a]gv_chain_live\.py" 2>/dev/null
       if [ "$SCN" = chain ] || [ "$SCN" = dual ] || [ "$SCN" = cover ]; then
-        chain_bridge "$(live_opt --sl-window)"
+        chain_bridge "$(live_opt --sl-window)" "$(live_opt --sl-sched)"
         mkdir -p "$LOG/agvc"
         start_proc live_server python3 -u apps/agv_chain_live.py --http 8090 --page "agv_${SCN}_live.html"
         wait_for 20 "live page on :8090" curl -sf -o /dev/null http://127.0.0.1:8090/
@@ -186,7 +190,7 @@ live_start() {
         done
         mkdir -p "$LOG/agvc"
         start_proc live_agent "$PY" -u apps/agv_chain.py ue --uu per-agv --in-coverage 2 --pc5 "$p5" --core "$CORE_PC" \
-          --boards "$CHAIN_BOARDS" --level "$lv" --guard-ms 0.2 --window-ms "$w" --topology "$SCN" --pick "$([ "$SCN" = cover ] && echo near || echo sticky)" $([ "$SCN" = cover ] && echo --platoon 8 --hold one) $l3 \
+          --boards "$CHAIN_BOARDS" --level "$lv" --guard-ms 0.2 --window-ms "$w" --topology "$SCN" --pick "$([ "$SCN" = cover ] && echo near || echo sticky)" $([ "$SCN" = cover ] && echo --platoon 8 --hold one) $l3 $([ "$(live_opt --sl-sched)" = mode1 ] && echo --sl-mode1) \
           --log "$LOG/agvc/live.jsonl" --log-max-mb 200 --live "$CORE_PC:5301"
       elif [ "$SCN" = agv ]; then
         start_proc live_agent python3 -u apps/agv.py ue --core "$CORE_PC" --level "$lv"
@@ -646,6 +650,7 @@ while [ $# -gt 0 ]; do
     --sl-window) case "${2:-}" in [1-9] | [1-9][0-9]) LIVE_OPTS="$LIVE_OPTS --sl-window $2" ;; *) die "--sl-window takes 1-99 ms" ;; esac; shift ;;
     --pc5) case "${2:-}" in oai | ctl) LIVE_OPTS="$LIVE_OPTS --pc5 $2" ;; *) die "--pc5 takes oai or ctl" ;; esac; shift ;;
     --relay) case "${2:-}" in l3 | app) LIVE_OPTS="$LIVE_OPTS --relay $2" ;; *) die "--relay takes l3 or app" ;; esac; shift ;;
+    --sl-sched) case "${2:-}" in mode1 | mode2) LIVE_OPTS="$LIVE_OPTS --sl-sched $2" ;; *) die "--sl-sched takes mode1 or mode2" ;; esac; shift ;;
     --level) case "${2:-}" in L1 | L2 | L3) LIVE_OPTS="$LIVE_OPTS --level $2" ;; *) die "--level takes L1, L2 or L3" ;; esac; shift ;;
     --mode) case "${2:-}" in both | nr | ble) LIVE_OPTS="$LIVE_OPTS --mode $2" ;; *) die "--mode takes both, nr or ble" ;; esac; shift ;;
     --tx-dbm) case "${2:-}" in 0 | -10 | -20 | -30) LIVE_OPTS="$LIVE_OPTS --tx-dbm $2" ;; *) die "--tx-dbm takes 0, -10, -20 or -30" ;; esac; shift ;;

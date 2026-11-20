@@ -14,6 +14,18 @@
  *   0x05 STATS   0x06 ISP (enter ROM bootloader)
  *                                                 0x85 STATS  <rx_ok:u32><rx_crc_err:u32><tx:u32>... (36 B, v5)
  *   0x07 REPEAT <flags><n>{<kind><from><to>}*n    0x87 REPEATOK <n>
+ *   0x08 SLCFG <id><mode><gap/50us>               0x88 SLCFGOK <id><mode><queue size>
+ *   0x09 SLQ   <radio payload>                    (no reply; 0x8A SLDONE with dropped+1 when the queue is full)
+ *   0x0A SLFLUSH                                  0x8A SLDONE <sent><left><dropped><mode><granted:u16><used:u16> (100 us)
+ *
+ * Sidelink mode 1 (v7, the gNB schedules the sidelink): the host stages its sidelink packets on the board (SLQ) at
+ * any time; they stay there until the gNB grants this board air time. The gNB's sidelink window announcement
+ * (AIR_SLWIN, kind 0x08 from link 0: header, <width ms:u16>, then <n>{<id><offset:u16><length:u16>}*n in 100 us units,
+ * like DCI 3_0 sidelink grants) is read by the board itself: with mode 1 it takes the grant whose id is its own
+ * (SLCFG), with mode 2 the grant with id 0xFF (the pool for UEs out of coverage; a random start in its first half,
+ * as a mode 2 UE picks its resource). At the grant's start the board sends its staged packets back to back, as many as
+ * fit before the grant ends, and reports SLDONE. Mode 0 = off (v6 behaviour). The radio keeps receiving until the
+ * grant starts, so a board hears the grants before its own.
  *
  * Repeater (v5, for daisy chains): with n rules set, a received packet whose air header (nrlink.py AIR_HDR:
  * kind, link, seq:u16, slot, frag, nfrag) matches a rule's kind and link is stored with its link byte set to the
@@ -47,7 +59,7 @@
 #include "fsl_lpuart.h"
 #include "pin_mux.h" /* v6: BOARD_InitPinLPUART0_RX/TX */
 
-#define NRLINK_VERSION "nrlink v6"
+#define NRLINK_VERSION "nrlink v7"
 
 /* Radio: 1 Mbps GFSK, formatted packets with an 8-bit length field (payload <= 255 B), 24-bit CRC. */
 #define RADIO_CHANNEL_DEFAULT   0x2AU /* 2360 MHz + 42 MHz = 2402 MHz */
@@ -78,6 +90,12 @@
 #define MSG_CFGOK  0x83U
 #define MSG_PONG   0x84U
 #define MSG_STATSR 0x85U
+#define MSG_SLCFG   0x08U
+#define MSG_SLQ     0x09U
+#define MSG_SLFLUSH 0x0AU
+#define MSG_SLCFGOK 0x88U
+#define MSG_SLDONE  0x8AU
+#define AIR_SLWIN   0x08U
 
 /* LEDs (active low): RGB on PTA19 (green) / PTA20 (blue) / PTA21 (red), LED1 on PTC1. */
 #define LED_RED_PIN   21U
@@ -97,7 +115,8 @@
 #define EVT_RX_FAIL (1U << 2)
 #define EVT_TX_DONE (1U << 3)
 #define EVT_TICK    (1U << 4)
-#define EVT_ALL     (EVT_UART | EVT_RX_DONE | EVT_RX_FAIL | EVT_TX_DONE | EVT_TICK)
+#define EVT_SLGO    (1U << 5)
+#define EVT_ALL     (EVT_UART | EVT_RX_DONE | EVT_RX_FAIL | EVT_TX_DONE | EVT_TICK | EVT_SLGO)
 
 /* Host UART RX rings, filled by the UART ISRs (the serial manager's per-byte path dropped bytes at speed).
  * v6: port 0 = LPUART1 (MCU-Link VCOM), port 1 = LPUART0 (Pico). Each has its own SLIP / text-line parser. */
@@ -163,6 +182,22 @@ static bool s_repFwd;          /* forwarding: the radio sends the stored packets
 static bool s_txFromRep;       /* the packet in the air is a repeated one (no TXDONE to the host) */
 static uint32_t s_repLastMs;
 static uint32_t s_statRep, s_statRepDrop, s_statRepMsgs;
+
+/* Sidelink mode 1 (v7) */
+#define SL_QUEUE 24U
+static uint8_t s_slPkt[SL_QUEUE][RADIO_MAX_PAYLOAD];
+static uint8_t s_slLen[SL_QUEUE];
+static uint8_t s_slHead, s_slCount;     /* ring of staged packets */
+static uint8_t s_slId, s_slMode;         /* grant id this board answers to; 0 off, 1 own grants, 2 the pool */
+static uint32_t s_slGapUs = 300U;
+static bool s_slArmed;                   /* a grant is pending (timer running) */
+static bool s_slSending;                 /* inside a grant: the radio sends staged packets */
+static bool s_txFromSl;
+static uint32_t s_slEnd;                 /* GENFSK timestamp (24 bit) at which the grant ends */
+static uint32_t s_slGrantUs, s_slT0;
+static uint8_t s_slSent, s_slDropped;
+static uint32_t s_slRand = 0x2545F491U;
+static TIMER_MANAGER_HANDLE_DEFINE(s_slTimer);
 
 
 /* LED state */
@@ -411,6 +446,148 @@ static void radio_tx(const uint8_t *payload, uint32_t len)
     s_statTx++;
 }
 
+static uint32_t ts24(void)
+{
+    return (uint32_t)GENFSK_GetTimestamp() & 0xFFFFFFU;
+}
+
+static uint32_t sl_air_us(uint32_t len)
+{
+    /* sync 4 + header 2 + payload + CRC 3 at 1 Mbit/s, plus the radio's ramp and turnaround */
+    return (len + 9U) * 8U + 180U;
+}
+
+static uint32_t sl_gap_us(uint32_t len)
+{
+    /* every receiver passes the packet to its host (~10 us a byte at 1 Mbaud) before it can take the next one */
+    uint32_t g = s_slGapUs + 2U * len;
+    return g;
+}
+
+static void sl_report(void)
+{
+    uint8_t r[8];
+    uint16_t g = (uint16_t)(s_slGrantUs / 100U), u = (uint16_t)(((ts24() - s_slT0) & 0xFFFFFFU) / 100U);
+    r[0] = s_slSent;
+    r[1] = s_slCount;
+    r[2] = s_slDropped;
+    r[3] = s_slMode;
+    r[4] = (uint8_t)g;
+    r[5] = (uint8_t)(g >> 8);
+    r[6] = (uint8_t)u;
+    r[7] = (uint8_t)(u >> 8);
+    host_send(MSG_SLDONE, r, 8U);
+    s_slSent = 0U;
+    s_slDropped = 0U;
+}
+
+static void radio_tx(const uint8_t *payload, uint32_t len);
+
+/* the next staged packet if it fits before the grant ends, else the end of the grant */
+static void sl_send_next(void)
+{
+    if (s_slCount != 0U)
+    {
+        uint32_t left = (s_slEnd - ts24()) & 0xFFFFFFU;
+        uint8_t i     = s_slHead;
+        if ((left < 0x800000U) && (sl_air_us(s_slLen[i]) + 100U <= left))
+        {
+            s_slHead = (uint8_t)((s_slHead + 1U) % SL_QUEUE);
+            s_slCount--;
+            s_txFromSl = true;
+            radio_tx(s_slPkt[i], s_slLen[i]);
+            if (s_txBusy)
+            {
+                s_slSent++;
+                return;
+            }
+            s_txFromSl = false;
+        }
+    }
+    s_slSending = false;
+    s_txFromSl  = false;
+    sl_report();
+}
+
+static void sl_timer_cb(void *param)
+{
+    (void)param;
+    (void)OSA_EventSet((osa_event_handle_t)s_evt, EVT_SLGO);
+}
+
+/* AIR_SLWIN heard from the gNB: arm this board's grant, if it has one and something to send */
+static void sl_grant(const uint8_t *p, uint32_t len, uint32_t rxTs)
+{
+    if ((s_slMode == 0U) || (len < 10U) || s_slArmed || s_slSending)
+    {
+        return;
+    }
+    uint32_t n = p[9];
+    for (uint32_t k = 0U; (k < n) && (10U + 5U * k + 5U <= len); k++)
+    {
+        const uint8_t *g = &p[10U + 5U * k];
+        if (!((s_slMode == 1U && g[0] == s_slId) || (s_slMode == 2U && g[0] == 0xFFU)))
+        {
+            continue;
+        }
+        uint32_t off = 100U * (uint32_t)(g[1] | (g[2] << 8)), ln = 100U * (uint32_t)(g[3] | (g[4] << 8));
+        if (s_slMode == 2U && ln > 2000U)
+        {
+            /* the pool: a random start in its first half (mode 2 resource selection) */
+            s_slRand ^= s_slRand << 13;
+            s_slRand ^= s_slRand >> 17;
+            s_slRand ^= s_slRand << 5;
+            uint32_t r = (s_slRand % (ln / 200U)) * 100U;
+            off += r;
+            ln -= r;
+        }
+        uint32_t el = (ts24() - rxTs) & 0xFFFFFFU;
+        if (el > 5000U)
+        {
+            el = 0U;              /* not on the radio timebase, or a stale packet: count from now */
+        }
+        uint32_t wait = (off > el) ? (off - el) : 0U;
+        if (ln <= (el > off ? el - off : 0U))
+        {
+            return;               /* already over */
+        }
+        ln -= (el > off ? el - off : 0U);
+        s_slGrantUs = ln;
+        s_slEnd     = (ts24() + wait + ln) & 0xFFFFFFU;
+        if (s_slCount == 0U)
+        {
+            sl_report();          /* nothing staged: the grant goes unused */
+            return;
+        }
+        s_slArmed = true;
+        if (wait < 500U)
+        {
+            (void)OSA_EventSet((osa_event_handle_t)s_evt, EVT_SLGO);
+        }
+        else
+        {
+            (void)TM_Start((timer_handle_t)s_slTimer, (uint8_t)(kTimerModeSingleShot | kTimerModeSetMicrosTimer), wait);
+        }
+        return;
+    }
+}
+
+static void sl_go(void)
+{
+    if (!s_slArmed)
+    {
+        return;
+    }
+    s_slArmed   = false;
+    s_slSending = true;
+    s_slT0      = ts24();
+    if (s_txBusy)
+    {
+        return;                   /* a host TX in the air: start when it is done */
+    }
+    sl_send_next();
+}
+
 static void rep_send_next(void)
 {
     if (s_repNext < s_repCount)
@@ -531,6 +708,10 @@ static void radio_deliver_rx(void)
         return;
     }
     s_statRxOk++;
+    if ((len >= 10U) && (s_rxPayload[AIR_KIND] == AIR_SLWIN) && (s_rxPayload[AIR_LINK] == 0U))
+    {
+        sl_grant(s_rxPayload, len, s_rxTs & 0xFFFFFFU);
+    }
     if (rep_take(s_rxPayload, len))
     {
         if (!s_repFwd)
@@ -651,6 +832,43 @@ static void handle_frame(const uint8_t *f, uint32_t len)
             reply[0] = s_repN;
             host_send(MSG_REPEATOK, reply, 1U);
             break;
+        case MSG_SLCFG:
+            if (len >= 3U)
+            {
+                s_slId   = f[1];
+                s_slMode = (f[2] <= 2U) ? f[2] : 0U;
+                if (len >= 4U)
+                {
+                    s_slGapUs = 50U * (uint32_t)f[3];
+                }
+            }
+            reply[0] = s_slId;
+            reply[1] = s_slMode;
+            reply[2] = (uint8_t)SL_QUEUE;
+            host_send(MSG_SLCFGOK, reply, 3U);
+            break;
+        case MSG_SLQ:
+            if ((len > 1U) && (len - 1U <= RADIO_MAX_PAYLOAD))
+            {
+                if (s_slCount >= SL_QUEUE)
+                {
+                    s_slDropped++;
+                    sl_report();
+                }
+                else
+                {
+                    uint8_t i = (uint8_t)((s_slHead + s_slCount) % SL_QUEUE);
+                    memcpy(s_slPkt[i], &f[1], len - 1U);
+                    s_slLen[i] = (uint8_t)(len - 1U);
+                    s_slCount++;
+                }
+            }
+            break;
+        case MSG_SLFLUSH:
+            s_slCount = 0U;
+            s_slHead  = 0U;
+            sl_report();
+            break;
         case MSG_STATS:
             memcpy(&reply[0], &s_statRxOk, 4U);
             memcpy(&reply[4], &s_statRxCrcErr, 4U);
@@ -711,7 +929,7 @@ static void host_rx_byte(uint8_t c)
     {
         if (p->inFrame && (p->frameLen > 0U))
         {
-            if ((p->frame[0] >= MSG_TX) && (p->frame[0] <= MSG_REPEAT)) /* a noise frame must not steal the replies */
+            if ((p->frame[0] >= MSG_TX) && (p->frame[0] <= MSG_SLFLUSH)) /* a noise frame must not steal the replies */
             {
                 s_hostUart = p->uart;
             }
@@ -871,6 +1089,8 @@ static void nrlink_init(void)
     (void)TM_InstallCallback((timer_handle_t)s_tick, tick_cb, NULL);
     (void)TM_Start((timer_handle_t)s_tick, (uint8_t)kTimerModeIntervalTimer, TICK_MS);
 
+    (void)TM_Open((timer_handle_t)s_slTimer);
+    (void)TM_InstallCallback((timer_handle_t)s_slTimer, sl_timer_cb, NULL);
     (void)GENFSK_RegisterCallbacks(s_genfskId, genfsk_rx_cb, genfsk_evt_cb);
     radio_configure(RADIO_CHANNEL_DEFAULT, RADIO_TX_POWER_DEFAULT);
     radio_rx_start();
@@ -925,8 +1145,23 @@ static void nrlink_handle(osa_event_flags_t flags, uint8_t *buf, uint32_t bufSiz
         {
             uint8_t status = (s_txStatus == gGenfskSuccess) ? 0U : 2U;
             bool rep       = s_txFromRep;
+            bool sl        = s_txFromSl;
             s_txBusy       = false;
-            if (rep)
+            if (sl)
+            {
+                s_txFromSl = false;
+                if (s_slCount != 0U)
+                {
+                    SDK_DelayAtLeastUs(sl_gap_us(s_slLen[s_slHead]), SystemCoreClock);
+                }
+                sl_send_next();
+            }
+            else if (s_slSending && !s_txFromSl)
+            {
+                host_send(MSG_TXDONE, &status, 1U);
+                sl_send_next();   /* the grant started during a host TX */
+            }
+            else if (rep)
             {
                 if (s_repNext < s_repCount)
                 {
@@ -942,6 +1177,10 @@ static void nrlink_handle(osa_event_flags_t flags, uint8_t *buf, uint32_t bufSiz
             {
                 radio_rx_start();
             }
+        }
+        if ((flags & EVT_SLGO) != 0U)
+        {
+            sl_go();
         }
         if ((flags & EVT_TICK) != 0U)
         {

@@ -38,7 +38,8 @@ hist = collections.deque()            # events for a new page: (t, event)
 pend = []                             # events not yet pushed
 clients = []                          # queues of connected pages
 S = dict(via={}, start=None, off=0.0, gen={}, early={}, cmd={}, cmdrx={}, chain=[0, 1, 2], leds=[None] * 3, last_rx=0.0,
-         stats=None, edge_ok=False, ctl_addr=None)
+         stats=None, edge_ok=False, ctl_addr=None, ctl_from=None, man=[None] * 3)
+CTL_SOCK = None                       # the controller's events come in on it; the page's commands go back out on it
 
 
 def emit(ev):
@@ -93,7 +94,11 @@ def on_ctl(m):
     elif k == "led":
         S["leds"][m["agv"]] = m
         emit(m)
-    elif k in ("cov", "attach", "egress", "pc5", "pc5up", "start", "serve", "rlf", "hold", "pc5conn", "rur", "disc", "relayop", "rlysess"):
+    elif k in ("cov", "attach", "egress", "pc5", "pc5up", "start", "serve", "rlf", "hold", "pc5conn", "rur", "disc", "relayop", "rlysess",
+               "slmode", "slm1"):
+        emit(m)
+    elif k == "manual":
+        S["man"][m["agv"]] = m if m.get("on") else None
         emit(m)
     elif k == "stats":
         S["stats"] = m
@@ -106,6 +111,8 @@ def udp_rx(port):
     s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     s.setsockopt(socket.SOL_SOCKET, socket.SO_RCVBUF, 1 << 22)
     s.bind(("0.0.0.0", port))
+    global CTL_SOCK
+    CTL_SOCK = s
     while True:
         p, addr = s.recvfrom(65535)
         try:
@@ -113,7 +120,7 @@ def udp_rx(port):
         except ValueError:
             continue
         with lock:
-            S["last_rx"], S["ctl_addr"] = time.time(), addr[0]
+            S["last_rx"], S["ctl_addr"], S["ctl_from"] = time.time(), addr[0], addr
             try:
                 on_ctl(m)
             except (KeyError, ValueError, TypeError, IndexError) as e:
@@ -217,7 +224,7 @@ def snap_events():
     """History for a page that connects, with each board's current LED right after the start (they may be older)."""
     h = list(hist)
     k = 1 if h and h[0]["k"] == "start" else 0
-    return h[:k] + [e for e in S["leds"] if e and e not in h] + h[k:]
+    return h[:k] + [e for e in S["leds"] + S["man"] if e and e not in h] + h[k:]
 
 
 class H(FL.H):
@@ -236,6 +243,29 @@ class H(FL.H):
         self.send_header("Cache-Control", "no-cache")
         self.end_headers()
         self.wfile.write(body)
+
+    def do_POST(self):
+        """The page moves an AGV: {"agv": i, "x": m, "y": m[, "end": 1]} or sends it back: {"agv": i, "route": 1}.
+        Passed to the controller on the UE PC, on the socket its events come from."""
+        path = self.path.split("?")[0]
+        if path != "/agv":
+            return self.send_error(404)
+        try:
+            n = int(self.headers.get("Content-Length", 0))
+            m = json.loads(self.rfile.read(min(n, 4096)) or b"{}")
+            i = int(m["agv"])
+            assert 0 <= i < 3
+            cmd = dict(k="route", agv=i) if m.get("route") else dict(k="drag", agv=i, x=round(float(m["x"]), 2),
+                                                                      y=round(float(m["y"]), 2), end=int(bool(m.get("end"))))
+        except (ValueError, KeyError, TypeError, AssertionError):
+            return self.send_error(400)
+        to = S["ctl_from"]
+        if CTL_SOCK is None or to is None or time.time() - S["last_rx"] > 5:
+            return self.send_error(503, "the controller on the UE PC is not running")
+        CTL_SOCK.sendto(json.dumps(cmd).encode(), to)
+        self.send_response(204)
+        self.send_header("Cache-Control", "no-cache")
+        self.end_headers()
 
     def do_GET(self):
         path = self.path.split("?")[0]

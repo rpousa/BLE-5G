@@ -1,0 +1,55 @@
+:root {
+  --navy: #022E57; --blue: #2C93CC; --blue-deep: #0D659E; --blue-light: #83CFED; --magenta: #E20073;
+  --paper: #F7FAFC; --band: #EBF2F6; --muted: #4F6A84; --line: #D5E0E8; --ok: #1E8E5A; --err: #C62828;
+}
+body { font-family: 'IBM Plex Sans', Arial, sans-serif; color: var(--navy); }
+section { padding: 128px; background: var(--paper); display: flex; flex-direction: column; gap: 40px; counter-increment: page; }
+section.alt { background: var(--band); }
+section.dark { background: var(--navy); color: #F7FAFC; }
+section.foot { padding: 128px 128px 160px; }
+h1, h2, h3 { font-family: 'Space Grotesk', Arial, sans-serif; font-weight: 600; color: var(--navy); margin: 0; }
+h1 { font-size: 112px; line-height: 1.05; }
+h2 { font-size: 72px; line-height: 1.1; }
+h3 { font-size: 40px; line-height: 1.15; }
+.dark h2, .dark h3 { color: #F7FAFC; }
+p { margin: 0; font-size: 32px; line-height: 1.4; }
+.eyebrow { font-family: 'IBM Plex Mono', 'Courier New', monospace; font-size: 26px; letter-spacing: 3px; color: var(--magenta); font-weight: 500; }
+.lead { font-size: 40px; line-height: 1.35; color: var(--muted); max-width: 1400px; }
+.dark .lead { color: #BFD6E8; }
+.row { display: flex; gap: 32px; align-items: stretch; }
+.card { flex: 1; background: #FFFFFF; border: 2px solid var(--line); border-radius: 6px; padding: 36px; display: flex; flex-direction: column; gap: 16px; }
+.alt .card { background: #FBFCFD; }
+.card .txt { font-size: 28px; line-height: 1.4; color: var(--muted); }
+.card .num { font-family: 'IBM Plex Mono', 'Courier New', monospace; font-size: 26px; color: var(--magenta); font-weight: 500; }
+.big { font-family: 'Space Grotesk', Arial, sans-serif; font-size: 120px; font-weight: 600; line-height: 1; color: var(--navy); }
+.dark .big { color: #F7FAFC; }
+.unit { font-size: 32px; color: var(--muted); }
+.dark .unit { color: #BFD6E8; }
+.stat { flex: 1; display: flex; flex-direction: column; gap: 12px; border-top: 4px solid var(--blue); padding-top: 28px; }
+.dark .stat { border-top-color: var(--blue-light); }
+.stat.hl { border-top-color: var(--magenta); }
+.statlab { font-size: 28px; line-height: 1.35; color: var(--muted); }
+.dark .statlab { color: #BFD6E8; }
+.footer { position: absolute; left: 128px; bottom: 64px; width: 1664px; display: flex; justify-content: space-between; font-size: 24px; color: var(--muted); }
+.dark .footer { color: #9FBBD3; }
+.pg::after { content: counter(page); }
+.bar { height: 72px; display: flex; align-items: center; justify-content: center; color: #F7FAFC; font-size: 26px; font-weight: 600; }
+.barlab { font-family: 'IBM Plex Mono', 'Courier New', monospace; font-size: 26px; color: var(--muted); width: 220px; }
+.tl { font-size: 28px; color: var(--navy); }
+.cover-logo { width: 242px; height: 132px; object-fit: contain; }
+.rise { animation: rise 600ms ease-out both; animation-delay: calc(var(--i, 0) * 140ms); }
+@keyframes rise { from { opacity: 0; transform: translateY(24px); } to { opacity: 1; transform: translateY(0); } }
+.grow { animation: grow 900ms ease-out both; animation-delay: calc(var(--i, 0) * 200ms); transform-origin: left center; }
+@keyframes grow { from { opacity: 0; transform: translateX(-40px); } to { opacity: 1; transform: translateX(0); } }
+.panel { flex: 1; display: flex; flex-direction: column; gap: 16px; border: 2px solid var(--line); border-radius: 6px; padding: 28px; background: #FBFCFD; }
+.radio { width: 440px; display: flex; flex-direction: column; gap: 20px; justify-content: center; }
+.pl { font-family: 'IBM Plex Mono', 'Courier New', monospace; font-size: 26px; letter-spacing: 3px; color: var(--muted); font-weight: 500; }
+.box { flex: 1; border-radius: 6px; padding: 18px 24px; display: flex; align-items: center; justify-content: center; border: 3px solid var(--blue); background: #FFFFFF; }
+.box p { font-family: 'Space Grotesk', Arial, sans-serif; font-size: 32px; font-weight: 600; color: var(--navy); text-align: center; }
+.box.core { background: var(--navy); border-color: var(--navy); }
+.box.core p { color: #F7FAFC; }
+.box.brd { border-color: var(--magenta); flex: none; height: 96px; }
+.radio .row .box.brd { flex: 1; }
+.box.ue { background: var(--blue-light); border-color: var(--blue-light); }
+.air { border-left: 4px dashed var(--blue); margin-left: 40px; padding: 18px 0 18px 20px; }
+.air p { font-family: 'IBM Plex Mono', 'Courier New', monospace; font-size: 26px; color: var(--blue-deep); white-space: nowrap; }

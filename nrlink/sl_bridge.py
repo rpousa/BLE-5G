@@ -56,9 +56,15 @@ def log(*a):
 
 
 def split_items(n, data):
+    """The n items in data; stops at the first one that does not fit (a short message would hand the UE a cut item,
+    and the UE then refuses every RUN that carries it)."""
     out, off = [], 0
     for _ in range(n):
+        if off + ITEM_HDR.size > len(data):
+            break
         t, s, ln = ITEM_HDR.unpack_from(data, off)
+        if off + ITEM_HDR.size + ln > len(data):
+            break
         out.append((t, s, data[off:off + ITEM_HDR.size + ln]))
         off += ITEM_HDR.size + ln
     return out
@@ -162,6 +168,7 @@ class UE:
         self.slot = -1           # last slot the UE reached
         self.st = dict(runs=0, slots=0, tx=0, rx=0)
         self.dropped = 0         # items dropped from a full outbox
+        self.fails = 0           # RUNs in a row the UE did not answer
 
     def wait_hello(self):
         self.sock.settimeout(None)
@@ -220,9 +227,15 @@ class UE:
                 items, self.inbox = take(self.inbox, RUN_MAX)
             r = self.run(target, items)
             if r is None:                 # (a restarted UE says HELLO, which run() follows)
-                with self.lock:
-                    self.inbox = items + self.inbox
+                self.fails += 1
+                if self.fails < 2:
+                    with self.lock:
+                        self.inbox = items + self.inbox
+                else:                     # it refuses them (malformed RUN): drop them rather than block it for good
+                    log(f"UE refused {len(items)} items twice, dropped")
+                    self.dropped += len(items)
                 continue
+            self.fails = 0
             _flags, out = r
             with self.lock:
                 self.outbox += out

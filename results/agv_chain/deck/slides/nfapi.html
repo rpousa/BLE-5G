@@ -1,0 +1,12 @@
+<section id="nfapi" class="dark foot">
+<p class="eyebrow">02 · 5G OVER THE BOARDS</p>
+<h2>The boards replace the radio, so time slows down</h2>
+<p class="lead">The gNB is split at nFAPI. Every slot the PNF would hand to an RF PHY goes over the boards instead; the nrUEs’ MAC runs as with a real PHY.</p>
+<div class="row" style="gap:64px">
+<div class="stat rise" style="--i:0"><p class="big">0.5<span class="unit"> ms</span></p><p class="statlab">a slot in real NR (μ = 1)</p></div>
+<div class="stat hl rise" style="--i:1"><p class="big">5.7<span class="unit"> ms</span></p><p class="statlab">a slot here, set by its exchange over the air: about 11× slower</p></div>
+<div class="stat rise" style="--i:2"><p class="big">255<span class="unit"> B</span></p><p class="statlab">largest air packet: a LiDAR scan crosses as 4</p></div>
+</div>
+<div class="footer"><span>AGV Sidelink Testbed</span><span class="pg"></span></div>
+<aside>The PNF's slot handler and the nrUE have a hook (nrlink) that sends the FAPI contents over the boards. Uplink: the gNB board polls every UE board in every UL slot. The PNF's time server sets the slot clock, so all NR timers follow it. Tuning: poll only attached UEs, skip empty slots, UL grants every frame, min_rxtxtime 4: LiDAR one-way p50 643 → 144 ms. The nFAPI tab animates this.</aside>
+</section>
