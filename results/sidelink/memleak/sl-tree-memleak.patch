@@ -1,0 +1,92 @@
+--- a/openair2/LAYER2/NR_MAC_UE/nr_ue_scheduler.c
++++ b/openair2/LAYER2/NR_MAC_UE/nr_ue_scheduler.c
+@@ -4091,12 +4091,15 @@
+                       psfch_periods[*sl_psfch_config->sl_PSFCH_Period_r16] : 0;
+ 
+   sl_resource_info_t *resource = NULL;
++  sl_resource_info_t resource_copy; /* nrlink: the list it comes from may be freed below */
+   bool resource_available = false;
+   if (get_softmodem_params()->sl_mode == 2 && get_softmodem_params()->relay_type == 0) {
+     if (mac->sl_candidate_resources && mac->sl_candidate_resources->size > 0 && sl_ind->slot_type == SIDELINK_SLOT_TYPE_TX) {
+       LOG_D(NR_MAC, "%4d.%2d sl_candidate_resources %p size %ld, capacity %ld slot_type %d\n", frame, slot, mac->sl_candidate_resources, mac->sl_candidate_resources->size, mac->sl_candidate_resources->capacity, sl_ind->slot_type);
+       resource = get_resource_element(mac->sl_candidate_resources, frame_slot);
+       if (resource) {
++        resource_copy = *resource;
++        resource = &resource_copy;
+         resource_available = true;
+         LOG_D(NR_MAC, "SELECTED_RESOURCE %4d.%2d slot_type %d, num_sl_pscch_rbs %d, sl_max_num_per_reserve %d, sl_min_time_gap_psfch %d, sl_pscch_sym_start %d, \
+               sl_pscch_sym_len %d, sl_psfch_period %d, sl_pssch_sym_start %d, sl_pssch_sym_len %d, sl_subchan_len %d, sl_subchan_size %d\n",
+@@ -4128,7 +4131,12 @@
+         mac->reselection_timer++;
+       } else if (sl_ind->slot_type == SIDELINK_SLOT_TYPE_TX) {
+         if (mac->reselection_timer < p_prime_rsvp_tx) {
++          List_t *old_rsrc = mac->sl_candidate_resources; /* nrlink: was leaked on every reselection */
+           mac->sl_candidate_resources = get_candidate_resources(&frame_slot, mac, &mac->sl_sensing_data, &mac->sl_transmit_history);
++          if (old_rsrc && old_rsrc != mac->sl_candidate_resources) {
++            free_list_mem(old_rsrc);
++            free(old_rsrc);
++          }
+           if (mac->sl_candidate_resources) {
+             LOG_D(NR_MAC, "%4d.%2d Returned resources %p\n", frame, slot, mac->sl_candidate_resources);
+             print_candidate_list(mac->sl_candidate_resources, __LINE__);
+@@ -4791,6 +4799,7 @@
+         push_back(nr_resource_list, rsrc_info);
+     }
+   }
++  free(rsrc_info); /* nrlink */
+   return nr_resource_list;
+ }
+ 
+@@ -5034,6 +5043,7 @@
+                                                  psfch_period);
+ 
+   if (candidate_slots.size == 0 ) {
++    free_list_mem(&candidate_slots); /* nrlink */
+     return NULL;
+   }
+ 
+@@ -5046,6 +5056,7 @@
+                                                            &candidate_slots,
+                                                            mu);
+   print_candidate_list(candidate_resources, __LINE__);
++  free_list_mem(&candidate_slots); /* nrlink */
+ 
+   uint64_t m_total = candidate_resources->size; // total number of candidate single-slot resources
+ 
+@@ -5220,6 +5231,8 @@
+           break; // break for proj_reserved_rsc_list
+         }
+       }
++      free_list_mem(resource_info_list); /* nrlink */
++      free(resource_info_list);
+       if (!erased) {
+         // Only need to increment if not erased above; if erased, the erase()
+         // action will point itCandidate to the next item
+@@ -5245,5 +5258,6 @@
+   } while (remaining_candidates->size < (sl_tx_params->sl_res_ratio * m_total));
+ 
+   LOG_D(NR_MAC, "%ld resources selected after sensing resource selection from %ld slots\n", remaining_candidates->size, m_total);
++  free_vector(&sensing_data_projections); /* nrlink */
+   return remaining_candidates;
+ }
+--- a/openair2/LAYER2/NR_MAC_UE/nr_ue_procedures.c
++++ b/openair2/LAYER2/NR_MAC_UE/nr_ue_procedures.c
+@@ -181,7 +181,7 @@
+   mac->SL_MAC_PARAMS->sl_bler.harq_round_max = HARQ_ROUND_MAX;
+   init_list(&mac->sl_sensing_data, sizeof(sensing_data_t), 1);
+   init_list(&mac->sl_transmit_history, sizeof(frameslot_t), 1);
+-  mac->sl_candidate_resources = (List_t*)malloc16_clear(sizeof(List_t*));
++  mac->sl_candidate_resources = (List_t*)malloc16_clear(sizeof(List_t)); /* nrlink: was sizeof(List_t*) */
+   init_list(mac->sl_candidate_resources, sizeof(sl_resource_info_t), 1);
+   mac->reselection_timer = 0;
+   if ((get_softmodem_params()->sl_mode == 1) && (get_softmodem_params()->relay_type == U2N))
+--- a/executables/nrlink_sl.c
++++ b/executables/nrlink_sl.c
+@@ -275,6 +275,7 @@
+   nr_fill_sl_indication(&ind, &rx_ind, NULL, proc, UE, phy);
+   UE->SL_UE_PHY_PARAMS.pssch.rx_ok++;
+   UE->if_inst->sl_indication(&ind);
++  free(s->ack_nack_rcvd); /* processed synchronously above */
+   st.rx_slsch++;
+ }
+ 
